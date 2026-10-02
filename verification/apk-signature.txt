@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Narrio, OU=Personal Android App, O=Narrio, C=US
+Signer #1 certificate SHA-256 digest: e6d1516efadf192bd4021b8a2368a69c5428b7ff2149babd857018cff6c21020
+Signer #1 certificate SHA-1 digest: 1ab0abd5bf4c6382b7758928c96ef30426a0845e
+Signer #1 certificate MD5 digest: 6e048f0b8adf0a5ef28bb0be102ea2a0
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 3072
+Signer #1 public key SHA-256 digest: f2a4c299bf0873fd9535759809e1f8d85a26b0e8fc9e565b7595d1744128c9aa
+Signer #1 public key SHA-1 digest: b0de74d02178a3ce6eb91f422633b66db02c7f5a
+Signer #1 public key MD5 digest: fd3f6164fe68453b6179e86fbdcb7a1e

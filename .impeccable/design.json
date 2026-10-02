@@ -1,0 +1,1169 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-02T21:58:38.411Z",
+  "title": "Design System: Narrio",
+  "extensions": {
+    "colorMeta": {
+      "night-copper": {
+        "role": "primary",
+        "displayName": "Night Copper",
+        "tonalRamp": [
+          "oklch(15.00% 0.09673 64.15)",
+          "oklch(26.43% 0.09673 64.15)",
+          "oklch(37.86% 0.09673 64.15)",
+          "oklch(49.29% 0.09673 64.15)",
+          "oklch(60.71% 0.09673 64.15)",
+          "oklch(72.14% 0.09673 64.15)",
+          "oklch(83.57% 0.09673 64.15)",
+          "oklch(95.00% 0.09673 64.15)"
+        ]
+      },
+      "night-on-copper": {
+        "role": "primary",
+        "displayName": "Night On Copper",
+        "tonalRamp": [
+          "oklch(15.00% 0.03826 65.03)",
+          "oklch(26.43% 0.03826 65.03)",
+          "oklch(37.86% 0.03826 65.03)",
+          "oklch(49.29% 0.03826 65.03)",
+          "oklch(60.71% 0.03826 65.03)",
+          "oklch(72.14% 0.03826 65.03)",
+          "oklch(83.57% 0.03826 65.03)",
+          "oklch(95.00% 0.03826 65.03)"
+        ]
+      },
+      "night-copper-container": {
+        "role": "primary",
+        "displayName": "Night Copper Container",
+        "tonalRamp": [
+          "oklch(15.00% 0.04696 59.51)",
+          "oklch(26.43% 0.04696 59.51)",
+          "oklch(37.86% 0.04696 59.51)",
+          "oklch(49.29% 0.04696 59.51)",
+          "oklch(60.71% 0.04696 59.51)",
+          "oklch(72.14% 0.04696 59.51)",
+          "oklch(83.57% 0.04696 59.51)",
+          "oklch(95.00% 0.04696 59.51)"
+        ]
+      },
+      "night-on-copper-container": {
+        "role": "primary",
+        "displayName": "Night On Copper Container",
+        "tonalRamp": [
+          "oklch(15.00% 0.05853 66.99)",
+          "oklch(26.43% 0.05853 66.99)",
+          "oklch(37.86% 0.05853 66.99)",
+          "oklch(49.29% 0.05853 66.99)",
+          "oklch(60.71% 0.05853 66.99)",
+          "oklch(72.14% 0.05853 66.99)",
+          "oklch(83.57% 0.05853 66.99)",
+          "oklch(95.00% 0.05853 66.99)"
+        ]
+      },
+      "day-copper": {
+        "role": "primary",
+        "displayName": "Day Copper",
+        "tonalRamp": [
+          "oklch(15.00% 0.07872 52.66)",
+          "oklch(26.43% 0.07872 52.66)",
+          "oklch(37.86% 0.07872 52.66)",
+          "oklch(49.29% 0.07872 52.66)",
+          "oklch(60.71% 0.07872 52.66)",
+          "oklch(72.14% 0.07872 52.66)",
+          "oklch(83.57% 0.07872 52.66)",
+          "oklch(95.00% 0.07872 52.66)"
+        ]
+      },
+      "day-on-copper": {
+        "role": "primary",
+        "displayName": "Day On Copper",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      },
+      "day-copper-container": {
+        "role": "primary",
+        "displayName": "Day Copper Container",
+        "tonalRamp": [
+          "oklch(15.00% 0.05387 58.89)",
+          "oklch(26.43% 0.05387 58.89)",
+          "oklch(37.86% 0.05387 58.89)",
+          "oklch(49.29% 0.05387 58.89)",
+          "oklch(60.71% 0.05387 58.89)",
+          "oklch(72.14% 0.05387 58.89)",
+          "oklch(83.57% 0.05387 58.89)",
+          "oklch(95.00% 0.05387 58.89)"
+        ]
+      },
+      "day-on-copper-container": {
+        "role": "primary",
+        "displayName": "Day On Copper Container",
+        "tonalRamp": [
+          "oklch(15.00% 0.04756 53.65)",
+          "oklch(26.43% 0.04756 53.65)",
+          "oklch(37.86% 0.04756 53.65)",
+          "oklch(49.29% 0.04756 53.65)",
+          "oklch(60.71% 0.04756 53.65)",
+          "oklch(72.14% 0.04756 53.65)",
+          "oklch(83.57% 0.04756 53.65)",
+          "oklch(95.00% 0.04756 53.65)"
+        ]
+      },
+      "night-sage": {
+        "role": "secondary",
+        "displayName": "Night Sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.04776 140.27)",
+          "oklch(26.43% 0.04776 140.27)",
+          "oklch(37.86% 0.04776 140.27)",
+          "oklch(49.29% 0.04776 140.27)",
+          "oklch(60.71% 0.04776 140.27)",
+          "oklch(72.14% 0.04776 140.27)",
+          "oklch(83.57% 0.04776 140.27)",
+          "oklch(95.00% 0.04776 140.27)"
+        ]
+      },
+      "night-on-sage": {
+        "role": "secondary",
+        "displayName": "Night On Sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.03279 159.53)",
+          "oklch(26.43% 0.03279 159.53)",
+          "oklch(37.86% 0.03279 159.53)",
+          "oklch(49.29% 0.03279 159.53)",
+          "oklch(60.71% 0.03279 159.53)",
+          "oklch(72.14% 0.03279 159.53)",
+          "oklch(83.57% 0.03279 159.53)",
+          "oklch(95.00% 0.03279 159.53)"
+        ]
+      },
+      "night-selected": {
+        "role": "secondary",
+        "displayName": "Night Selected",
+        "tonalRamp": [
+          "oklch(15.00% 0.03740 157.32)",
+          "oklch(26.43% 0.03740 157.32)",
+          "oklch(37.86% 0.03740 157.32)",
+          "oklch(49.29% 0.03740 157.32)",
+          "oklch(60.71% 0.03740 157.32)",
+          "oklch(72.14% 0.03740 157.32)",
+          "oklch(83.57% 0.03740 157.32)",
+          "oklch(95.00% 0.03740 157.32)"
+        ]
+      },
+      "night-on-selected": {
+        "role": "secondary",
+        "displayName": "Night On Selected",
+        "tonalRamp": [
+          "oklch(15.00% 0.04429 135.86)",
+          "oklch(26.43% 0.04429 135.86)",
+          "oklch(37.86% 0.04429 135.86)",
+          "oklch(49.29% 0.04429 135.86)",
+          "oklch(60.71% 0.04429 135.86)",
+          "oklch(72.14% 0.04429 135.86)",
+          "oklch(83.57% 0.04429 135.86)",
+          "oklch(95.00% 0.04429 135.86)"
+        ]
+      },
+      "day-sage": {
+        "role": "secondary",
+        "displayName": "Day Sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.05742 144.60)",
+          "oklch(26.43% 0.05742 144.60)",
+          "oklch(37.86% 0.05742 144.60)",
+          "oklch(49.29% 0.05742 144.60)",
+          "oklch(60.71% 0.05742 144.60)",
+          "oklch(72.14% 0.05742 144.60)",
+          "oklch(83.57% 0.05742 144.60)",
+          "oklch(95.00% 0.05742 144.60)"
+        ]
+      },
+      "day-on-sage": {
+        "role": "secondary",
+        "displayName": "Day On Sage",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 89.88)",
+          "oklch(26.43% 0.00000 89.88)",
+          "oklch(37.86% 0.00000 89.88)",
+          "oklch(49.29% 0.00000 89.88)",
+          "oklch(60.71% 0.00000 89.88)",
+          "oklch(72.14% 0.00000 89.88)",
+          "oklch(83.57% 0.00000 89.88)",
+          "oklch(95.00% 0.00000 89.88)"
+        ]
+      },
+      "day-selected": {
+        "role": "secondary",
+        "displayName": "Day Selected",
+        "tonalRamp": [
+          "oklch(15.00% 0.04166 132.97)",
+          "oklch(26.43% 0.04166 132.97)",
+          "oklch(37.86% 0.04166 132.97)",
+          "oklch(49.29% 0.04166 132.97)",
+          "oklch(60.71% 0.04166 132.97)",
+          "oklch(72.14% 0.04166 132.97)",
+          "oklch(83.57% 0.04166 132.97)",
+          "oklch(95.00% 0.04166 132.97)"
+        ]
+      },
+      "day-on-selected": {
+        "role": "secondary",
+        "displayName": "Day On Selected",
+        "tonalRamp": [
+          "oklch(15.00% 0.05088 146.15)",
+          "oklch(26.43% 0.05088 146.15)",
+          "oklch(37.86% 0.05088 146.15)",
+          "oklch(49.29% 0.05088 146.15)",
+          "oklch(60.71% 0.05088 146.15)",
+          "oklch(72.14% 0.05088 146.15)",
+          "oklch(83.57% 0.05088 146.15)",
+          "oklch(95.00% 0.05088 146.15)"
+        ]
+      },
+      "night-ground": {
+        "role": "neutral",
+        "displayName": "Night Ground",
+        "tonalRamp": [
+          "oklch(15.00% 0.01592 188.96)",
+          "oklch(26.43% 0.01592 188.96)",
+          "oklch(37.86% 0.01592 188.96)",
+          "oklch(49.29% 0.01592 188.96)",
+          "oklch(60.71% 0.01592 188.96)",
+          "oklch(72.14% 0.01592 188.96)",
+          "oklch(83.57% 0.01592 188.96)",
+          "oklch(95.00% 0.01592 188.96)"
+        ]
+      },
+      "night-text": {
+        "role": "neutral",
+        "displayName": "Night Text",
+        "tonalRamp": [
+          "oklch(15.00% 0.02128 85.94)",
+          "oklch(26.43% 0.02128 85.94)",
+          "oklch(37.86% 0.02128 85.94)",
+          "oklch(49.29% 0.02128 85.94)",
+          "oklch(60.71% 0.02128 85.94)",
+          "oklch(72.14% 0.02128 85.94)",
+          "oklch(83.57% 0.02128 85.94)",
+          "oklch(95.00% 0.02128 85.94)"
+        ]
+      },
+      "night-surface-low": {
+        "role": "neutral",
+        "displayName": "Night Surface Low",
+        "tonalRamp": [
+          "oklch(15.00% 0.01902 178.64)",
+          "oklch(26.43% 0.01902 178.64)",
+          "oklch(37.86% 0.01902 178.64)",
+          "oklch(49.29% 0.01902 178.64)",
+          "oklch(60.71% 0.01902 178.64)",
+          "oklch(72.14% 0.01902 178.64)",
+          "oklch(83.57% 0.01902 178.64)",
+          "oklch(95.00% 0.01902 178.64)"
+        ]
+      },
+      "night-surface": {
+        "role": "neutral",
+        "displayName": "Night Surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.02104 180.85)",
+          "oklch(26.43% 0.02104 180.85)",
+          "oklch(37.86% 0.02104 180.85)",
+          "oklch(49.29% 0.02104 180.85)",
+          "oklch(60.71% 0.02104 180.85)",
+          "oklch(72.14% 0.02104 180.85)",
+          "oklch(83.57% 0.02104 180.85)",
+          "oklch(95.00% 0.02104 180.85)"
+        ]
+      },
+      "night-surface-high": {
+        "role": "neutral",
+        "displayName": "Night Surface High",
+        "tonalRamp": [
+          "oklch(15.00% 0.02574 171.99)",
+          "oklch(26.43% 0.02574 171.99)",
+          "oklch(37.86% 0.02574 171.99)",
+          "oklch(49.29% 0.02574 171.99)",
+          "oklch(60.71% 0.02574 171.99)",
+          "oklch(72.14% 0.02574 171.99)",
+          "oklch(83.57% 0.02574 171.99)",
+          "oklch(95.00% 0.02574 171.99)"
+        ]
+      },
+      "night-muted-text": {
+        "role": "neutral",
+        "displayName": "Night Muted Text",
+        "tonalRamp": [
+          "oklch(15.00% 0.02234 154.04)",
+          "oklch(26.43% 0.02234 154.04)",
+          "oklch(37.86% 0.02234 154.04)",
+          "oklch(49.29% 0.02234 154.04)",
+          "oklch(60.71% 0.02234 154.04)",
+          "oklch(72.14% 0.02234 154.04)",
+          "oklch(83.57% 0.02234 154.04)",
+          "oklch(95.00% 0.02234 154.04)"
+        ]
+      },
+      "night-outline": {
+        "role": "neutral",
+        "displayName": "Night Outline",
+        "tonalRamp": [
+          "oklch(15.00% 0.02274 161.12)",
+          "oklch(26.43% 0.02274 161.12)",
+          "oklch(37.86% 0.02274 161.12)",
+          "oklch(49.29% 0.02274 161.12)",
+          "oklch(60.71% 0.02274 161.12)",
+          "oklch(72.14% 0.02274 161.12)",
+          "oklch(83.57% 0.02274 161.12)",
+          "oklch(95.00% 0.02274 161.12)"
+        ]
+      },
+      "night-outline-muted": {
+        "role": "neutral",
+        "displayName": "Night Outline Muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.02747 163.10)",
+          "oklch(26.43% 0.02747 163.10)",
+          "oklch(37.86% 0.02747 163.10)",
+          "oklch(49.29% 0.02747 163.10)",
+          "oklch(60.71% 0.02747 163.10)",
+          "oklch(72.14% 0.02747 163.10)",
+          "oklch(83.57% 0.02747 163.10)",
+          "oklch(95.00% 0.02747 163.10)"
+        ]
+      },
+      "day-ground": {
+        "role": "neutral",
+        "displayName": "Day Ground",
+        "tonalRamp": [
+          "oklch(15.00% 0.01597 82.79)",
+          "oklch(26.43% 0.01597 82.79)",
+          "oklch(37.86% 0.01597 82.79)",
+          "oklch(49.29% 0.01597 82.79)",
+          "oklch(60.71% 0.01597 82.79)",
+          "oklch(72.14% 0.01597 82.79)",
+          "oklch(83.57% 0.01597 82.79)",
+          "oklch(95.00% 0.01597 82.79)"
+        ]
+      },
+      "day-text": {
+        "role": "neutral",
+        "displayName": "Day Text",
+        "tonalRamp": [
+          "oklch(15.00% 0.02787 169.42)",
+          "oklch(26.43% 0.02787 169.42)",
+          "oklch(37.86% 0.02787 169.42)",
+          "oklch(49.29% 0.02787 169.42)",
+          "oklch(60.71% 0.02787 169.42)",
+          "oklch(72.14% 0.02787 169.42)",
+          "oklch(83.57% 0.02787 169.42)",
+          "oklch(95.00% 0.02787 169.42)"
+        ]
+      },
+      "day-surface-low": {
+        "role": "neutral",
+        "displayName": "Day Surface Low",
+        "tonalRamp": [
+          "oklch(15.00% 0.02172 83.26)",
+          "oklch(26.43% 0.02172 83.26)",
+          "oklch(37.86% 0.02172 83.26)",
+          "oklch(49.29% 0.02172 83.26)",
+          "oklch(60.71% 0.02172 83.26)",
+          "oklch(72.14% 0.02172 83.26)",
+          "oklch(83.57% 0.02172 83.26)",
+          "oklch(95.00% 0.02172 83.26)"
+        ]
+      },
+      "day-surface": {
+        "role": "neutral",
+        "displayName": "Day Surface",
+        "tonalRamp": [
+          "oklch(15.00% 0.02347 82.12)",
+          "oklch(26.43% 0.02347 82.12)",
+          "oklch(37.86% 0.02347 82.12)",
+          "oklch(49.29% 0.02347 82.12)",
+          "oklch(60.71% 0.02347 82.12)",
+          "oklch(72.14% 0.02347 82.12)",
+          "oklch(83.57% 0.02347 82.12)",
+          "oklch(95.00% 0.02347 82.12)"
+        ]
+      },
+      "day-surface-high": {
+        "role": "neutral",
+        "displayName": "Day Surface High",
+        "tonalRamp": [
+          "oklch(15.00% 0.02698 80.24)",
+          "oklch(26.43% 0.02698 80.24)",
+          "oklch(37.86% 0.02698 80.24)",
+          "oklch(49.29% 0.02698 80.24)",
+          "oklch(60.71% 0.02698 80.24)",
+          "oklch(72.14% 0.02698 80.24)",
+          "oklch(83.57% 0.02698 80.24)",
+          "oklch(95.00% 0.02698 80.24)"
+        ]
+      },
+      "day-muted-text": {
+        "role": "neutral",
+        "displayName": "Day Muted Text",
+        "tonalRamp": [
+          "oklch(15.00% 0.02507 157.92)",
+          "oklch(26.43% 0.02507 157.92)",
+          "oklch(37.86% 0.02507 157.92)",
+          "oklch(49.29% 0.02507 157.92)",
+          "oklch(60.71% 0.02507 157.92)",
+          "oklch(72.14% 0.02507 157.92)",
+          "oklch(83.57% 0.02507 157.92)",
+          "oklch(95.00% 0.02507 157.92)"
+        ]
+      },
+      "day-outline": {
+        "role": "neutral",
+        "displayName": "Day Outline",
+        "tonalRamp": [
+          "oklch(15.00% 0.02041 142.75)",
+          "oklch(26.43% 0.02041 142.75)",
+          "oklch(37.86% 0.02041 142.75)",
+          "oklch(49.29% 0.02041 142.75)",
+          "oklch(60.71% 0.02041 142.75)",
+          "oklch(72.14% 0.02041 142.75)",
+          "oklch(83.57% 0.02041 142.75)",
+          "oklch(95.00% 0.02041 142.75)"
+        ]
+      },
+      "day-outline-muted": {
+        "role": "neutral",
+        "displayName": "Day Outline Muted",
+        "tonalRamp": [
+          "oklch(15.00% 0.01903 110.11)",
+          "oklch(26.43% 0.01903 110.11)",
+          "oklch(37.86% 0.01903 110.11)",
+          "oklch(49.29% 0.01903 110.11)",
+          "oklch(60.71% 0.01903 110.11)",
+          "oklch(72.14% 0.01903 110.11)",
+          "oklch(83.57% 0.01903 110.11)",
+          "oklch(95.00% 0.01903 110.11)"
+        ]
+      },
+      "night-error": {
+        "role": "error",
+        "displayName": "Night Error",
+        "tonalRamp": [
+          "oklch(15.00% 0.08908 26.76)",
+          "oklch(26.43% 0.08908 26.76)",
+          "oklch(37.86% 0.08908 26.76)",
+          "oklch(49.29% 0.08908 26.76)",
+          "oklch(60.71% 0.08908 26.76)",
+          "oklch(72.14% 0.08908 26.76)",
+          "oklch(83.57% 0.08908 26.76)",
+          "oklch(95.00% 0.08908 26.76)"
+        ]
+      },
+      "night-on-error": {
+        "role": "error",
+        "displayName": "Night On Error",
+        "tonalRamp": [
+          "oklch(15.00% 0.13359 27.32)",
+          "oklch(26.43% 0.13359 27.32)",
+          "oklch(37.86% 0.13359 27.32)",
+          "oklch(49.29% 0.13359 27.32)",
+          "oklch(60.71% 0.13359 27.32)",
+          "oklch(72.14% 0.13359 27.32)",
+          "oklch(83.57% 0.13359 27.32)",
+          "oklch(95.00% 0.13359 27.32)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display-small": {
+        "displayName": "display small",
+        "purpose": "Repeated page headings in Discover, My shelf, and Settings."
+      },
+      "headline-large": {
+        "displayName": "headline large",
+        "purpose": "Recording titles, large cover lettering, and tabletop book context."
+      },
+      "headline-medium": {
+        "displayName": "headline medium",
+        "purpose": "Wordmark, player title, sheet/dialog headings, and empty-state titles."
+      },
+      "headline-small": {
+        "displayName": "headline small",
+        "purpose": "Shelf, description, source, and settings section headings."
+      },
+      "title-large": {
+        "displayName": "title large",
+        "purpose": "Regular cover lettering and the quiet player closing line."
+      },
+      "title-medium": {
+        "displayName": "title medium",
+        "purpose": "Recording rows, context bars, preparation state, and bookmark times."
+      },
+      "title-small": {
+        "displayName": "title small",
+        "purpose": "Shelf titles, source options, parts, and account status."
+      },
+      "body-large": {
+        "displayName": "body large",
+        "purpose": "Recording author and the Material text-field body role."
+      },
+      "body-medium": {
+        "displayName": "body medium",
+        "purpose": "Descriptions, instructions, and supporting context."
+      },
+      "body-small": {
+        "displayName": "body small",
+        "purpose": "Author, narrator, source, and playback metadata."
+      },
+      "label-large": {
+        "displayName": "label large",
+        "purpose": "Material action labels."
+      },
+      "label-medium": {
+        "displayName": "label medium",
+        "purpose": "Elapsed/remaining times, metadata, preparation labels, and chips."
+      },
+      "label-small": {
+        "displayName": "label small",
+        "purpose": "Cover authors, saved progress, and duration captions."
+      }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": [],
+    "panelSamples": {
+      "status": "display-only HTML/CSS translations; not shipped Android UI",
+      "dimensions": "CSS px in frontmatter and snippets copy native dp/sp scalar values for baseline display only. They do not define device density or font scaling.",
+      "states": "CSS hover, focus-visible, and active effects are panel-only affordances. Actual Android state layers, ripple, focus, and disabled behavior are supplied by Material 3.",
+      "fonts": "Snippets name Newsreader and Manrope with CSS fallbacks; the panel does not load the app's bundled TTF resources. Native screenshots use the actual fonts.",
+      "icons": "Inline SVG samples represent the same actions. The app uses Android Material rounded/auto-mirrored vector icons.",
+      "tonalRamps": "Eight-step OKLCH ramps are synthesized from each extracted color at fixed hue/chroma for panel display. These are not shipped theme scales; wide-gamut samples can clip in sRGB."
+    },
+    "android": {
+      "platform": "android",
+      "stack": "Kotlin / Jetpack Compose / Material 3",
+      "sourceRoot": "app/src/main/java/app/narrio/ui",
+      "sources": [
+        "Theme.kt",
+        "NarrioApp.kt",
+        "PlayerScreen.kt",
+        "BookCover.kt",
+        "CatalogScreens.kt",
+        "DetailAndSettings.kt"
+      ],
+      "nativeUnits": {
+        "geometry": "dp",
+        "typography": "sp",
+        "tracking": "sp",
+        "frontmatter": "Schema-compatible px display adapter; use the native values in this extension and source for Compose."
+      },
+      "provenance": {
+        "direction": "Listening room",
+        "contract": ".impeccable/direction-contract.md",
+        "seedEvidence": ".impeccable/concept-seed-evidence.txt",
+        "formSeed": "73f8a99b",
+        "groundedIndex": 4,
+        "catalogRevision": "c3b204a1eed6",
+        "buildPath": "code-led",
+        "approvedComp": null,
+        "qualityBarCard": null
+      },
+      "colorSchemes": {
+        "Night": {
+          "primary": "{colors.night-copper}",
+          "onPrimary": "{colors.night-on-copper}",
+          "primaryContainer": "{colors.night-copper-container}",
+          "onPrimaryContainer": "{colors.night-on-copper-container}",
+          "secondary": "{colors.night-sage}",
+          "onSecondary": "{colors.night-on-sage}",
+          "secondaryContainer": "{colors.night-selected}",
+          "onSecondaryContainer": "{colors.night-on-selected}",
+          "background": "{colors.night-ground}",
+          "surface": "{colors.night-ground}",
+          "onBackground": "{colors.night-text}",
+          "onSurface": "{colors.night-text}",
+          "surfaceContainerLow": "{colors.night-surface-low}",
+          "surfaceContainer": "{colors.night-surface}",
+          "surfaceContainerHigh": "{colors.night-surface-high}",
+          "surfaceVariant": "{colors.night-surface-high}",
+          "onSurfaceVariant": "{colors.night-muted-text}",
+          "outline": "{colors.night-outline}",
+          "outlineVariant": "{colors.night-outline-muted}",
+          "error": "{colors.night-error}",
+          "onError": "{colors.night-on-error}"
+        },
+        "Day": {
+          "primary": "{colors.day-copper}",
+          "onPrimary": "{colors.day-on-copper}",
+          "primaryContainer": "{colors.day-copper-container}",
+          "onPrimaryContainer": "{colors.day-on-copper-container}",
+          "secondary": "{colors.day-sage}",
+          "onSecondary": "{colors.day-on-sage}",
+          "secondaryContainer": "{colors.day-selected}",
+          "onSecondaryContainer": "{colors.day-on-selected}",
+          "background": "{colors.day-ground}",
+          "surface": "{colors.day-ground}",
+          "onBackground": "{colors.day-text}",
+          "onSurface": "{colors.day-text}",
+          "surfaceContainerLow": "{colors.day-surface-low}",
+          "surfaceContainer": "{colors.day-surface}",
+          "surfaceContainerHigh": "{colors.day-surface-high}",
+          "surfaceVariant": "{colors.day-surface}",
+          "onSurfaceVariant": "{colors.day-muted-text}",
+          "outline": "{colors.day-outline}",
+          "outlineVariant": "{colors.day-outline-muted}"
+        },
+        "selection": {
+          "Night": "authored dark scheme",
+          "Day": "authored light scheme",
+          "System": "isSystemInDarkTheme()",
+          "dynamicColor": false,
+          "unlistedRoles": "Material darkColorScheme/lightColorScheme defaults; Day error roles were not customized or extracted."
+        }
+      },
+      "typography": {
+        "source": "Theme.kt",
+        "roles": {
+          "displayLarge": {
+            "fontFamily": "Newsreader",
+            "fontSizeSp": 56,
+            "lineHeightSp": 58,
+            "fontWeight": 400,
+            "letterSpacingSp": -0.4,
+            "frontmatterToken": null,
+            "usage": "declared theme role; no current screen application"
+          },
+          "displayMedium": {
+            "fontFamily": "Newsreader",
+            "fontSizeSp": 44,
+            "lineHeightSp": 47,
+            "fontWeight": 400,
+            "letterSpacingSp": -0.4,
+            "frontmatterToken": null,
+            "usage": "declared theme role; no current screen application"
+          },
+          "displaySmall": {
+            "fontFamily": "Newsreader",
+            "fontSizeSp": 36,
+            "lineHeightSp": 40,
+            "fontWeight": 400,
+            "letterSpacingSp": -0.4,
+            "frontmatterToken": "display-small",
+            "usage": "current screen or Material control role"
+          },
+          "headlineLarge": {
+            "fontFamily": "Newsreader",
+            "fontSizeSp": 32,
+            "lineHeightSp": 36,
+            "fontWeight": 400,
+            "letterSpacingSp": -0.4,
+            "frontmatterToken": "headline-large",
+            "usage": "current screen or Material control role"
+          },
+          "headlineMedium": {
+            "fontFamily": "Newsreader",
+            "fontSizeSp": 28,
+            "lineHeightSp": 32,
+            "fontWeight": 400,
+            "letterSpacingSp": -0.4,
+            "frontmatterToken": "headline-medium",
+            "usage": "current screen or Material control role"
+          },
+          "headlineSmall": {
+            "fontFamily": "Newsreader",
+            "fontSizeSp": 24,
+            "lineHeightSp": 28,
+            "fontWeight": 400,
+            "letterSpacingSp": -0.4,
+            "frontmatterToken": "headline-small",
+            "usage": "current screen or Material control role"
+          },
+          "titleLarge": {
+            "fontFamily": "Newsreader",
+            "fontSizeSp": 22,
+            "lineHeightSp": 28,
+            "fontWeight": 500,
+            "letterSpacingSp": -0.4,
+            "frontmatterToken": "title-large",
+            "usage": "current screen or Material control role"
+          },
+          "titleMedium": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 16,
+            "lineHeightSp": 23,
+            "fontWeight": 600,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "title-medium",
+            "usage": "current screen or Material control role"
+          },
+          "titleSmall": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 14,
+            "lineHeightSp": 20,
+            "fontWeight": 600,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "title-small",
+            "usage": "current screen or Material control role"
+          },
+          "bodyLarge": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 16,
+            "lineHeightSp": 26,
+            "fontWeight": 400,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "body-large",
+            "usage": "current screen or Material control role"
+          },
+          "bodyMedium": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 14,
+            "lineHeightSp": 22,
+            "fontWeight": 400,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "body-medium",
+            "usage": "current screen or Material control role"
+          },
+          "bodySmall": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 12,
+            "lineHeightSp": 19,
+            "fontWeight": 400,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "body-small",
+            "usage": "current screen or Material control role"
+          },
+          "labelLarge": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 14,
+            "lineHeightSp": 20,
+            "fontWeight": 600,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "label-large",
+            "usage": "current screen or Material control role"
+          },
+          "labelMedium": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 12,
+            "lineHeightSp": 18,
+            "fontWeight": 600,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "label-medium",
+            "usage": "current screen or Material control role"
+          },
+          "labelSmall": {
+            "fontFamily": "Manrope",
+            "fontSizeSp": 11,
+            "lineHeightSp": 16,
+            "fontWeight": 500,
+            "letterSpacingSp": 0,
+            "frontmatterToken": "label-small",
+            "usage": "current screen or Material control role"
+          }
+        },
+        "fontResources": {
+          "Newsreader": "app/src/main/res/font/newsreader.ttf",
+          "Manrope": "app/src/main/res/font/manrope.ttf"
+        },
+        "weightAxis": "FontVariation.weight(weight.weight)",
+        "fontDeclarations": {
+          "Newsreader": [
+            400,
+            500,
+            600
+          ],
+          "Manrope": [
+            400,
+            500,
+            600,
+            700
+          ]
+        },
+        "fontLicenses": "docs/ART.md"
+      },
+      "spacingDp": {
+        "micro": 4,
+        "inline": 8,
+        "compact": 12,
+        "row": 16,
+        "inset": 20,
+        "page": 24,
+        "section": 28,
+        "wide": 32
+      },
+      "roundedDp": {
+        "cover": 8,
+        "selection": 12,
+        "container": 14
+      },
+      "materialDefaults": {
+        "shapes": "MaterialTheme.shapes is not overridden. Standard buttons, chips, navigation, fields, sheets, and dialogs retain library defaults except explicit source modifiers.",
+        "interactions": "Material ripple/state layers/focus/disabled behavior; no authored Android hover specification.",
+        "elevation": "No custom shadow scale. MiniPlayer tonalElevation = 0 dp; Material modals retain their component defaults."
+      },
+      "window": {
+        "source": "NarrioApp.kt",
+        "expandedMinimumWidthDp": 600,
+        "railWidthDp": 80,
+        "compactDestinations": [
+          "Discover",
+          "My shelf",
+          "Settings"
+        ],
+        "nonSeparatingCatalogFractionOfAvailableWidth": 0.53,
+        "catalogPaneMinimumDp": 250,
+        "separatingVerticalHinge": "Catalog width begins at fold.bounds.left converted to dp minus 80 dp rail; bounded by 250 dp pane minima. Reported fold width is inserted as a gap, at least 1 dp.",
+        "tabletopCondition": "Horizontal FoldingFeature + HALF_OPENED + playerOpen",
+        "insets": "safeDrawing Horizontal + Top; navigationBarsPadding on expanded/player/detail; Settings uses imePadding.",
+        "navigation": "BackHandler collapses player/selection first or returns non-Discover destination to Discover. No claim of physical predictive-back validation is made."
+      },
+      "tabletop": {
+        "source": "PlayerScreen.kt",
+        "upperPaddingDp": 20,
+        "contextGapDp": 28,
+        "contextTopPaddingDp": 12,
+        "upperHeight": "max(hinge bounds top minus status-bar top, 0) in dp",
+        "upperClipping": "clipToBounds before padding",
+        "coverHeight": "max(min(available upper content height, upper content width × 0.55 × 1.45), 1 dp)",
+        "coverWidth": "coverHeight ÷ 1.45",
+        "bookContext": "independent verticalScroll inside the upper Row",
+        "hingeGapMinimumDp": 12,
+        "lowerPaddingDp": 24,
+        "lowerContent": "independent verticalScroll transport pane"
+      },
+      "components": {
+        "buttons": {
+          "source": "DetailAndSettings.kt / PlayerScreen.kt / CatalogScreens.kt",
+          "variants": [
+            "Button",
+            "FilledTonalButton",
+            "OutlinedButton",
+            "TextButton",
+            "IconButton",
+            "FilledIconButton"
+          ],
+          "nativeShape": "Material defaults; Transport primary explicitly CircleShape",
+          "transportPrimarySizeDp": 82,
+          "transportSkipSizeDp": 56,
+          "primaryIconSizeDp": 42,
+          "skipIconSizeDp": 32
+        },
+        "fields": {
+          "source": "CatalogScreens.kt / DetailAndSettings.kt",
+          "searchCornerDp": 14,
+          "credentialCornerDp": 12,
+          "singleLine": true,
+          "credentialMask": "PasswordVisualTransformation",
+          "searchClearAction": true
+        },
+        "chips": {
+          "source": "CatalogScreens.kt / DetailAndSettings.kt",
+          "component": "FilterChip",
+          "groupGapDp": 8,
+          "categoryScrolling": "LazyRow",
+          "states": "Native selected/unselected Material states"
+        },
+        "bookRows": {
+          "source": "CatalogScreens.kt",
+          "coverWidthDp": 76,
+          "coverHeightDp": 112,
+          "artTextGapDp": 16,
+          "titleMaxLines": 3,
+          "narratorMaxLines": 2,
+          "metadataGapDp": 4
+        },
+        "shelfTiles": {
+          "source": "CatalogScreens.kt",
+          "widthDp": 140,
+          "coverHeightDp": 204,
+          "gapDp": 18,
+          "titleMaxLines": 2,
+          "authorMaxLines": 1
+        },
+        "bookCover": {
+          "source": "BookCover.kt",
+          "cornerDp": 8,
+          "titleHiddenBelowWidthDp": 60,
+          "tinyWidthThresholdDp": 100,
+          "paddingDp": {
+            "large": 22,
+            "tiny": 6,
+            "standard": 12
+          },
+          "nativeLargeTitleRole": "headlineLarge",
+          "nativeTinyTitleRole": "bodySmall",
+          "nativeStandardTitleRole": "titleLarge",
+          "authorRole": "labelSmall",
+          "titleMaxLines": {
+            "large": 5,
+            "tiny": 3,
+            "standard": 4
+          },
+          "authorMaxLines": 2,
+          "artPaletteScope": "per-book component art; not interface-wide tokens",
+          "defaultArtPalette": {
+            "ground": "#435C4A",
+            "ink": "#F0E4CC"
+          },
+          "raster": "app/src/main/res/drawable-nodpi/secret_garden.png",
+          "providerImageFallback": "Non-curated covers use AsyncImage when coverUrl is available; original drawing is used otherwise.",
+          "provenance": "docs/ART.md"
+        },
+        "feature": {
+          "source": "CatalogScreens.kt",
+          "minimumHeightDp": 286,
+          "cornerDp": 16,
+          "paddingDp": 24,
+          "textWidthFraction": 0.8,
+          "art": "secret_garden.png",
+          "localOverrides": {
+            "headline": "#F8EACC",
+            "author": "#D2DEC7",
+            "buttonContainer": "#E8AF79",
+            "buttonContent": "#342312"
+          },
+          "scrim": "Brush.horizontalGradient with source-defined dark green alpha values; retained for text contrast.",
+          "scope": "Discover component-specific artwork treatment"
+        },
+        "miniPlayer": {
+          "source": "PlayerScreen.kt",
+          "coverWidthDp": 38,
+          "coverHeightDp": 52,
+          "horizontalGapDp": 12,
+          "paddingDp": {
+            "start": 16,
+            "end": 8,
+            "top": 10,
+            "bottom": 10
+          },
+          "tonalElevationDp": 0,
+          "progressHeightDp": 2,
+          "progressCondition": "durationMs > 0",
+          "titleMaxLines": 1,
+          "contextMaxLines": 1,
+          "surfaceAction": "Open full player"
+        },
+        "recoveryAndPreparation": {
+          "source": "CatalogScreens.kt / DetailAndSettings.kt",
+          "cornerDp": 14,
+          "paddingDp": 20,
+          "recoveryAction": "Try again",
+          "preparationAction": "Check availability",
+          "progress": "Actual source preparation progress only"
+        },
+        "sheetsAndDialogs": {
+          "source": "DetailAndSettings.kt / PlayerScreen.kt",
+          "sheet": "ModalBottomSheet, skipPartiallyExpanded = true",
+          "sheetContainer": "surfaceContainer",
+          "partsMaximumHeightDp": 520,
+          "bookmarksMaximumHeightDp": 480,
+          "selectionCornerDp": 12,
+          "selectionFill": "secondaryContainer",
+          "dialogs": [
+            "speed",
+            "sleep",
+            "shelf removal"
+          ],
+          "dialogComponent": "AlertDialog"
+        }
+      },
+      "updates": {
+        "source": "app/src/main/java/app/narrio/playback/ListeningService.kt",
+        "visibilitySource": "NarrioApp.kt ON_START / ON_STOP",
+        "visibleLoopIntervalMs": 1000,
+        "hiddenLoopIntervalMs": 5000,
+        "publishCondition": "visible || player.isPlaying || sleepUntil > 0",
+        "statement": "Hidden active playback and sleep timers still publish; no literal stop-all-background-updates claim.",
+        "sourcePreparationPollMs": 15000,
+        "sourcePreparationScope": "DetailPane while composition effect remains active and pending preparation is connected"
+      },
+      "evidence": {
+        "screenshots": ".impeccable/review",
+        "nativeCapturesReviewed": 15,
+        "review": ".impeccable/review/finish-review.md",
+        "correctionVerdict": ".impeccable/review/finish-verdict.md",
+        "disposition": "ship",
+        "dispositionScope": "scored tabletop correction",
+        "posture": "Synthetic WindowManager test features, not physical Samsung Fold 8 evidence.",
+        "physicalHardwareValidated": false,
+        "htmlCssDetectorRun": false,
+        "limitations": [
+          "No approved decision comp or QUALITY BAR card was available.",
+          "Native screenshots do not establish physical gestures, refresh rate, or runtime performance.",
+          "No TorBox development account was supplied; the user connects TorBox in the app.",
+          "Display sample fonts and CSS do not establish native rendering."
+        ]
+      },
+      "notCanonized": [
+        {
+          "item": "Provisional claim that playback updates stop while the UI is hidden",
+          "reason": "The implemented service uses a five-second hidden loop and continues publication for active playback or a sleep timer."
+        },
+        {
+          "item": "Former fixed 110 × 155 dp tabletop thumbnail",
+          "reason": "It was a resolved review defect; the implemented upper pane now sizes the artwork from the available region."
+        },
+        {
+          "item": "Per-book palette and Discover-only feature geometry",
+          "reason": "These are component art choices, not reusable global interface scales."
+        },
+        {
+          "item": "Panel hover effects and synthesized tonal ramps",
+          "reason": "They are display adapters, not native implementation tokens or states."
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "name": "Primary listening action — display sample",
+      "kind": "button",
+      "refersTo": "button-primary-night",
+      "description": "Display-only translation of the Night Material primary action. Android uses Button defaults.",
+      "html": "<button class=\"ds-button ds-primary\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M8 5v14l11-7z\"/></svg><span>Listen</span></button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 24px;border-radius:9999px;font:600 14px/20px \"Manrope\",sans-serif;cursor:pointer}.ds-button:focus-visible{outline:2px solid #E8AF79;outline-offset:3px}.ds-button:disabled{opacity:.38;cursor:default}.ds-primary{background:#E8AF79;color:#342312;border:0}.ds-primary:hover{box-shadow:inset 0 0 0 100px rgb(52 35 18 / .08)}.ds-primary:active{box-shadow:inset 0 0 0 100px rgb(52 35 18 / .12)}"
+    },
+    {
+      "name": "Tonal action — display sample",
+      "kind": "button",
+      "refersTo": "button-tonal-night",
+      "description": "Display-only translation of a FilledTonalButton. This does not specify native elevation or ripple.",
+      "html": "<button class=\"ds-button ds-tonal\">Bookmark this moment</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 24px;border-radius:9999px;font:600 14px/20px \"Manrope\",sans-serif;cursor:pointer}.ds-button:focus-visible{outline:2px solid #E8AF79;outline-offset:3px}.ds-button:disabled{opacity:.38;cursor:default}.ds-tonal{background:#304739;color:#D3E7CA;border:0}.ds-tonal:hover{box-shadow:inset 0 0 0 100px rgb(211 231 202 / .08)}.ds-tonal:active{box-shadow:inset 0 0 0 100px rgb(211 231 202 / .12)}"
+    },
+    {
+      "name": "Outlined action — display sample",
+      "kind": "button",
+      "refersTo": "button-outlined-night",
+      "description": "Display-only translation of the outlined Save/speed/sleep action. Native shape and state layers remain Material-owned.",
+      "html": "<button class=\"ds-button ds-outlined\">Save</button>",
+      "css": ".ds-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 24px;border-radius:9999px;font:600 14px/20px \"Manrope\",sans-serif;cursor:pointer}.ds-button:focus-visible{outline:2px solid #E8AF79;outline-offset:3px}.ds-button:disabled{opacity:.38;cursor:default}.ds-outlined{background:transparent;color:#E8AF79;border:1px solid #809087}.ds-outlined:hover{background:rgb(232 175 121 / .08)}.ds-outlined:active{background:rgb(232 175 121 / .12)}"
+    },
+    {
+      "name": "Search field — display sample",
+      "kind": "input",
+      "refersTo": "search-field-night",
+      "description": "Display-only translation of the 14 dp OutlinedTextField. Keyboard, IME, focus, and editing are native Android behavior.",
+      "html": "<label class=\"ds-search\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"m14.5 14.5 5 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"/></svg><input aria-label=\"Search books or authors\" placeholder=\"Search books or authors\"></label>",
+      "css": ".ds-search{display:flex;align-items:center;gap:12px;min-height:56px;max-width:360px;padding:0 16px;border:1px solid #809087;border-radius:14px;background:#101B1A;color:#B9C8BD}.ds-search input{width:100%;border:0;background:transparent;color:#F4EDDE;outline:0;font:400 16px/26px \"Manrope\",sans-serif}.ds-search input::placeholder{color:#B9C8BD}.ds-search:hover{border-color:#F4EDDE}.ds-search:focus-within{border:2px solid #E8AF79}"
+    },
+    {
+      "name": "Compact navigation — display sample",
+      "kind": "nav",
+      "description": "Display-only translation of the three Material destinations. Actual navigation becomes an 80 dp rail from 600 dp current window width.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main\"><button class=\"ds-nav-item\" aria-current=\"page\"><span class=\"ds-indicator\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\" fill=\"currentColor\"/><path fill=\"#304739\" d=\"m16 8-3 5-5 3 3-5z\"/></svg></span><span>Discover</span></button><button class=\"ds-nav-item\"><span class=\"ds-indicator\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M2 4c4-1 7 0 9 2v15c-3-2-6-3-9-2zm20 0c-4-1-7 0-9 2v15c3-2 6-3 9-2z\"/></svg></span><span>My shelf</span></button><button class=\"ds-nav-item\"><span class=\"ds-indicator\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 6h18M3 12h18M3 18h18\" stroke=\"currentColor\" stroke-width=\"2\"/><path d=\"M8 3v6m8 0v6M7 15v6\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg></span><span>Settings</span></button></nav>",
+      "css": ".ds-nav{display:flex;justify-content:space-around;gap:8px;max-width:420px;background:#15221F;padding:12px 8px}.ds-nav-item{display:flex;flex:1;align-items:center;flex-direction:column;gap:4px;min-height:64px;border:0;background:transparent;color:#B9C8BD;font:600 12px/18px \"Manrope\",sans-serif;cursor:pointer}.ds-indicator{display:flex;align-items:center;justify-content:center;width:64px;height:32px;border-radius:9999px}.ds-nav-item[aria-current=\"page\"]{color:#F4EDDE}.ds-nav-item[aria-current=\"page\"] .ds-indicator{background:#304739;color:#D3E7CA}.ds-nav-item:hover .ds-indicator{box-shadow:inset 0 0 0 100px rgb(244 237 222 / .08)}.ds-nav-item:focus-visible{outline:2px solid #E8AF79;outline-offset:2px;border-radius:8px}.ds-nav-item:active .ds-indicator{box-shadow:inset 0 0 0 100px rgb(244 237 222 / .12)}"
+    },
+    {
+      "name": "Category chip — display sample",
+      "kind": "chip",
+      "description": "Display-only translation of a selected Material FilterChip; the sample is not a working catalog filter.",
+      "html": "<button class=\"ds-chip\" aria-pressed=\"true\">All</button>",
+      "css": ".ds-chip{padding:6px 16px;border:1px solid transparent;border-radius:8px;background:#304739;color:#D3E7CA;font:600 14px/20px \"Manrope\",sans-serif;cursor:pointer}.ds-chip:hover{box-shadow:inset 0 0 0 100px rgb(211 231 202 / .08)}.ds-chip:focus-visible{outline:2px solid #E8AF79;outline-offset:3px}.ds-chip:active{box-shadow:inset 0 0 0 100px rgb(211 231 202 / .12)}"
+    },
+    {
+      "name": "Recovery container — display sample",
+      "kind": "card",
+      "refersTo": "recovery-container-night",
+      "description": "Display-only translation of RecoveryState; copy is generic sample content and does not report a live failure.",
+      "html": "<section class=\"ds-recovery\"><strong>Couldn’t load the recording</strong><p>A source message appears here.</p><button>Try again</button></section>",
+      "css": ".ds-recovery{max-width:340px;padding:20px;border-radius:14px;background:#1B2A27;color:#F4EDDE;font:400 14px/22px \"Manrope\",sans-serif}.ds-recovery strong{font:600 16px/23px \"Manrope\",sans-serif}.ds-recovery p{margin:8px 0;color:#B9C8BD}.ds-recovery button{min-height:48px;padding:0 12px;border:0;border-radius:9999px;background:transparent;color:#E8AF79;font:600 14px/20px \"Manrope\",sans-serif;cursor:pointer}.ds-recovery button:hover{background:rgb(232 175 121 / .08)}.ds-recovery button:focus-visible{outline:2px solid #E8AF79;outline-offset:2px}.ds-recovery button:active{background:rgb(232 175 121 / .12)}"
+    },
+    {
+      "name": "Typographic cover — display sample",
+      "kind": "custom",
+      "description": "Display-only translation of the default authored cover palette and 8 dp clipping. This generic sample does not replace the original garden raster or reproduce a catalog edition.",
+      "html": "<div class=\"ds-cover\" role=\"img\" aria-label=\"Generic typographic cover sample\"><span>A story<br>to keep</span><svg class=\"ds-cover-art\" viewBox=\"0 0 140 100\" aria-hidden=\"true\"><circle cx=\"91\" cy=\"45\" r=\"32\" fill=\"#F0E4CC\" opacity=\".7\"/><circle cx=\"52\" cy=\"37\" r=\"32\" fill=\"#435C4A\"/><path d=\"M25 86h90\" stroke=\"#F0E4CC\" opacity=\".5\" stroke-width=\"2\"/></svg><small>Author name</small></div>",
+      "css": ".ds-cover{position:relative;display:flex;flex-direction:column;justify-content:space-between;width:140px;height:204px;padding:12px;border-radius:8px;overflow:hidden;background:#435C4A;color:#F0E4CC}.ds-cover>span{position:relative;z-index:1;font:500 22px/28px \"Newsreader\",serif;letter-spacing:-.4px}.ds-cover small{position:relative;z-index:1;font:500 11px/16px \"Manrope\",sans-serif}.ds-cover-art{position:absolute;width:140px;height:100px;left:12px;bottom:12px}"
+    },
+    {
+      "name": "Recording row — display sample",
+      "kind": "custom",
+      "description": "Display-only translation of BookRow with generic metadata. Native titles, narrators, and duration come from the recording.",
+      "html": "<button class=\"ds-book-row\"><span class=\"ds-row-cover\" aria-hidden=\"true\">A story</span><span class=\"ds-row-copy\"><strong>Recording title</strong><span>Author name</span><em>Narrator name</em></span></button>",
+      "css": ".ds-book-row{display:flex;align-items:center;gap:16px;width:340px;padding:0;border:0;background:#101B1A;color:#F4EDDE;text-align:left;cursor:pointer}.ds-row-cover{display:flex;width:76px;height:112px;flex-shrink:0;padding:8px;border-radius:8px;background:#435C4A;color:#F0E4CC;font:500 22px/28px \"Newsreader\",serif}.ds-row-copy{display:flex;flex-direction:column;gap:4px;font:400 12px/19px \"Manrope\",sans-serif}.ds-row-copy strong{font:600 16px/23px \"Manrope\",sans-serif}.ds-row-copy>span{color:#B9C8BD}.ds-row-copy em{color:#B1C9AC;font-style:normal}.ds-book-row:hover{background:rgb(244 237 222 / .04)}.ds-book-row:focus-visible{outline:2px solid #E8AF79;outline-offset:4px}.ds-book-row:active{background:rgb(244 237 222 / .08)}"
+    },
+    {
+      "name": "Mini-player — display sample",
+      "kind": "custom",
+      "refersTo": "mini-player-night",
+      "description": "Display-only translation of the mini-player's title, part, and play action. Generic sample copy has no invented listening timestamp or progress.",
+      "html": "<div class=\"ds-mini\"><span class=\"ds-mini-cover\" aria-hidden=\"true\"></span><button class=\"ds-mini-open\"><strong>Recording title</strong><span>Audio part</span></button><button class=\"ds-mini-play\" aria-label=\"Play\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M8 5v14l11-7z\"/></svg></button></div>",
+      "css": ".ds-mini{display:flex;align-items:center;gap:12px;max-width:360px;padding:10px 8px 10px 16px;background:#1B2A27;color:#F4EDDE}.ds-mini-cover{width:38px;height:52px;border-radius:8px;background:#435C4A;flex-shrink:0}.ds-mini-open{display:flex;flex:1;min-height:48px;flex-direction:column;justify-content:center;gap:2px;border:0;background:transparent;color:#F4EDDE;text-align:left;cursor:pointer}.ds-mini-open strong{font:600 14px/20px \"Manrope\",sans-serif}.ds-mini-open>span{color:#B9C8BD;font:400 12px/19px \"Manrope\",sans-serif}.ds-mini-play{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border:0;border-radius:50%;background:transparent;color:#E8AF79;cursor:pointer}.ds-mini button:hover{background:rgb(244 237 222 / .08)}.ds-mini button:focus-visible{outline:2px solid #E8AF79;outline-offset:2px}.ds-mini button:active{background:rgb(244 237 222 / .12)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Listening room",
+    "overview": "Narrio is a quiet, personal listening room. Warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. Serif titles carry the story; the sans serif carries the task.\n\nThe implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected recording or listening session beside each other.\n\nThis guide records the current Compose implementation. The surface concept and first-viewport strategy remain in [.impeccable/direction-contract.md](.impeccable/direction-contract.md). FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.",
+    "keyCharacteristics": [
+      "Warm ink at night; warm paper by day.",
+      "Newsreader for story titles; Manrope for metadata and controls.",
+      "Artwork is the centerpiece; functional content stays legible around it.",
+      "Material navigation adapts to available window width and reported hinge posture.",
+      "Explicit loading, preparation, empty, selected, and recovery states."
+    ],
+    "rules": [
+      {
+        "name": "The Paired Scheme Rule",
+        "body": "Resolve interface colors through MaterialTheme.colorScheme. Night and Day are complete authored schemes, selected explicitly or through System; the current app does not use wallpaper-derived dynamic color.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Use semantic Material typography roles. Newsreader owns display, headline, and titleLarge; Manrope owns the remaining titles, body, labels, and controls. Keep system font scaling in sp.",
+        "section": "typography"
+      },
+      {
+        "name": "The Window First Rule",
+        "body": "Choose the composition from current window width and WindowManager features. Do not select a layout from the device name or assume physical Fold dimensions.",
+        "section": "layout"
+      },
+      {
+        "name": "The Hinge Is Space Rule",
+        "body": "Keep the reported separating region free of content. In tabletop playback, constrain artwork and book context to the upper pane and let lower controls scroll independently.",
+        "section": "layout"
+      },
+      {
+        "name": "The Quiet Surface Rule",
+        "body": "Use tonal surfaces and outlineVariant dividers to distinguish functional regions. Preserve Material sheet and dialog elevation; the implementation has no custom shadow vocabulary.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Artwork Contrast Rule",
+        "body": "Keep original artwork and its text scrims together. The gradients in the featured scene and image covers are legibility treatments already present in the build.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Native State Rule",
+        "body": "Let Material components render pressed, focused, selected, disabled, loading, and modal states. Web panel hover/focus samples do not define Android interaction.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do use the matching Night or Day Material role for interface text, actions, surfaces, and dividers.",
+      "Do reuse semantic typography roles and keep native text sizes in sp.",
+      "Do keep recording title, author, narrator, language, and source visibly grouped.",
+      "Do use 24 dp page padding and the existing compact spacing steps for related metadata.",
+      "Do preserve independently scrollable panes and real hinge clearance when the window changes.",
+      "Do use Material icons, native controls, accessible action descriptions, and native minimum touch sizing.",
+      "Do retain artwork provenance and bundled font licenses in docs/ART.md.",
+      "Do show truthful playback, preparation, account, and recovery state."
+    ],
+    "donts": [
+      "Don't replace the warm paper scheme with an automatic inversion of the night palette.",
+      "Don't apply per-book artwork colors to interface-wide controls or surfaces.",
+      "Don't wrap every catalog row or text section in another decorative container.",
+      "Don't shrink the tabletop cover to a fixed thumbnail when the upper pane has room for the artwork.",
+      "Don't place content through a reported separating hinge.",
+      "Don't treat synthetic posture screenshots as physical Samsung hardware validation.",
+      "Don't treat panel CSS units, hover effects, generated ramps, or font fallbacks as shipped Android behavior.",
+      "Don't fabricate listening progress, catalog coverage, account status, or runtime performance claims."
+    ]
+  }
+}

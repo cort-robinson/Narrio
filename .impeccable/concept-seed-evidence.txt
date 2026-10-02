@@ -1,0 +1,129 @@
+DIRECTION CONCEPT SEED (key: 73f8a99b; mode: operate; source: api; approved pool: c3b204a1eed6; 306/564 human-approved; rerun with --scope direction --mode operate --from 73f8a99b --candidate-count 7 to reproduce this roll against this catalog revision)
+ASSIGNED INDEX: 4
+  After ordering the grounded directions by resonance, build candidate
+  4 of your own grounded list; the assignment never points at a
+  challenger. The assignment is the roll, not a suggestion: your top-ranked
+  direction is what every run would ship, so the script decides which grounded
+  direction gets built. Each direction joins a durable visual system to a
+  concrete expression for the requested first surface, decided as one. It must
+  survive the current task plus navigation, quiet and dense content,
+  interaction and state, and a substantially different future surface. In an
+  attended run, present the assigned direction fully committed and offer
+  re-roll. You may add ONE card for your top-ranked grounded candidate when
+  it is not the assigned direction, kicker IMPECCABLE’S PICK, with an honest risk line
+  naming its familiarity; one pick card, never a ranked lineup, and the pick
+  never takes the lead position. When the assignment IS your top candidate,
+  there is no pick card. Re-roll yourself only
+  on named factual grounds, when the assignment cannot carry the product's
+  truth or task; taste is never grounds.
+  The assignment exists to refuse the model's ranking rut, never to outrank
+  the user or the brief. Never expose assignment metadata in user-facing labels.
+CHALLENGERS:
+  1. A working plate where every element registers against one off-centre calibrated rail, colour survives only as hairline emission lines of seven wavelengths standing on a procedurally banded charcoal continuum, and state is carried in line height, dash and doubling rather than hue.
+     SOURCE ID: operate-c-emission-line-rail
+     CREATIVE SPARK: A glass spectrogram lying on a low viewing box at three in the morning: a grey continuum crossed by needle-thin bright lines, every legend at the same tiny size, one sodium pair doubled and standing brighter than anything near it.
+     SYSTEM GRAMMAR:
+       - Palette/material: procedural charcoal continuum with bone legends; colour only as hairlines at 405/436/486/546/589/615/656nm; foreign images mat into graphite, edged by one line.
+       - Type/composition: one grotesque at a single size, ranked by tracking and ink; all matter hangs off one off-centre rail, and prose only ever sits in bone on flat ash plates.
+       - Topology/navigation: every destination is a tick on the rail; the open one blooms into a giant plate above it, the rest stay hairline stubs, and nothing ever leaves the rail.
+       - Controls/state: state is line form, not hue: full-height solid live, dashed pending, half-height stale, struck disabled; a doubled line, sodium yellow, outranks its neighbours.
+       - Responsive/motion: a landing line slides to its position and damps with one overshoot; narrow widths shorten the band shown, never the type; sheets behind the top one dim a step.
+     WEB LEVERAGE: Build the rail as one custom property mapping any value to an x position; every mark is a 1px absolutely placed line whose state is height, dash pattern and doubling, settled by a spring, never by colour.
+     QUALITY BAR: board https://impeccable.style/worlds/cards/operate-c-emission-line-rail.webp · hero https://impeccable.style/worlds/cards/operate-c-emission-line-rail-hero.webp
+  2. a streaming catalog wall of horizontally scrolling rows, each poster tile expanding on focus to reveal a title, a rating chip and a short line, with the active row lifting slightly and the rest of the wall dimming behind it
+     SOURCE ID: pop-culture-shelf-streaming-title-card-wall
+     CREATIVE SPARK: Rows and rows of artwork, and the one you land on grows and tells you what it is while everything else quietly gets out of the way.
+     SYSTEM GRAMMAR:
+       - Palette/material: a deep neutral ground with full-bleed poster artwork as the only color, and a single accent on the focused tile border
+       - Type/composition: rows of fixed-ratio poster tiles with a row heading above, and metadata revealed only inside the focused tile
+       - Topology/navigation: rows scroll horizontally and the wall scrolls vertically, so navigation is a grid traversed one axis at a time
+       - Controls/state: controls are tiles, the focused one expands and reveals metadata, and the active row lifts while others dim
+       - Responsive/motion: rows keep their tile ratio and show fewer per screen, and motion is a scale on focus with neighbors sliding aside
+     WEB LEVERAGE: keyboard and pointer focus state driving tile expansion, horizontal rail scrolling with snap, and row-level dimming
+     QUALITY BAR: board https://impeccable.style/worlds/cards/pop-culture-shelf-streaming-title-card-wall.webp · hero https://impeccable.style/worlds/cards/pop-culture-shelf-streaming-title-card-wall-hero.webp
+  3. an orienteering map and legend, iso-standard colors where white means runnable forest, contours rule the truth, and the course rides in purple over everything
+     SOURCE ID: notation-diagram-systems-orienteering-map
+     CREATIVE SPARK: Thumb on the map and breath ragged, a runner in wet birch forest gambles on the marsh crossing because two contour lines pinch, and the purple line does not care how.
+     SYSTEM GRAMMAR:
+       - Palette/material: isom inks, white runnable forest, olive thicket, yellow open land, brown contours, blue marsh, course purple reserved for the active leg
+       - Type/composition: condensed sans control numerals in purple beside their circles, the legend a ranked symbol table, contour line texture is the page's ground
+       - Topology/navigation: terrain is a fixed color language beneath and the numbered purple course rides above, you travel control to control choosing your own route
+       - Controls/state: each control pairs a circle on the map with a coded description row, punched controls check off, the course layer never edits the terrain
+       - Responsive/motion: the map keeps metric scale and clips to a window around your current leg; panning follows the compass bearing
+     WEB LEVERAGE: Geolocation tracks your position over the fixed-scale map with the course as an SVG overlay layer.
+     QUALITY BAR: board https://impeccable.style/worlds/cards/notation-diagram-systems-orienteering-map.webp · hero https://impeccable.style/worlds/cards/notation-diagram-systems-orienteering-map-hero.webp
+  4. a Wim Crouwel gridded type specimen, where letterforms are built cell by cell on a visible construction grid and the poster is the proof
+     SOURCE ID: crouwel-grid-specimen
+     CREATIVE SPARK: Faint blue gridlines cover the sheet like graph paper; enormous letterforms assemble themselves from its cells, and one diagonal is the only rebellion the system permits.
+     SYSTEM GRAMMAR:
+       - Palette/material: white or one stark saturated ground, faint construction-grid hairlines, one accent plane earned by the headline
+       - Type/composition: monumental grid-constructed letterforms over small neutral grotesk; the layout grid stays visible as part of the design
+       - Topology/navigation: Move by cell, by letter, and by catalog entry.
+       - Controls/state: Reveal construction, snap to cells, and toggle grid visibility as a real state.
+       - Responsive/motion: The page reflows by whole cells; letterforms rebuild cell by cell when content changes.
+     WEB LEVERAGE: CSS grid as the literal visible armature with display letterforms drawn from the same grid tokens
+     QUALITY BAR: board https://impeccable.style/worlds/cards/crouwel-grid-specimen.webp · hero https://impeccable.style/worlds/cards/crouwel-grid-specimen-hero.webp
+  5. a design annual's plate section on uncoated near-white stock, where registration crosshairs mark every plate corner, a letterpressed circular attribution stamp sits half off the image, hairline rules divide the credits row, and one grotesque carries display and caption alike
+     SOURCE ID: design-annual-s-plate-section
+     CREATIVE SPARK: The sheet is almost white but never neutral: it drifts warm at one corner and green at another, so the ink reads as printed rather than rendered. Everything else is registration furniture — crosses, dots, hairlines — and a single periwinkle stamp to prove a human signed it.
+     SYSTEM GRAMMAR:
+       - Palette/material: ground #F5F4F6, drifting to #FAF6F5 and #EEF3EF at edges; ink #16181A never pure black; single accent seal #DCDDF3; hairlines #C9C7C4 1px; photography untinted.
+       - Type/composition: one grotesque throughout — 400 weight, 92px display at -0.02em, 17px body; labels 11px mono uppercase at 0.14em; 12-col grid, 40px gutters, no italics.
+       - Topology/navigation: one continuous sheet; 72px sticky bar of mono tokens; crosshair plus marks register plate corners; 8px dot matrix fills voids; hairlines split the 4-up row.
+       - Controls/state: primary is a filled #16181A rect, 0 radius, mono caps 0.12em; secondary a 1px outline rect; nav arrows 44px circles; background inverts 0.1s ease.
+       - Responsive/motion: stamp's text ring turns 25s linear infinite and lifts 4px on hover 0.6s cubic-bezier(.19,1,.22,1); tiles step one column at that curve; no parallax.
+     WEB LEVERAGE: Sticky mono token bar, SVG textPath stamp on infinite linear rotation, pointer-local dot-matrix fades, and a whole grid built from 1px hairlines and CSS crosshairs.
+     QUALITY BAR: board https://impeccable.style/worlds/cards/design-annual-s-plate-section.webp · hero https://impeccable.style/worlds/cards/design-annual-s-plate-section-hero.webp
+  6. a zoo and gardens guide map, where every area is a swelling lobe of flat colour and the coastline between lobes does all the dividing, and where a lobe can open in its middle so the page ground shows through it as water
+     SOURCE ID: aww2-zoo-gardens-guide-map
+     CREATIVE SPARK: A summer opening-morning guide map creased into eight panels: an apple-green headland swelling across the fold, a coral flamingo standing right on its edge with one foot out over the cream, and a yellow capsule pinned to the coastline reading GATE.
+     SYSTEM GRAMMAR:
+       - Palette/material: Flat unmodulated colour, no grain: green #8ED462 land on cream #F5F1E4 water, ink #2C2E2A. Photographs keep their own colour, cropped to a lobe, never tinted.
+       - Type/composition: One grotesk at one weight; display at 0.95 leading, -0.06em. Prose is ink on cream, white, green or yellow; coral and blue carry labels only.
+       - Topology/navigation: One lobe dominates each screen, swelling until its coast leaves the frame on two sides; a lobe may open in its middle and let the ground through as water.
+       - Controls/state: Controls are capsules in yellow #F5E211, coral #FF705D, blue #2BA0FF, lilac #EBC1FF; a round chip rides its trailing edge and crosses to the leading edge when live.
+       - Responsive/motion: Everything that moves takes 0.4s and overshoots before settling. Scroll redraws the coastline continuously; at narrow widths the coast runs down the frame.
+     WEB LEVERAGE: Every area is one SVG path; scroll advances a single timeline that morphs the coastline, and the same path clips the illustration and the type, so one geometry drives layout, art and state together.
+     QUALITY BAR: board https://impeccable.style/worlds/cards/aww2-zoo-gardens-guide-map.webp · hero https://impeccable.style/worlds/cards/aww2-zoo-gardens-guide-map-hero.webp
+Fuse each challenger before judging it: the challenger supplies the form
+  and its system grammar, the product supplies every fact, and clarity wins
+  conflicts. Weigh the fused result against the assigned direction on exactly
+  two axes, audience identification and product clarity. Losing to strong
+  grounded material is a valid outcome; beating a thin or tool-monoculture
+  list is the point. A fused challenger that wins both axes becomes the build.
+  Close the weighing with a verdict per challenger, decided before any
+  borrowing is considered: wins (beats the assigned direction on both axes),
+  competitive (holds one axis), or declined (loses both). A declined
+  challenger is not spent: name the one discipline of its system the assigned
+  direction lacks, and raise the assigned direction to match before
+  presenting it. A donation transfers ambition and system discipline, never
+  the challenger's clothes; one world owns the page. Write each raise as its
+  own named line on the presented direction, and carry every verdict, kept
+  line, and raise into the decision page payload.
+When you can view images, open the QUALITY BAR board and hero for any
+challenger you weigh seriously and for the world you build. They exist as a
+craft bar, the finish level and commitment the build is expected to reach,
+never as a mockup to copy; your surface serves this product, not that render.
+PRODUCT.md and explicit incumbent brand commitments constrain every direction.
+The seed never chooses exact colors, fonts, tokens, or a user preference, and
+it never permits the world and first surface to be selected independently.
+The CREATIVE SPARK is a complete visual system, not a theme or decorative
+reference. Translate every supplied system rule into the product: palette and
+material, type and composition, topology, controls and states, and adaptation.
+Keep the source's visible character, scale, rhythm, and interaction instead of
+reducing vivid grammar to generic nouns. When the source is already a credible
+interface language, commit to it across navigation, content, controls, and
+states. Otherwise keep a literal carrier only when it becomes functional.
+Ambitious motion, spatial media, or interaction is welcome when it strengthens
+the product without weakening semantics, performance, or fallback behavior.
+TELEMETRY: after the user's choice resolves, rerun this script once with
+  --kind <assigned|pick|challenger|canon> --from 73f8a99b --scope direction --mode operate,
+  adding --chosen <challenger-id> when a dealt challenger won and keeping
+  --register <safer|bolder> when the resolved round came from a steered hand.
+  One ping per resolved attended round. The ping is anonymous, the card kind
+  plus the catalog id when one won; your grounded candidates' names never
+  leave the machine, and the ping is skipped automatically when DO_NOT_TRACK
+  or IMPECCABLE_NO_TELEMETRY is set.
+A user- or brief-pinned decision beats the roll, always.
+ASSIGNED INDEX (restated for truncated readers): 4. Build candidate
+4 of your own grounded list; seed key 73f8a99b.

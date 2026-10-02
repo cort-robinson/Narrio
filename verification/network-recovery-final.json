@@ -1,0 +1,15 @@
+{
+  "before": {
+    "state": "NONE",
+    "position_ms": 395927
+  },
+  "offline_error_shown": true,
+  "user_action": "Try again",
+  "recovered": {
+    "state": "PLAYING",
+    "position_ms": 0
+  },
+  "old_error_cleared": true,
+  "elapsed_seconds": 25.7,
+  "scope": "Final signed release; API 36 emulator; both connectivity paths disabled during a jump to unbuffered audio part five."
+}

@@ -1,0 +1,16 @@
+{
+  "before": {
+    "state": "PLAYING",
+    "position_ms": 539188
+  },
+  "offline_seek": {
+    "state": "BUFFERING",
+    "position_ms": 592160
+  },
+  "recovered": {
+    "state": "PLAYING",
+    "position_ms": 592160
+  },
+  "elapsed_seconds": 77.8,
+  "scope": "Optimized release on API 36 emulator; Wi-Fi and mobile data disabled, unbuffered seek, connectivity restored."
+}

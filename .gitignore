@@ -1,0 +1,19 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+*.jks
+*.keystore
+.env*
+.idea/
+captures/
+artifacts/
+verification/private/
+emulator*.log
+verification/*emulator*.log
+scripts/__pycache__/
+.signing/
+signing.properties
+# Retain early exploratory logs locally; final verification evidence is versioned.
+verification/instrumentation.txt
+verification/fold-posture.txt

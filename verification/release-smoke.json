@@ -1,0 +1,15 @@
+{
+  "system_pause": {
+    "state": "PAUSED",
+    "position_ms": 272704
+  },
+  "system_play": {
+    "state": "PLAYING",
+    "position_ms": 272709
+  },
+  "screen_off_after_7_seconds": {
+    "state": "PLAYING",
+    "position_ms": 281765
+  },
+  "release": "1.0.0"
+}
