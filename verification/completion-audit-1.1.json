@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "release": "1.1.0",
+  "implementationCommit": "abe5abaf946e968aafa7c766e3d72b7a63c9effd",
+  "brief": "C:/Users/cortr/.codex/attachments/75da23ca-e27c-428b-b83e-85a017da7589/pasted-text-1.txt",
+  "allRequirementsVerified": false,
+  "requirements": [
+    {
+      "requirement": "Standalone native Kotlin, Media3, Room app without a custom server",
+      "status": "verified_implementation_and_emulator_install",
+      "evidence": [
+        "app/build.gradle.kts",
+        "app/src/main/AndroidManifest.xml",
+        "app/src/main/java/app/narrio/NarrioApplication.kt",
+        "verification/package-1.1.json"
+      ]
+    },
+    {
+      "requirement": "Separate recording/source/file identity and delivery extension point",
+      "status": "verified_implementation_and_identity_tests",
+      "evidence": [
+        "app/src/main/java/app/narrio/domain/Models.kt",
+        "app/src/main/java/app/narrio/data/LibraryDatabase.kt",
+        "app/src/test/java/app/narrio/domain/AudioIdentityTest.kt"
+      ]
+    },
+    {
+      "requirement": "Useful audiobook discovery and selecting the intended narrated edition",
+      "status": "public_recordings_verified_indexed_metadata_explicitly_uncertain_live_torbox_pending",
+      "evidence": [
+        "app/src/main/java/app/narrio/data/ArchiveDiscovery.kt",
+        "app/src/main/java/app/narrio/data/KnabenDiscovery.kt",
+        "verification/listening-1.1-corrections.txt",
+        "verification/offline-native-final.txt"
+      ]
+    },
+    {
+      "requirement": "TorBox authentication, cache checks, source creation/reuse, actual files, temporary links",
+      "status": "contract_tests_verified_live_playback_pending",
+      "evidence": [
+        "app/src/main/java/app/narrio/data/TorBoxDelivery.kt",
+        "app/src/test/java/app/narrio/data/ProviderContractTest.kt",
+        "verification/automated-1.1.json"
+      ]
+    },
+    {
+      "requirement": "Cached-first listening without mandatory phone downloads; explicit uncached preparation",
+      "status": "native_fixture_and_provider_contracts_verified_live_account_pending",
+      "evidence": [
+        "app/src/androidTest/java/app/narrio/SourceExperienceTest.kt",
+        "verification/source-experience-phone-final.txt",
+        "verification/automated-1.1.json"
+      ]
+    },
+    {
+      "requirement": "Single M4B and naturally ordered multipart MP3, deep seeking, chapter/part fallbacks",
+      "status": "real_public_audio_and_chapter_contracts_verified",
+      "evidence": [
+        "verification/listening-1.1-baseline.txt",
+        "verification/listening-1.1-corrections.txt",
+        "verification/automated-1.1.json"
+      ]
+    },
+    {
+      "requirement": "Shelf, resume, bookmarks, speed, skip and sleep timer; independent layout histories",
+      "status": "native_emulator_verified",
+      "evidence": [
+        "app/src/androidTest/java/app/narrio/NarrioListeningTest.kt",
+        "app/src/androidTest/java/app/narrio/PersistenceAndRenewalTest.kt",
+        "verification/listening-1.1-baseline.txt",
+        "verification/listening-1.1-corrections.txt"
+      ]
+    },
+    {
+      "requirement": "Protected local credentials, no secret logging, disconnect removal, temporary URL renewal preserving offsets",
+      "status": "implementation_and_synthetic_native_contracts_verified_live_renewal_pending",
+      "evidence": [
+        "app/src/main/java/app/narrio/data/CredentialStore.kt",
+        "app/src/main/java/app/narrio/playback/RefreshingDataSource.kt",
+        "app/src/androidTest/java/app/narrio/PersistenceAndRenewalTest.kt",
+        "verification/listening-1.1-baseline.txt"
+      ]
+    },
+    {
+      "requirement": "Optional explicit phone downloads and offline playback",
+      "status": "real_audio_native_and_signed_release_verified",
+      "evidence": [
+        "verification/offline-native-final.txt",
+        "verification/release-offline.json",
+        "verification/offline-restart.json",
+        "app/src/main/java/app/narrio/data/OfflineStore.kt"
+      ]
+    },
+    {
+      "requirement": "Impressive native interface and adaptive Fold behavior",
+      "status": "scoped_native_visual_review_and_injected_postures_verified_physical_fold_pending",
+      "evidence": [
+        ".impeccable/review/v1.1/finish-review.md",
+        ".impeccable/review/finish-verdict.md",
+        "verification/source-experience-fold.txt",
+        "verification/source-experience-large-text-final.txt"
+      ]
+    },
+    {
+      "requirement": "Signed installable update preserving prior app data",
+      "status": "verified",
+      "evidence": [
+        "verification/package-1.1.json",
+        "verification/apk-signature-1.1.txt",
+        "verification/upgrade-release.json"
+      ]
+    },
+    {
+      "requirement": "Complete search-to-TorBox path on a real Android device, sustained background/headset/network/restart checks",
+      "status": "required_external_acceptance_pending",
+      "evidence": [
+        "docs/VALIDATION.md"
+      ],
+      "observedConnectedDevices": [
+        "emulator-5554          device product:sdk_gphone64_x86_64 model:sdk_gphone64_x86_64 device:emu64xa transport_id:1",
+        "emulator-5556          device product:sdk_gphone64_x86_64 model:sdk_gphone64_x86_64 device:emu64xa transport_id:3"
+      ]
+    },
+    {
+      "requirement": "Catalog limits documented; breadth deferred except user-authorized UI and offline downloads",
+      "status": "documented",
+      "evidence": [
+        "README.md",
+        "PRODUCT.md",
+        "docs/VALIDATION.md"
+      ]
+    }
+  ],
+  "remainingGate": "Live-account cached playback and the full real-device acceptance sequence. Only emulators are connected and the user connects TorBox inside the phone app.",
+  "nextAction": "Receive the result of the already-requested Ready to stream / cached M4B phone test; use any concrete failure to continue implementation."
+}
