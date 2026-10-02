@@ -23,8 +23,9 @@ class NarrioListeningTest {
         compose.onNodeWithText("Explore recording").performClick()
         compose.waitUntil(30_000) { compose.onAllNodesWithText("Read by Ashleighjane").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Listen").performScrollTo().performClick()
+        compose.onNode(hasText("Chapter files") and hasClickAction()).performScrollTo().performClick()
         compose.onNodeWithText("Start listening").performScrollTo().performClick()
-        compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.positionMs > 1000 }
+        compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.source?.format == "MP3" && graph.playback.state.value.positionMs > 1000 }
         assertEquals(27, graph.playback.state.value.source?.parts?.size)
         compose.runOnIdle { graph.playback.service!!.speed(1f) }
         compose.onNodeWithText("1×").performScrollTo().performClick()
@@ -89,7 +90,7 @@ class NarrioListeningTest {
     @Test fun searchFindsDistinctNarratedRecordings() {
         compose.waitUntil(60_000) { compose.onAllNodesWithText("Search books or authors").fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(hasSetTextAction()).performTextInput("pride prejudice")
-        compose.waitUntil(60_000) { compose.onAllNodesWithText("recordings", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(60_000) { compose.onAllNodesWithText("Pride and Prejudice (version 3)").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Pride and Prejudice (version 3)").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Karen Savage").assertExists()
     }

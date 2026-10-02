@@ -38,10 +38,12 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) vm.graph.playback.visible = true
             if (event == Lifecycle.Event.ON_STOP) vm.graph.playback.visible = false
+            vm.graph.offline.visible = vm.graph.playback.visible
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         vm.graph.playback.visible = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-        onDispose { vm.graph.playback.visible = false; lifecycleOwner.lifecycle.removeObserver(observer) }
+        vm.graph.offline.visible = vm.graph.playback.visible
+        onDispose { vm.graph.playback.visible = false; vm.graph.offline.visible = false; lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(state.playing) {

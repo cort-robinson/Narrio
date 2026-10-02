@@ -1,0 +1,33 @@
+{
+  "version": "1.1.0",
+  "unitSuites": [
+    {
+      "name": "app.narrio.data.ProviderContractTest",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0
+    },
+    {
+      "name": "app.narrio.domain.AudioIdentityTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0
+    }
+  ],
+  "lint": {
+    "Warning": 38
+  },
+  "nativeResults": {
+    "offline-native-final.txt": "3 passed",
+    "source-experience-phone-final.txt": "2 passed",
+    "source-experience-large-text-final.txt": "1 passed",
+    "source-experience-fold-final.txt": "1 passed",
+    "source-experience-fold.txt": "source state and injected hinge passed",
+    "listening-1.1-baseline.txt": "4 passed; 2 test assumptions corrected",
+    "listening-1.1-corrections.txt": "2 corrected cases passed"
+  },
+  "limits": [
+    "Native cache/preparation screenshots use synthetic fixtures.",
+    "Live TorBox cached playback and physical Fold behavior require the user account and phone."
+  ]
+}

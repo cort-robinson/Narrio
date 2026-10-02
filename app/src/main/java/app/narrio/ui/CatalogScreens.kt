@@ -30,7 +30,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val connected by vm.connected.collectAsStateWithLifecycle()
     val scope by vm.sourceScope.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
-    val browse = query.isBlank() && category == "All" && scope == "Catalog"
+    val browse = query.isBlank() && category == "All" && scope == "Public"
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -50,15 +50,16 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { vm.search("") }) { Icon(Icons.Rounded.Close, "Clear search") } },
                 shape = RoundedCornerShape(14.dp))
             Spacer(Modifier.height(10.dp))
-            if (connected) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Catalog", "TorBox").forEach { FilterChip(scope == it, { vm.search(scope = it) }, { Text(if (it == "TorBox") "My TorBox" else "Book catalog") }) }
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(if (connected) listOf("Cached", "All sources", "Public", "TorBox") else listOf("Public", "All sources")) { FilterChip(scope == it, { vm.search(cat = "All", scope = it) }, { Text(when (it) { "TorBox" -> "My TorBox"; "Public" -> "Public books"; "Cached" -> "Ready to stream"; else -> it }) }) }
             }
-            if (scope == "Catalog") LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (scope == "Public") LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(listOf("All", "Fiction", "Mystery", "Wonder", "Nonfiction")) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) }) }
             }
         }
         if (catalog.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary) }
-        catalog.error?.let { error -> item { RecoveryState("Couldn't load the catalog", error, { vm.search() }) } }
+        catalog.notice?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
+        catalog.error?.let { error -> item { RecoveryState(if (catalog.books.isEmpty()) "Couldn't load the catalog" else "Some sources are unavailable", error, { vm.search() }) } }
         if (browse && catalog.books.isNotEmpty()) {
             val featured = catalog.books.first()
             item { FeaturedBook(featured, { vm.open(featured) }) }
@@ -92,18 +93,19 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     Icon(Icons.Rounded.Public, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
                     Column {
                         Text("Open books. Real voices.", style = MaterialTheme.typography.titleSmall)
-                        Text("Discover public-domain recordings from LibriVox. Connect TorBox to deliver them or browse audio already in your account.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Discover public-domain recordings from LibriVox. Connect TorBox to search cached audiobook releases and stream through your account.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         } else if (catalog.books.isNotEmpty()) {
             item {
-                Text(if (scope == "TorBox") "Audio in your TorBox" else "${catalog.books.size} recordings", style = MaterialTheme.typography.headlineSmall)
-                Text(if (scope == "TorBox") "Check narration and language in each source." else "LibriVox · Public-domain catalog · Editions stay separate", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (scope == "TorBox") "Audio in your TorBox" else if (scope == "Cached") "${catalog.books.size} ready to stream" else "${catalog.books.size} recordings", style = MaterialTheme.typography.headlineSmall)
+                Text(when (scope) { "Cached" -> "Cache checked in TorBox · No phone download required"; "Public" -> "LibriVox · Public-domain catalog · Editions stay separate"; else -> "Choose the exact release. Indexed narration and language can be unverified." }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.open(book) }) }
         } else if (!catalog.loading && catalog.error == null) item {
-            EmptyState("No recordings yet", if (scope == "TorBox") "Your TorBox account has no matching audio files. Try the book catalog." else "Try a title or author, or clear the category. The launch catalog contains public-domain books.", Icons.Rounded.Search)
+            EmptyState(if (scope == "Cached") "No cached releases found" else "No recordings yet", when (scope) { "TorBox" -> "Your TorBox account has no matching audio files. Try All sources."; "Cached" -> "Try another title or author. All sources can show uncached releases, and Public books can stream directly."; else -> "Try a title or author, or clear the category." }, Icons.Rounded.Search)
+            if (scope == "Cached") OutlinedButton({ vm.search(scope = "All sources") }, Modifier.fillMaxWidth()) { Text("See all sources") }
         }
     }
 }
@@ -135,6 +137,7 @@ fun BookRow(book: Audiobook, open: () -> Unit, trailing: (@Composable () -> Unit
             Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(book.narrator, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (book.durationMs > 0) Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (book.provider != "archive" || book.cacheState != "unchecked") Text(if (book.cacheState == "cached") "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}" else "${providerLabel(book)} · ${if (book.cacheState == "uncached") "Not cached" else "Cache not checked"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         trailing?.invoke()
     }
@@ -143,6 +146,7 @@ fun BookRow(book: Audiobook, open: () -> Unit, trailing: (@Composable () -> Unit
 @Composable
 fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val shelf by vm.shelf.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
     var remove by remember { mutableStateOf<Audiobook?>(null) }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
@@ -159,6 +163,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         items(shelf, key = { it.bookId }) { entry ->
             Column {
                 ShelfRow(entry, { vm.resume(entry) }, { vm.open(entry.book()) })
+                downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton({ vm.open(entry.book()) }) { Text(if (entry.state == "preparing" || entry.state == "ready") "Check source" else "Recording details") }
                     IconButton({ remove = entry.book() }) { Icon(Icons.Rounded.MoreHoriz, "Remove ${entry.book().title} from shelf") }
@@ -168,7 +173,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
     }
     remove?.let { book -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove from your shelf?") },
-        text = { Text("This clears saved progress and bookmarks for ${book.title} on this device.") },
+        text = { Text("This removes phone downloads, saved progress, and bookmarks for ${book.title} on this device.") },
         confirmButton = { TextButton({ vm.remove(book); remove = null }) { Text("Remove") } }, dismissButton = { TextButton({ remove = null }) { Text("Keep book") } }) }
 }
 

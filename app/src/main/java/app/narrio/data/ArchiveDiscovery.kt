@@ -51,7 +51,7 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
         fun parseBook(meta: JsonObject, loaded: Boolean): Audiobook {
             val description = cleanHtml(meta.text("description"))
             val narrator = Regex("Read (?:in [A-Za-z]+ )?by\\s+([^\\n.]+)", RegexOption.IGNORE_CASE)
-                .find(description)?.groupValues?.get(1)?.trim()?.take(150) ?: "Narrator not listed"
+                .find(description)?.groupValues?.get(1)?.split(Regex("\\s+(?=For (?:further|more) information|For more free audio|Total running time|Summary by)", RegexOption.IGNORE_CASE))?.first()?.trim()?.take(150) ?: "Narrator not listed"
             val lang = meta.text("language").let { when (it.lowercase()) { "eng", "en", "english" -> "English"; "" -> "Language not listed"; else -> it } }
             return Audiobook(
                 id = meta.text("identifier"), title = meta.text("title").ifBlank { "Untitled recording" },
@@ -72,7 +72,7 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
             fun part(file: JsonObject) = AudioPart(
                 id = "${book.id}:${file.text("name")}", name = file.text("name"),
                 title = file.text("title").ifBlank { file.text("name").substringAfterLast('/').substringBeforeLast('.').replace('_', ' ') },
-                durationMs = parseDuration(file.text("length")), archiveUrl = url(file.text("name")),
+                durationMs = parseDuration(file.text("length")), archiveUrl = url(file.text("name")), sizeBytes = file.number("size"),
             )
             val mp3s = all.filter { it.text("name").endsWith(".mp3", true) }
             val highQuality = mp3s.filter { !it.text("name").contains("64kb", true) && !it.text("format").contains("64Kbps", true) }

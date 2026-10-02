@@ -1,0 +1,6 @@
+
+app.narrio.NarrioListeningTest:..
+
+Time: 61.766
+
+OK (2 tests)

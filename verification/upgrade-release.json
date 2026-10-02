@@ -1,0 +1,11 @@
+{
+  "upgrade": "1.0.0 to 1.1.0, install -r, same signer",
+  "previous_position_ms": 166997,
+  "after_state": [
+    "PLAYING",
+    "3",
+    "170293",
+    "5"
+  ],
+  "retained_later_part": true
+}

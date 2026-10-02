@@ -1,0 +1,7 @@
+
+app.narrio.SourceExperienceTest:.
+app.narrio.FoldWindowTest:.
+
+Time: 12.761
+
+OK (2 tests)

@@ -12,6 +12,7 @@ data class AudioPart(
     val archiveUrl: String = "",
     val torrentId: Long? = null,
     val fileId: Long? = null,
+    val sizeBytes: Long = 0,
 )
 
 @Serializable
@@ -40,11 +41,19 @@ data class Audiobook(
     val torrentHash: String = "",
     val provider: String = "archive",
     val detailsLoaded: Boolean = false,
+    val magnetUri: String = "",
+    val cacheState: String = "unchecked",
+    val cachedFormats: List<String> = emptyList(),
+    val releaseSizeBytes: Long = 0,
 )
 
 data class Chapter(val title: String, val startMs: Long)
 
-data class Preparation(val torrentId: Long, val ready: Boolean, val progress: Float, val state: String)
+data class Preparation(
+    val torrentId: Long, val ready: Boolean, val progress: Float, val state: String,
+    val downloadBytesPerSecond: Long = 0, val etaSeconds: Long = 0,
+    val seeds: Long? = null, val checkedAtMs: Long = 0,
+)
 
 /** Full path comparison keeps disc folders and unpadded chapter numbers in order. */
 object AudioOrdering : Comparator<String> {
@@ -72,6 +81,8 @@ fun formatTime(ms: Long): String {
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 }
 fun durationLabel(ms: Long): String = if (ms > 0) "${ms / 3_600_000}h ${(ms / 60_000) % 60}m" else "Length on playback"
+fun sizeLabel(bytes: Long): String = when { bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0); bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0); else -> "%.0f KB".format(bytes / 1000.0) }
+fun providerLabel(book: Audiobook) = when (book.provider) { "torbox" -> "My TorBox"; "knaben" -> "Indexed release"; else -> "LibriVox" }
 
 interface RecordingDiscovery {
     suspend fun search(query: String, category: String = "All"): List<Audiobook>

@@ -47,7 +47,8 @@ class ListeningService : MediaSessionService() {
         graph = (application as NarrioApplication).graph
         val streamHttp = graph.http.newBuilder().callTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS).build()
         val upstream = DefaultDataSource.Factory(this, OkHttpDataSource.Factory(streamHttp))
-        val factory = DataSource.Factory { RefreshingDataSource(upstream.createDataSource(), graph.torbox, parts, links) }
+        val network = DataSource.Factory { RefreshingDataSource(upstream.createDataSource(), graph.torbox, parts, links) }
+        val factory = graph.offline.playbackFactory(network)
         player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(factory))
             .setSeekBackIncrementMs(30_000).setSeekForwardIncrementMs(30_000)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(30_000, 90_000, 1_000, 3_000).build())
@@ -115,7 +116,7 @@ class ListeningService : MediaSessionService() {
         currentBook = book; currentSource = source; error = null; chapters = emptyList()
         parts.clear(); links.clear()
         val items = source.parts.map { part ->
-            val stableUri = "narrio://audio/${Uri.encode(part.id)}"
+            val stableUri = stableAudioUri(part)
             parts[stableUri] = part
             MediaItem.Builder().setMediaId(part.id).setUri(stableUri)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(part.title).setAlbumTitle(book.title)
@@ -145,7 +146,7 @@ class ListeningService : MediaSessionService() {
         sleepAtEnd = endOfPart; publish()
     }
     fun disconnect() {
-        if (currentSource?.delivery == "torbox") { player.pause(); player.stop(); error = "TorBox is disconnected. Reconnect in Settings to resume this source." }
+        if (currentSource?.let { it.delivery == "torbox" && !graph.offline.complete(it) } == true) { player.pause(); player.stop(); error = "TorBox is disconnected. Reconnect in Settings to resume this source." }
         links.clear(); publish()
     }
     suspend fun forget() {
@@ -178,6 +179,7 @@ class ListeningService : MediaSessionService() {
         chapterJob = scope.launch {
             val parsed = withContext(Dispatchers.IO) {
                 runCatching {
+                    if (graph.offline.complete(part)) return@runCatching graph.offline.cachedEdges(part).flatMap(ChapterReader::parseChpl).distinctBy { it.startMs }.sortedBy { it.startMs }
                     val url = graph.torbox.resolve(part)
                     graph.http.newCall(Request.Builder().url(url).header("Range", "bytes=0-262143").build()).execute().use { r ->
                         if (r.code != 206) return@use emptyList<Chapter>()

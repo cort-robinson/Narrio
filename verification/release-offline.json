@@ -1,0 +1,12 @@
+{
+  "build": "final R8 signed 1.1.0",
+  "book": "The Raven, Chris Goringe, M4B",
+  "network": "Wi-Fi/data disabled",
+  "cold_start": true,
+  "media_state": [
+    "PLAYING",
+    "3",
+    "75229",
+    "0"
+  ]
+}

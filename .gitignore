@@ -17,3 +17,6 @@ signing.properties
 # Retain early exploratory logs locally; final verification evidence is versioned.
 verification/instrumentation.txt
 verification/fold-posture.txt
+verification/offline-native.txt
+verification/source-experience-phone.txt
+verification/source-experience-large-text.txt

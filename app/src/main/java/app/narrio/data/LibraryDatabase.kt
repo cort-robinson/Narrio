@@ -16,6 +16,7 @@ data class ShelfEntry(
     val playedAt: Long = 0,
     val state: String = "saved",
     val preparationId: Long = 0,
+    val pendingFormat: String = "",
 ) {
     fun book(): Audiobook = NarrioJson.decodeFromString(bookJson)
     fun source(): AudioSource? = sourceJson.takeIf { it.isNotBlank() }?.let { NarrioJson.decodeFromString(it) }
@@ -42,7 +43,7 @@ interface LibraryDao {
     @Query("SELECT * FROM shelf WHERE playedAt > 0 AND sourceJson != '' ORDER BY playedAt DESC LIMIT 1") suspend fun lastPlayed(): ShelfEntry?
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insert(entry: ShelfEntry)
     @Query("UPDATE shelf SET bookJson = :json WHERE bookId = :id") suspend fun metadata(id: String, json: String)
-    @Query("UPDATE shelf SET sourceJson = :source, partId = :part, positionMs = :position, playedAt = :time, state = 'listening', preparationId = 0 WHERE bookId = :id")
+    @Query("UPDATE shelf SET sourceJson = :source, partId = :part, positionMs = :position, playedAt = :time, state = CASE WHEN state IN ('preparing', 'ready') THEN state ELSE 'listening' END WHERE bookId = :id")
     suspend fun shelfProgress(id: String, source: String, part: String, position: Long, time: Long)
     @Query("SELECT * FROM positions WHERE bookId = :book AND sourceId = :source") suspend fun position(book: String, source: String): SourcePosition?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putPosition(position: SourcePosition)
@@ -51,7 +52,8 @@ interface LibraryDao {
         val sourceId = NarrioJson.decodeFromString<AudioSource>(source).id
         putPosition(SourcePosition(id, sourceId, source, part, position, time))
     }
-    @Query("UPDATE shelf SET state = 'preparing', preparationId = :torrent WHERE bookId = :id") suspend fun preparing(id: String, torrent: Long)
+    @Query("UPDATE shelf SET state = 'preparing', preparationId = :torrent, pendingFormat = :format WHERE bookId = :id") suspend fun preparing(id: String, torrent: Long, format: String)
+    @Query("UPDATE shelf SET state = 'listening', preparationId = 0, pendingFormat = '' WHERE bookId = :id") suspend fun finishPreparation(id: String)
     @Query("UPDATE shelf SET state = :state WHERE bookId = :id") suspend fun state(id: String, state: String)
     @Query("DELETE FROM shelf WHERE bookId = :id") suspend fun deleteShelf(id: String)
     @Query("DELETE FROM bookmarks WHERE bookId = :id") suspend fun deleteBookmarks(id: String)
@@ -66,5 +68,5 @@ interface LibraryDao {
     @Transaction suspend fun remove(id: String) { deleteBookmarks(id); deletePositions(id); deleteShelf(id) }
 }
 
-@Database(entities = [ShelfEntry::class, BookmarkEntry::class, SourcePosition::class], version = 2, exportSchema = true)
+@Database(entities = [ShelfEntry::class, BookmarkEntry::class, SourcePosition::class], version = 3, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() { abstract fun library(): LibraryDao }

@@ -198,6 +198,7 @@ This guide records the current Compose implementation. The surface concept and f
 - Artwork is the centerpiece; functional content stays legible around it.
 - Material navigation adapts to available window width and reported hinge posture.
 - Explicit loading, preparation, empty, selected, and recovery states.
+- Cache-aware source selection with separate cloud preparation and phone storage state.
 
 The color, family, and weight tokens above come from [Theme.kt](app/src/main/java/app/narrio/ui/Theme.kt). The [DESIGN.md format](https://raw.githubusercontent.com/google-labs-code/design.md/main/docs/spec.md) supports CSS dimensions, so frontmatter lengths are a baseline display translation: the same numeric scalar expressed in px. Android implementation uses dp for geometry and sp for typography. Exact native values, role mappings, and sample limitations live in [.impeccable/design.json](.impeccable/design.json), under `extensions.android`; never paste the px adapter into Compose.
 
@@ -267,11 +268,15 @@ Horizontal HALF_OPENED posture becomes tabletop only while the player is open. T
 
 Safe drawing insets protect the top and horizontal edges; full/detail/expanded content also applies navigation-bar padding. Settings applies IME padding. System Back is handled in the app to return from player/detail or to Discover.
 
+The source-scope chips now scroll horizontally at compact and expanded widths. SourcePicker keeps its content in a vertically scrollable native sheet, with weighted option text that can wrap around its radio controls. Long release names and larger system text expand the content instead of clipping the source and preparation actions. The sheet also sets its own system-bar icon appearance from the active theme. These behaviors are implemented in DetailAndSettings.kt; they do not introduce new breakpoints or fixed modal geometry.
+
 **The Window First Rule.** Choose the composition from current window width and WindowManager features. Do not select a layout from the device name or assume physical Fold dimensions.
 
 **The Hinge Is Space Rule.** Keep the reported separating region free of content. In tabletop playback, constrain artwork and book context to the upper pane and let lower controls scroll independently.
 
 The 15 reviewed native captures under [.impeccable/review](.impeccable/review/) include compact and expanded windows, Night and Day, enlarged type, a separating hinge, and tabletop. [finish-verdict.md](.impeccable/review/finish-verdict.md) reports the tabletop correction resolved with ship disposition at that correction's scope. Hinge postures were injected through WindowManager testing; physical Fold 8 geometry, gestures, refresh rate, and performance are not established by these images.
+
+The [1.1 finish review](.impeccable/review/v1.1/finish-review.md) returns ship with no material fixes for the introduced source, cache, preparation, and phone-download regions. Its 12 cached-source, uncached-source, preparation, and offline-settings captures cover phone, phone with enlarged type, and expanded layouts. Availability and cloud progress in those images are synthetic SourceExperienceTest fixtures. Preparation and settings captures intentionally show scrolled regions. The additional [offline release shelf](.impeccable/review/v1.1/offline-shelf-release-phone.png) shows a real downloaded M4B in the final signed release. Offline MP3/M4B playback, seeking, later-part behavior, pause/resume, and cold restart passed native validation. The final signed release additionally passed an offline M4B cold restart; see [offline-native-final.txt](verification/offline-native-final.txt), [release-offline.json](verification/release-offline.json), and [offline-restart.json](verification/offline-restart.json). Successful live TorBox cached playback and physical Samsung Fold behavior remain unverified.
 
 ## Elevation & Depth
 
@@ -325,6 +330,33 @@ RecoveryState pairs a title, readable message, and Try again action inside the c
 
 Source options and current parts use selection-colored rows with radio or current-part indicators. Source, parts, and bookmarks open in ModalBottomSheet. Speed and sleep use scrollable AlertDialog content. Shelf removal uses an explicit Material confirmation dialog. See [DetailAndSettings.kt](app/src/main/java/app/narrio/ui/DetailAndSettings.kt).
 
+### Source scope and cache-aware selection
+
+Connected discovery starts with **Ready to stream**. Its horizontally scrolling FilterChip row also exposes All sources, Public books, and My TorBox; disconnected discovery exposes Public books and All sources. Category chips apply to Public books. Keep partial-source notices and errors visible alongside any available results, and let the empty ready-source state offer See all sources. See [CatalogScreens.kt](app/src/main/java/app/narrio/ui/CatalogScreens.kt) and the source-scope default in [NarrioViewModel.kt](app/src/main/java/app/narrio/ui/NarrioViewModel.kt).
+
+Recording rows add quiet provider/cache context through labelSmall. Detail and source sheets retain visible indexed metadata uncertainty: narration and edition can be unverified, and the listener should inspect the release and files. Do not replace unknown author, language, narrator, or abridgment details with inferred facts. Indexed discovery is not a promise of cache availability or commercial catalog coverage.
+
+SourcePicker remembers an available preferred format, otherwise starts with a cached format when one exists, otherwise the first source. The chosen format and delivery determine readiness: direct Internet Archive delivery is ready, while TorBox requires the chosen format in the recording's cachedFormats. A cached M4B does not make an uncached MP3 ready. Keep the selected source row, format/file count, Cached label when applicable, and delivery state together.
+
+The primary action is Stream now for TorBox, Start listening for direct public audio, or Connect TorBox when an account is needed. Immediate TorBox streaming is disabled for an uncached chosen format while connected. A separate outlined Prepare in TorBox action appears for that case, with explicit waiting context. Details with no discovered indexed audio can separately offer Prepare this release in TorBox or connection guidance. These action conditions live in [DetailAndSettings.kt](app/src/main/java/app/narrio/ui/DetailAndSettings.kt).
+
+### Cloud preparation
+
+Preparation reuses the existing functional tonal container, title, progress indicator, and Check availability action. It shows actual cloud progress, a positive transfer rate when supplied, approximate remaining time when available or ETA unavailable, and optional connected-seed context. The copy distinguishes making a cached source available in the account from fetching an uncached source. Cloud fetching is explicitly separate from saving audio to the phone; the listener can leave and return from the shelf. Do not present cloud progress as phone-storage progress.
+
+### Phone downloads and offline listening
+
+Download to phone is a separate optional outlined action in SourcePicker. It is enabled only when the chosen source/delivery is ready, the app is not busy, TorBox delivery is connected when required, and no download already exists for that recording and format. A completed matching download offers Play offline; an existing incomplete download points to management on the shelf. Known source size appears as Phone storage context. The sheet says streaming does not save the book to the phone.
+
+OfflineStatus appears with the recording on both the shelf and detail pane. It reuses surfaceContainer, the existing container corner and inset, and native Material controls. Its status is paired with format, completed-file count, and known downloaded/total bytes. Phone progress appears only when total size is known. Active downloads offer Pause download, paused downloads offer Resume download, and failed downloads offer Retry download. A completed download offers Play offline. Use the FlowRow actions to retain readable wrapping under system font scaling.
+
+Remove download opens a native confirmation explaining that audio is removed while the book, bookmarks, and listening progress remain on the shelf. Removing the entire shelf recording is a different confirmation that also removes its phone downloads, saved progress, and bookmarks. Keep those consequences explicit.
+
+### Download preference
+
+Settings introduces the existing headlineSmall/bodyMedium/titleSmall hierarchy around a native Switch labeled Download only on Wi-Fi. It is on by default; enabled copy says downloads wait for an unmetered connection, while disabled copy explains that downloads can use mobile data, including large whole-book files. This is a phone-download preference, separate from streaming and cloud preparation. The value is saved on the device and the status remains visible in the same scrollable settings page.
+
+
 **The Native State Rule.** Let Material components render pressed, focused, selected, disabled, loading, and modal states. Web panel hover/focus samples do not define Android interaction.
 
 The sidecar's HTML/CSS entries are labeled display samples for the Impeccable panel. They illustrate these implemented primitives; they are not shipped UI, native motion specifications, or browser evidence. Their hover/focus styling and generated tonal ramps exist only to make those samples usable.
@@ -341,6 +373,10 @@ The sidecar's HTML/CSS entries are labeled display samples for the Impeccable pa
 - **Do** use Material icons, native controls, accessible action descriptions, and native minimum touch sizing.
 - **Do** retain artwork provenance and bundled font licenses in docs/ART.md.
 - **Do** show truthful playback, preparation, account, and recovery state.
+- **Do** gate immediate TorBox streaming by the selected format and delivery readiness.
+- **Do** keep streaming, cloud preparation, and optional phone saving as separate explicit actions.
+- **Do** retain indexed metadata uncertainty and approximate or unavailable ETA labels.
+- **Do** show phone-download state, recovery actions, offline playback, and the saved unmetered-connection preference.
 
 ### Don't:
 
@@ -352,3 +388,6 @@ The sidecar's HTML/CSS entries are labeled display samples for the Impeccable pa
 - **Don't** treat synthetic posture screenshots as physical Samsung hardware validation.
 - **Don't** treat panel CSS units, hover effects, generated ramps, or font fallbacks as shipped Android behavior.
 - **Don't** fabricate listening progress, catalog coverage, account status, or runtime performance claims.
+- **Don't** imply that every format is ready because one format is cached.
+- **Don't** describe TorBox cloud fetching as audio already saved to the phone.
+- **Don't** present synthetic cache or preparation screenshots as successful authenticated TorBox playback.

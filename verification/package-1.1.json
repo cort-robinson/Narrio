@@ -1,0 +1,14 @@
+{
+  "package": "app.narrio",
+  "versionName": "1.1.0",
+  "versionCode": 2,
+  "sizeBytes": 6379405,
+  "sha256": "8EEA740A533C63DDCCD8D7D1206DDF5734A84DA5D1E3A4660EFBFFB9F7CB99B5",
+  "signerSha256": "e6d1516efadf192bd4021b8a2368a69c5428b7ff2149babd857018cff6c21020",
+  "sameSignerAs1_0": true,
+  "release": "R8 optimized, signature verified",
+  "copies": [
+    "artifacts/Narrio-1.1.0.apk",
+    "C:/Users/cortr/Downloads/Narrio-1.1.0.apk"
+  ]
+}

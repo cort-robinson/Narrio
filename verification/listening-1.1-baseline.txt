@@ -1,0 +1,43 @@
+
+app.narrio.NarrioListeningTest:
+Error in searchFindsDistinctNarratedRecordings(app.narrio.NarrioListeningTest):
+java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains 'Pride and Prejudice (version 3)' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:82)
+	at app.narrio.NarrioListeningTest.searchFindsDistinctNarratedRecordings(NarrioListeningTest.kt:93)
+.
+Error in realRecordingSupportsLaterPartControlsAndBackgroundResume(app.narrio.NarrioListeningTest):
+java.lang.AssertionError: expected:<27> but was:<1>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at app.narrio.NarrioListeningTest.realRecordingSupportsLaterPartControlsAndBackgroundResume(NarrioListeningTest.kt:28)
+
+app.narrio.PersistenceAndRenewalTest:...
+
+Time: 23.965
+There were 2 failures:
+1) searchFindsDistinctNarratedRecordings(app.narrio.NarrioListeningTest)
+java.lang.AssertionError: Action performScrollTo() failed.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains 'Pride and Prejudice (version 3)' (ignoreCase: false))
+
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+	at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+	at androidx.compose.ui.test.ActionsKt.performScrollTo(Actions.kt:82)
+	at app.narrio.NarrioListeningTest.searchFindsDistinctNarratedRecordings(NarrioListeningTest.kt:93)
+2) realRecordingSupportsLaterPartControlsAndBackgroundResume(app.narrio.NarrioListeningTest)
+java.lang.AssertionError: expected:<27> but was:<1>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at app.narrio.NarrioListeningTest.realRecordingSupportsLaterPartControlsAndBackgroundResume(NarrioListeningTest.kt:28)
+
+FAILURES!!!
+Tests run: 6,  Failures: 2

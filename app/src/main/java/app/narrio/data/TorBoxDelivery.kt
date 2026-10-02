@@ -24,9 +24,12 @@ class TorBoxDelivery(
     }
 
     override suspend fun prepare(book: Audiobook): Preparation = withContext(Dispatchers.IO) {
-        require(book.torrentUrl.isNotBlank()) { "This recording has no torrent source. Use direct streaming." }
         val existing = list().firstOrNull { book.torrentHash.isNotBlank() && it.text("hash").equals(book.torrentHash, true) }
         if (existing != null) return@withContext preparation(existing)
+        val form = MultipartBody.Builder().setType(MultipartBody.FORM)
+        if (book.magnetUri.startsWith("magnet:?")) form.addFormDataPart("magnet", book.magnetUri)
+        else {
+        if (book.torrentUrl.isBlank()) throw ProviderException("This recording has no torrent source. Choose another recording.")
         // Upload a real .torrent file. Archive URLs are not assumed to be magnets.
         val torrent = http.newCall(Request.Builder().url(book.torrentUrl).build()).execute().use { r ->
             if (!r.isSuccessful) throw ProviderException("The recording's torrent is unavailable. Try direct streaming.")
@@ -34,13 +37,39 @@ class TorBoxDelivery(
             if (body.contentLength() > 4_000_000) throw ProviderException("This torrent file is too large.")
             body.bytes().also { if (it.size > 4_000_000) throw ProviderException("This torrent file is too large.") }
         }
-        val form = MultipartBody.Builder().setType(MultipartBody.FORM)
-            .addFormDataPart("file", "recording.torrent", torrent.toRequestBody("application/x-bittorrent".toMediaType()))
-            .addFormDataPart("seed", "1").addFormDataPart("allow_zip", "false").addFormDataPart("as_queued", "false").build()
-        val data = request("torrents/createtorrent", body = form)["data"] as? JsonObject
+        form.addFormDataPart("file", "recording.torrent", torrent.toRequestBody("application/x-bittorrent".toMediaType()))
+        }
+        val body = form.addFormDataPart("seed", "1").addFormDataPart("allow_zip", "false").addFormDataPart("as_queued", "false").build()
+        val data = request("torrents/createtorrent", body = body)["data"] as? JsonObject
             ?: throw ProviderException("TorBox did not return a preparation identifier. Check your TorBox dashboard.")
         val id = data.number("torrent_id")
         if (id > 0) list().firstOrNull { it.number("id") == id }?.let(::preparation) ?: Preparation(id, false, 0f, "Preparing in TorBox") else Preparation(0, false, 0f, "Queued in TorBox")
+    }
+
+    /** Playback's default path must pass this check before adding any new torrent. */
+    suspend fun prepareCached(book: Audiobook, format: String): Preparation {
+        val checked = checkCached(listOf(book)).first()
+        if (checked.cacheState != "cached" || format !in checked.cachedFormats)
+            throw ProviderException("This format isn't cached in TorBox. Choose another ready source, or explicitly prepare it in TorBox.")
+        return prepare(book)
+    }
+
+    suspend fun checkCached(books: List<Audiobook>): List<Audiobook> = withContext(Dispatchers.IO) {
+        val hashes = books.map { it.torrentHash.lowercase() }.filter { it.matches(Regex("[a-f0-9]{40}")) }.distinct()
+        val cached = hashes.chunked(100).flatMap { batch ->
+            parseCached(request("torrents/checkcached", mapOf("hash" to batch.joinToString(","), "format" to "object", "list_files" to "true"))["data"]).entries
+        }.associate { it.toPair() }
+        books.map { book ->
+            val item = cached[book.torrentHash.lowercase()]
+            val files = item?.objects("files").orEmpty()
+            val formats = if (book.provider == "archive") book.sources.filter { source ->
+                source.parts.isNotEmpty() && source.parts.all { part -> files.any { sameFile(it.text("name"), part.name) } }
+            }.map { it.format } else files.map { audioFormat(it.text("name")) }.distinct()
+            book.copy(cacheState = if (formats.isNotEmpty()) "cached" else "uncached", cachedFormats = formats,
+                sources = if (book.provider == "knaben" && item != null) mapSources(item, book).map { source ->
+                    source.copy(id = "cache:${book.torrentHash}:${source.format}", parts = source.parts.map { it.copy(torrentId = null, fileId = null) })
+                } else book.sources)
+        }
     }
 
     suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = withContext(Dispatchers.IO) {
@@ -54,7 +83,7 @@ class TorBoxDelivery(
         preparation(item)
     }
 
-    private fun preparation(item: JsonObject) = Preparation(
+    internal fun preparation(item: JsonObject) = Preparation(
         item.number("id"), item.flag("download_finished") && item.flag("download_present"),
         (item.text("progress").toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f).coerceIn(0f, 1f),
         when (val state = item.text("download_state")) {
@@ -65,19 +94,25 @@ class TorBoxDelivery(
             "paused" -> "Paused in TorBox"
             else -> state.ifBlank { "Preparing in TorBox" }
         },
+        downloadBytesPerSecond = item.number("download_speed"), etaSeconds = item.number("eta"),
+        seeds = item["seeds"]?.let { item.number("seeds") }, checkedAtMs = System.currentTimeMillis(),
     )
 
     override suspend fun sources(book: Audiobook, torrentId: Long): List<AudioSource> = withContext(Dispatchers.IO) {
         val item = list().firstOrNull { it.number("id") == torrentId } ?: throw ProviderException("TorBox is still preparing this recording.")
+        if (!preparation(item).ready) throw ProviderException("This recording is still being prepared in TorBox. Choose a cached source to listen now.")
         mapSources(item, book)
     }
 
     suspend fun library(query: String = ""): List<Audiobook> = withContext(Dispatchers.IO) {
-        list().filter { it.text("name").contains(query, true) && it.objects("files").any { f -> isAudioFile(f.text("name")) } }.map { item ->
+        val terms = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        list().filter { item -> terms.all { item.text("name").contains(it, true) } && item.objects("files").any { f -> isAudioFile(f.text("name")) } }.map { item ->
             val book = Audiobook("torbox:${item.number("id")}", item.text("name").ifBlank { "TorBox audiobook" },
                 "Your TorBox library", language = "Language not listed", narrator = "Narrator not listed", provider = "torbox",
-                description = "Audio files in your TorBox account. Check this source's narration and language before listening.", detailsLoaded = true)
-            book.copy(sources = mapSources(item, book))
+                description = "Audio files in your TorBox account. Check this source's narration and language before listening.", detailsLoaded = true,
+                torrentHash = item.text("hash"))
+            val sources = mapSources(item, book)
+            book.copy(sources = sources, cacheState = if (preparation(item).ready) "cached" else "uncached", cachedFormats = if (preparation(item).ready) sources.map { it.format } else emptyList())
         }
     }
 
@@ -110,6 +145,27 @@ class TorBoxDelivery(
     }
 
     companion object {
+        private fun sameFile(a: String, b: String) = a == b || a.endsWith("/$b")
+        private fun audioFormat(name: String) = when (val ext = name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" }
+        internal fun parseCached(data: JsonElement?): Map<String, JsonObject> {
+            val values = when (data) {
+                is JsonObject -> data.mapNotNull { (hash, value) -> (value as? JsonObject)?.let { hash to it } }
+                is JsonArray -> data.mapNotNull { (it as? JsonObject)?.let { item -> item.text("hash") to item } }
+                else -> emptyList()
+            }
+            return values.mapNotNull { (key, item) ->
+                val hash = item.text("hash").ifBlank { key }.lowercase()
+                if (!hash.matches(Regex("[a-f0-9]{40}"))) return@mapNotNull null
+                val files = (item["files"] as? JsonArray).orEmpty().mapIndexedNotNull { index, file ->
+                    val obj = file as? JsonObject
+                    val name = obj?.text("name")?.ifBlank { obj.text("path") } ?: file.stringValue()
+                    if (!isAudioFile(name) || Regex("(^|[/ _-])(sample|trailer)([/ _.-]|$)", RegexOption.IGNORE_CASE).containsMatchIn(name)) null else buildJsonObject {
+                        put("id", index); put("name", name); put("size", obj?.number("size") ?: 0)
+                    }
+                }
+                hash to buildJsonObject { put("files", JsonArray(files)); put("id", 0) }
+            }.toMap()
+        }
         fun mapSources(item: JsonObject, book: Audiobook): List<AudioSource> {
             val torrentId = item.number("id")
             val files = item.objects("files").filter { isAudioFile(it.text("name")) && !Regex("(^|[/ _-])(sample|trailer)([/ _.-]|$)", RegexOption.IGNORE_CASE).containsMatchIn(it.text("name")) }
@@ -117,12 +173,15 @@ class TorBoxDelivery(
                 val original = book.sources.flatMap { it.parts }.firstOrNull { it.name == f.text("name") || f.text("name").endsWith("/${it.name}") }
                 return AudioPart("torbox:$torrentId:${f.number("id")}", f.text("name"),
                     original?.title ?: f.text("short_name").ifBlank { f.text("name").substringAfterLast('/') }.substringBeforeLast('.').replace('_', ' '),
-                    durationMs = original?.durationMs ?: 0, torrentId = torrentId, fileId = f.number("id"))
+                    durationMs = original?.durationMs ?: 0, torrentId = torrentId, fileId = f.number("id"), sizeBytes = f.number("size"))
             }
             return listOf("mp3", "m4b", "other").mapNotNull { format ->
                 var group = files.filter { val ext = it.text("name").substringAfterLast('.').lowercase(); when (format) { "other" -> ext !in setOf("mp3", "m4b"); else -> ext == format } }
                 val archiveNames = book.sources.firstOrNull { it.format.equals(format, true) }?.parts?.map { it.name }.orEmpty()
-                if (archiveNames.isNotEmpty()) group = group.filter { f -> archiveNames.any { name -> f.text("name") == name || f.text("name").endsWith("/$name") } }.ifEmpty { group }
+                if (archiveNames.isNotEmpty()) {
+                    if (archiveNames.any { name -> group.none { sameFile(it.text("name"), name) } }) return@mapNotNull null
+                    group = group.filter { f -> archiveNames.any { name -> sameFile(f.text("name"), name) } }
+                }
                 if (format == "mp3") group = group.filter { !it.text("name").contains("64kb", true) }.ifEmpty { group }
                 if (group.isEmpty()) null else AudioSource("torbox:$torrentId:$format", if (format == "m4b") "Whole-book audio" else "Ordered audio parts",
                     format.uppercase(), group.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::toPart), "torbox", torrentId)

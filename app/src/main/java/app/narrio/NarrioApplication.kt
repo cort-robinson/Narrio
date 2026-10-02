@@ -18,17 +18,21 @@ class NarrioApplication : Application() {
 class AppGraph(application: Application) {
     val http = OkHttpClient.Builder().connectTimeout(20, TimeUnit.SECONDS).readTimeout(40, TimeUnit.SECONDS)
         .callTimeout(60, TimeUnit.SECONDS).addInterceptor { chain ->
-            chain.proceed(chain.request().newBuilder().header("User-Agent", "Narrio/1.0 Android audiobook player").build())
+            chain.proceed(chain.request().newBuilder().header("User-Agent", "Narrio/${BuildConfig.VERSION_NAME} Android audiobook player").build())
         }.build()
     val database = Room.databaseBuilder(application, LibraryDatabase::class.java, "narrio.db").addMigrations(object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("CREATE TABLE IF NOT EXISTS positions (bookId TEXT NOT NULL, sourceId TEXT NOT NULL, sourceJson TEXT NOT NULL, partId TEXT NOT NULL, positionMs INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(bookId, sourceId))")
         }
+    }, object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE shelf ADD COLUMN pendingFormat TEXT NOT NULL DEFAULT ''") }
     }).build()
     val library = database.library()
     val credentials = CredentialStore(application)
     val catalog = ArchiveDiscovery(http)
+    val indexedCatalog = KnabenDiscovery(http)
     val torbox = TorBoxDelivery(http, credentials::read)
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()
+    val offline = OfflineStore(application, http, torbox)
 }

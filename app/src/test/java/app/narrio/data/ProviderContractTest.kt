@@ -9,6 +9,72 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ProviderContractTest {
+    @Test fun flattenedSearchDescriptionDoesNotTurnCatalogBoilerplateIntoNarration() {
+        val meta = NarrioJson.parseToJsonElement("""{"identifier":"raven","title":"The Raven","creator":"Edgar Allan Poe","description":"LibriVox recording. Read by Chris Goringe For further information, including reader information, visit the catalog."}""").jsonObject
+        assertEquals("Chris Goringe", ArchiveDiscovery.parseBook(meta, false).narrator)
+    }
+    @Test fun uncachedDefaultPlaybackNeverCreatesATorrent() = runTest {
+        val server = MockWebServer(); server.start()
+        try {
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":{}}"""))
+            val client = TorBoxDelivery(OkHttpClient(), { "test-secret" }, server.url("/").toString())
+            val error = runCatching { client.prepareCached(Audiobook("id", "Book", "Author", torrentHash = "a".repeat(40), magnetUri = "magnet:?xt=urn:btih:${"a".repeat(40)}"), "M4B") }.exceptionOrNull()
+            assertTrue(error is ProviderException)
+            assertEquals(1, server.requestCount)
+            val request = server.takeRequest()
+            assertEquals("/torrents/checkcached", request.requestUrl?.encodedPath)
+            assertEquals("true", request.requestUrl?.queryParameter("list_files"))
+        } finally { server.shutdown() }
+    }
+    @Test fun cacheAvailabilityChecksTheChosenFilesAndRejectsNonAudio() = runTest {
+        val server = MockWebServer(); server.start()
+        val hash = "a".repeat(40); val other = "b".repeat(40)
+        try {
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":{"$hash":{"files":[{"name":"root/whole.m4b","size":100},{"name":"root/chapter_1.mp3"}]},"$other":{"files":[{"name":"film.mp4"},{"name":"sample.mp3"}]}}}"""))
+            val client = TorBoxDelivery(OkHttpClient(), { "test-secret" }, server.url("/").toString())
+            val sources = listOf(AudioSource("mp3", "Parts", "MP3", listOf(AudioPart("1", "chapter_1.mp3", "1"), AudioPart("2", "chapter_2.mp3", "2"))), AudioSource("m4b", "Whole", "M4B", listOf(AudioPart("m", "whole.m4b", "Whole"))))
+            val result = client.checkCached(listOf(Audiobook("archive", "Book", "Author", torrentHash = hash, sources = sources), Audiobook("indexed", "Film", "Unknown", torrentHash = other, provider = "knaben")))
+            assertEquals(listOf("M4B"), result[0].cachedFormats)
+            assertEquals("uncached", result[1].cacheState)
+            assertTrue(result[1].sources.isEmpty())
+        } finally { server.shutdown() }
+    }
+    @Test fun cachedIndexedReleaseListsRealOrderedAudioAndUsesMagnet() = runTest {
+        val server = MockWebServer(); server.start(); val hash = "a".repeat(40)
+        try {
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":[{"hash":"$hash","files":[{"name":"Book/10.mp3","size":123},{"name":"Book/2.mp3","size":456}]}]}"""))
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":[]}"""))
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":{"torrent_id":42}}"""))
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":[{"id":42,"download_finished":true,"download_present":true}]}"""))
+            val client = TorBoxDelivery(OkHttpClient(), { "test-secret" }, server.url("/").toString())
+            val book = Audiobook("indexed", "Release", "Unverified", provider = "knaben", torrentHash = hash, magnetUri = "magnet:?xt=urn:btih:$hash")
+            val checked = client.checkCached(listOf(book)).first()
+            assertEquals(listOf("Book/2.mp3", "Book/10.mp3"), checked.sources.first().parts.map { it.name })
+            assertEquals(456, checked.sources.first().parts.first().sizeBytes)
+            assertTrue(client.prepare(book).ready)
+            server.takeRequest(); server.takeRequest()
+            val form = server.takeRequest().body.readUtf8()
+            assertTrue(form.contains("magnet:?xt=urn:btih:$hash")); assertFalse(form.contains("filename="))
+        } finally { server.shutdown() }
+    }
+    @Test fun preparationReportsProviderProgressSpeedAndEta() {
+        val item = NarrioJson.parseToJsonElement("""{"id":7,"progress":0.35,"download_speed":1048576.5,"eta":3600,"seeds":2,"download_finished":false,"download_present":false,"download_state":"downloading"}""").jsonObject
+        val result = TorBoxDelivery(OkHttpClient(), { "unused" }).preparation(item)
+        assertEquals(0.35f, result.progress); assertEquals(1_048_576L, result.downloadBytesPerSecond)
+        assertEquals(3600L, result.etaSeconds); assertEquals(2L, result.seeds); assertFalse(result.ready)
+    }
+    @Test fun audiobookIndexerKeepsUnverifiedReleasesSeparateAndReceivesNoAccountKey() = runTest {
+        val server = MockWebServer(); server.start(); val hash = "a".repeat(40)
+        try {
+            server.enqueue(MockResponse().setBody("""{"hits":[{"title":"Example - Reader A","hash":"$hash","categoryId":[1003000],"bytes":123,"tracker":"example"},{"title":"Example - Reader B","hash":"${"b".repeat(40)}","categoryId":[1003000]},{"title":"Example Film","hash":"${"c".repeat(40)}","categoryId":[3001000]}]}"""))
+            val result = KnabenDiscovery(OkHttpClient(), server.url("/v2/").toString()).search("Example")
+            assertEquals(2, result.size); assertNotEquals(result[0].id, result[1].id)
+            assertTrue(result.all { it.narrator.contains("not verified") && it.sources.isEmpty() })
+            val request = server.takeRequest()
+            assertNull(request.getHeader("Authorization"))
+            assertEquals("1003000", request.requestUrl?.queryParameter("c")); assertTrue(request.path!!.contains("dead"))
+        } finally { server.shutdown() }
+    }
     @Test fun archiveUsesNarratedEditionAndAvoidsDuplicateBitrates() {
         val root = NarrioJson.parseToJsonElement("""{
             "metadata":{"identifier":"edition-1","title":"Example","creator":["An Author"],"language":"eng","runtime":"1:01:02","description":"<div>Read in English by A Reader</div><p>The story.</p>"},
