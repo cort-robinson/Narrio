@@ -53,6 +53,7 @@ data class Audiobook(
     val narratorFromCatalog: Boolean = false,
     val seeders: Long = 0,
     val filesVerified: Boolean = false,
+    val bookFilesSelected: Boolean = false,
 )
 
 data class Chapter(val title: String, val startMs: Long)

@@ -185,6 +185,7 @@ class TorBoxDelivery(
             return listOf("mp3", "m4b", "other").mapNotNull { format ->
                 var group = files.filter { val ext = it.text("name").substringAfterLast('.').lowercase(); when (format) { "other" -> ext !in setOf("mp3", "m4b"); else -> ext == format } }
                 val archiveNames = book.sources.firstOrNull { it.format.equals(format, true) }?.parts?.map { it.name }.orEmpty()
+                if (book.bookFilesSelected && archiveNames.isEmpty()) return@mapNotNull null
                 if (archiveNames.isNotEmpty()) {
                     if (archiveNames.any { name -> group.none { sameFile(it.text("name"), name) } }) return@mapNotNull null
                     group = group.filter { f -> archiveNames.any { name -> sameFile(f.text("name"), name) } }

@@ -100,7 +100,7 @@ object SourceQuality {
         if (!authorVerified) return null
         // Different books in one torrent must keep separate shelf and listening histories.
         val suffix = ":book:${BookIdentity.key(book.title, book.author)}"
-        return recording.copy(id = if (recording.id.endsWith(suffix)) recording.id else recording.id + suffix, sources = sources)
+        return recording.copy(id = if (recording.id.endsWith(suffix)) recording.id else recording.id + suffix, sources = sources, bookFilesSelected = true)
     }
 
     fun matches(book: Audiobook, recording: Audiobook): Boolean {
