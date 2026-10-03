@@ -66,7 +66,11 @@ npm run release:preview
 
 Create `hotfix/<name>` from `master` for an urgent stable fix. Make its actual commits Conventional Commits (for example `fix(player): retain the listening position`), open a PR to `master`, pass checks, and merge with a merge commit. Test the affected behavior before merging. Merge `master` into `dev` afterward so the fix remains in future versions. Ordinary features target `dev`.
 
-If CI or signing fails, nothing is published. Correct the configuration or code and retry the failed job. A failure after tagging/uploading can leave an unpublished tag or draft. **Re-run that original workflow**: automation rebuilds the same source/version, replaces only unpublished draft assets, verifies the uploads, and finalizes it. A newer commit cannot recover an older source's draft; complete the older run first, then retry the newer run. Published versions and assets are never replaced. For a bad published release, ship a new fix/revert commit and higher version.
+If CI or signing fails, nothing is published. Correct credential/configuration or transient failures and retry the failed job. A failure after tagging/uploading can leave an unpublished tag or draft. **Re-run that original workflow**: automation rebuilds the same source/version, replaces only unpublished draft assets, verifies the uploads, and finalizes it. A newer commit cannot recover an older source's draft; complete the older run first, then retry the newer run.
+
+If the publication code itself is broken, rerunning its old commit repeats the bug. Fix the tooling through a checked PR. For an already verified draft, retrieve the original workflow artifacts, independently verify the APK signature/package/version/checksums and protected tag's source commit, then use the corrected finalizer against that draft's release ID. It must compare all uploaded bytes before publication. Re-run the original failed job afterward to confirm published-version retries are harmless. Keep the original tag and APK source; never substitute newer application code into an existing version.
+
+Published versions and assets are never replaced. For a bad published release, ship a new fix/revert commit and higher version.
 
 ## Repository configuration
 
