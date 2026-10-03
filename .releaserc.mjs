@@ -10,7 +10,7 @@ export default {
     ['@semantic-release/github', {
       draftRelease: true,
       assets: [
-        { path: 'artifacts/Narrio-${nextRelease.version}.apk', label: 'Signed Android APK' },
+        { path: 'artifacts/Narrio-*.apk', label: 'Signed Android APK' },
         { path: 'artifacts/release-manifest.json', label: 'Version, signing, and source details' },
         { path: 'artifacts/SHA256SUMS', label: 'SHA-256 checksums' },
       ],
