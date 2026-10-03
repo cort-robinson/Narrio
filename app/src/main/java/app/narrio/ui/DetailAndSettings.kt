@@ -309,6 +309,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
     LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Make it yours.", style = MaterialTheme.typography.displaySmall); Spacer(Modifier.height(8.dp)); Text("Your listening room, your rules.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         item { AppearanceEntry(appearance, openAppearance) }
+        item { UpdateSettings(vm.graph.updates) }
         item {
             Text("TorBox", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
