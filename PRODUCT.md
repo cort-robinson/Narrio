@@ -12,7 +12,7 @@ Native Kotlin, Jetpack Compose, Media3 background playback, and Room local persi
 
 ## Users
 
-An Android listener who wants to discover narrated books and keep listening across the cover and unfolded displays of a Samsung Galaxy Z Fold 8.
+Android listeners who want to discover narrated books, stream cached sources, save books for offline listening, and return to their saved place.
 
 ## Product Purpose
 
@@ -27,7 +27,7 @@ Direct connections to catalog and delivery providers; no custom backend. The use
 - Catalog, recording discovery, delivery, playback, and library are separate modules.
 - Recording and part identifiers own progress; temporary URLs do not.
 - V1 needs source-backed discovery, single-file and multipart playback, preparation state, background media controls, and local persistence.
-- Fold layouts must use current window size and actual hinge/posture information, preserve state across folding, support multi-window, and honor system insets.
+- Layouts must adapt to the current window size on Android phones, larger screens, and multi-window sessions, while honoring system insets and text scaling. Foldables, including the Galaxy Z Fold 8, receive hinge/posture support and retain playback across folding; this is a compatibility requirement within the broader Android experience.
 - Working installation package and honest validation evidence are required.
 - Discovery combines Knaben's audiobook release index, Internet Archive's LibriVox catalog, and the user's TorBox audio. Indexed release metadata remains visibly unverified; files and TorBox cache availability determine playability.
 - Connected search defaults to ready sources. Uncached cloud preparation and phone downloads require separate explicit actions. Phone downloads use Wi-Fi by default and can be paused, resumed, retried, or removed.

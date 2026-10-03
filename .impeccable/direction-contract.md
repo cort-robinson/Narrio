@@ -14,7 +14,9 @@ First viewport: Narrio's small wordmark, a large 'Your next chapter.' heading, o
 
 Listener path: discover, inspect the narrated edition, choose direct Archive or TorBox delivery, listen, bookmark, and return to the saved shelf. Errors offer retry; preparation stays saved.
 
-Signature interaction: unfolding reveals a second pane containing the selected recording or current listening session without losing the catalog, position, or search. A horizontal half-open hinge divides artwork from reachable transport controls.
+Audience and priority: Android audiobook listeners. Discovery, cached streaming, optional offline listening, and reliable progress are the primary experience. Foldable support and optimizations are compatibility features within that broader product.
+
+Signature interaction: the listening session stays accessible while moving between discovery, the shelf, and the player. Wider windows reveal a second pane containing the selected recording or current listening session without losing the catalog, position, or search. Supported fold postures adapt that same experience around the hinge.
 
 ## Quality challenges and raises
 
@@ -31,8 +33,8 @@ Signature interaction: unfolding reveals a second pane containing the selected r
 - Day: background #F6F0E5, surface #EEE5D5, text #20332C, secondary text #56665C, action #805031.
 - Newsreader for display/headline roles; Manrope for body, label, and controls. Use sp and semantic roles.
 - Material 48 dp minimum controls; generous page margins, tight metadata groupings, 14 dp general shapes, cover corners 8 dp.
-- Cover screen: three-destination bottom navigation, compact mini-player, vertically scrollable detail/player.
-- Unfolded: 80 dp navigation rail, independently scrollable catalog and detail/listening panes; avoid occluding/separating vertical hinges.
+- Compact window: three-destination bottom navigation, compact mini-player, vertically scrollable detail/player.
+- Expanded window: 80 dp navigation rail, independently scrollable catalog and detail/listening panes; avoid occluding/separating vertical hinges where reported.
 - Half-open horizontal posture: artwork and book context above hinge, playback and parts below hinge.
 - System font scaling, TalkBack, keyboard, predictive back, edge-to-edge, and reduced motion remain native guarantees.
 - Static art and bounded drawing: no constantly running decorative animations. Playback updates stop when UI is not visible.

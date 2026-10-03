@@ -1,6 +1,6 @@
 # Narrio
 
-A native Android listening room for audiobooks. Real recording discovery, MP3 and M4B streaming, a personal shelf, and playback that stays with you when a Fold opens.
+A native Android listening room for audiobooks. Discover recordings, stream cached sources through TorBox, save books for offline listening, and keep your place on a personal shelf.
 
 ## Install the update
 
@@ -24,9 +24,11 @@ The signed package is `artifacts/Narrio-1.1.0.apk`. A copy is also delivered to 
 - Media3 background service and system media controls; pause on headphone disconnection and Android audio-focus handling.
 - Night, Day, and System appearance; original cover art and bundled Newsreader/Manrope typography.
 
-## Galaxy Z Fold 8 and adaptive behavior
+## Adaptive Android layouts
 
-Narrio targets Android 16 and uses current window bounds and Jetpack WindowManager posture data rather than a device-name check. The cover display has bottom navigation and a compact player. Unfolded windows at least 600 dp wide reveal an 80 dp navigation rail and two independently scrolling panes. Vertical separating hinges keep discovery and playback on opposite sides. A horizontal half-open posture puts artwork above the hinge and transport below it.
+Narrio targets Android 16 and adapts to current window bounds. Compact phone windows have bottom navigation and a mini-player. Windows at least 600 dp wide reveal an 80 dp navigation rail and two independently scrolling panes, including larger screens and multi-window sessions.
+
+Foldables, including the Galaxy Z Fold 8, also receive hinge and posture support through Jetpack WindowManager. Vertical separating hinges keep discovery and playback on opposite sides. A supported horizontal half-open posture puts artwork above the hinge and transport below it.
 
 The service owns playback, so folding, rotation, or multi-window resizing does not rebuild the audio session. Insets and enlarged system text are supported. Static artwork avoids constant decorative animation; background UI updates slow down when the activity is hidden. See [validation](docs/VALIDATION.md) for the exact emulator evidence and physical-device limits.
 
