@@ -159,7 +159,7 @@ class TorBoxDelivery(
                 val files = (item["files"] as? JsonArray).orEmpty().mapIndexedNotNull { index, file ->
                     val obj = file as? JsonObject
                     val name = obj?.text("name")?.ifBlank { obj.text("path") } ?: file.stringValue()
-                    if (!isAudioFile(name) || Regex("(^|[/ _-])(sample|trailer)([/ _.-]|$)", RegexOption.IGNORE_CASE).containsMatchIn(name)) null else buildJsonObject {
+                    if (!isBookAudioFile(name)) null else buildJsonObject {
                         put("id", index); put("name", name); put("size", obj?.number("size") ?: 0)
                     }
                 }
@@ -174,7 +174,7 @@ class TorBoxDelivery(
                 if (Regex("(?i)(^|[/ _-])(readme|license|info|credits)([. _-]|$)").containsMatchIn(name)) return@mapNotNull null
                 BookTextSource("torbox:$torrentId:${file.number("id")}", name.substringAfterLast('/'), format = format, provider = "torbox", torrentId = torrentId, fileId = file.number("id"), attribution = "Companion file from your TorBox audio source")
             }
-            val files = item.objects("files").filter { isAudioFile(it.text("name")) && !Regex("(^|[/ _-])(sample|trailer)([/ _.-]|$)", RegexOption.IGNORE_CASE).containsMatchIn(it.text("name")) }
+            val files = item.objects("files").filter { isBookAudioFile(it.text("name")) }
             fun toPart(f: JsonObject): AudioPart {
                 val original = book.sources.flatMap { it.parts }.firstOrNull { it.name == f.text("name") || f.text("name").endsWith("/${it.name}") }
                 return AudioPart("torbox:$torrentId:${f.number("id")}", f.text("name"),

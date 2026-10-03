@@ -73,12 +73,12 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
                 title = file.text("title").ifBlank { file.text("name").substringAfterLast('/').substringBeforeLast('.').replace('_', ' ') },
                 durationMs = parseDuration(file.text("length")), archiveUrl = url(file.text("name")), sizeBytes = file.number("size"),
             )
-            val mp3s = all.filter { it.text("name").endsWith(".mp3", true) }
+            val mp3s = all.filter { it.text("name").endsWith(".mp3", true) && isBookAudioFile(it.text("name")) }
             val highQuality = mp3s.filter { !it.text("name").contains("64kb", true) && !it.text("format").contains("64Kbps", true) }
                 .ifEmpty { mp3s }
             val originals = highQuality.filter { it.text("source") == "original" }.ifEmpty { highQuality }
             val multipart = originals.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::part)
-            val m4b = all.filter { it.text("name").endsWith(".m4b", true) }.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::part)
+            val m4b = all.filter { it.text("name").endsWith(".m4b", true) && isBookAudioFile(it.text("name")) }.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::part)
             val textFiles = all.mapNotNull { file ->
                 val name = file.text("name")
                 val format = textFileFormat(name) ?: return@mapNotNull null

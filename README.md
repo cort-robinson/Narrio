@@ -1,6 +1,6 @@
 # Narrio
 
-A native Android listening room for audiobooks. Discover recordings, stream cached sources through TorBox, save books for offline listening, and keep your place on a personal shelf.
+A native Android listening room for audiobooks. Find a book, choose a matching listening source, stream through TorBox or Internet Archive, and keep your place on a personal shelf.
 
 ## Install the update
 
@@ -9,18 +9,20 @@ Download the signed APK from the [latest GitHub release](https://github.com/cort
 1. Transfer the APK to your Android phone and open it in Files.
 2. If Android requests it, allow that app to install unknown apps, then install Narrio.
 3. Open **Settings → TorBox**, enter your API key, and tap **Connect TorBox**. Your TorBox plan must include API access.
-4. Search for a title or author in **Ready to stream**, open the exact recording/release, tap **Listen**, choose a cached audio format, then **Stream now**. Narrio rechecks availability before adding a new source to TorBox. Streaming requires no phone download.
+4. On this development branch, search for a title or author, open the book, and tap **Find sources**. Choose a matching recording, tap **Listen**, choose an audio format, then **Stream now**. Narrio rechecks availability before adding a new source to TorBox. Streaming requires no phone download. Stable installs retain their published discovery flow until this change is released.
 5. To listen offline, choose **Download to phone**. Downloads use Wi-Fi by default. **My shelf** offers progress, pause/resume/retry, **Play offline**, and removal. Settings can permit mobile-data downloads.
 
-**All sources** includes uncached releases from Knaben's audiobook index and LibriVox. Indexed and account releases gain matched descriptions, authors, narrator information, and artwork from Audible, with Open Library as a book-metadata fallback. Catalog narration is labeled separately because the release's exact recording, language, and abridgment remain unverified; inspect the original release name and filenames. **Public books** streams LibriVox recordings directly through Internet Archive without an account and retains that recording's own readers and artwork. **My TorBox** searches your existing account audio. Availability depends on search coverage and the TorBox cache. An uncached release can be prepared only through its explicit **Prepare in TorBox** action; this can take hours and does not save audio to the phone.
+Discovery uses the Audible book catalog, Google Books, and Open Library. Editions with the same normalized title and author appear once; full descriptions and covers take priority. A book result identifies the work and does not guarantee a playable audiobook. Source providers and TorBox are contacted only when you request sources from book details, or open an existing saved recording.
 
-Book details fill in progressively after playable search results appear. Open a recording to retrieve its details, or use **Refresh book details** below its description. Successful lookups are cached for a day and saved with shelf items. Metadata failures keep existing details and allow listening to continue. Ambiguous title/author matches stay unknown; multiple catalog narrators need a matching release hint before Narrio selects one.
+**Find sources** checks LibriVox public audio and, when connected, Knaben releases and your TorBox account audio. Only matching title/author releases with usable public or cached audio appear. Wrong books, sequels, summaries, collections, samples, and unchecked cache results are excluded. Cached audio appears first. Exact recording narration and language can remain unverified; inspect the release and audio files. Catalog narrators describe metadata editions and never identify a chosen recording automatically. Existing saved releases retain their explicit cloud preparation controls.
+
+Successful metadata lookups are cached for a day and saved with shelf items. Metadata failures keep existing details and allow saved recordings to remain usable. **Refresh book details** on a recording retains its source, files, and listening position.
 
 ## Included
 
 Follow along is available on this development branch and its Narrio Dev preview. Stable updates are published from `master` through the [development workflow](docs/DEVELOPMENT.md); see [current validation](docs/VALIDATION.md) for feature evidence.
 
-- Search by title and author, with separate narrated recordings and visible language/narrator metadata.
+- Metadata-only title/author search with one result per book, followed by explicit discovery of matching narrated recordings.
 - TorBox account connection, batched hash/file cache checks, cached-source filtering, existing-source reuse, torrent/magnet creation, detailed cloud preparation status, and temporary per-file playback links.
 - Explicit offline phone downloads with storage estimates, Wi-Fi preference, progress, pause/resume/retry, and removal. Ordinary streaming does not write to the offline audio cache.
 - Whole-book M4B and naturally ordered multipart MP3 playback, 30-second skip controls, speed, a sleep timer, and bookmarks.
@@ -50,7 +52,7 @@ The service owns playback, so folding, rotation, or multi-window resizing does n
 
 ## Local privacy
 
-No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to the selected discovery providers; TorBox credentials are never sent to Knaben, Internet Archive, or Gutendex. Metadata lookup sends cleaned book/release names to Audible or Open Library; artwork loads from the returned provider image URLs. TorBox credentials, file lists, listening positions, and bookmarks are never sent to metadata providers. Room contains recording metadata, stable part IDs, positions, bookmarks, and text attachments/timing matches. Original and normalized book text stay in private device storage. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads, book text, and history, without deleting files from TorBox.
+No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to catalog providers; TorBox credentials are never sent to Knaben, Internet Archive, or Gutendex. Metadata lookup sends book/release names to Audible, Google Books, or Open Library; artwork loads from the returned provider image URLs. TorBox credentials, file lists, listening positions, and bookmarks are never sent to metadata providers. Room contains recording metadata, stable part IDs, positions, bookmarks, and text attachments/timing matches. Original and normalized book text stay in private device storage. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads, book text, and history, without deleting files from TorBox.
 
 ## Build
 

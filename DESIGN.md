@@ -187,11 +187,11 @@ components:
 
 Narrio is a quiet, personal listening room. In the default palette, warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. The original type pairing gives story titles a serif voice and tasks a clear sans serif.
 
-The implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected recording or listening session beside each other.
+The implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected book, recording, or listening session beside each other.
 
 Listening room remains the default. Local Appearance settings offer paired palettes, one custom palette, and font and text-size choices within the same layouts and semantic roles.
 
-This guide records the current Compose implementation. The surface concept and first-viewport strategy remain in [.impeccable/direction-contract.md](.impeccable/direction-contract.md). FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.
+This guide records the current Compose implementation. The original surface concept and first-viewport strategy remain as historical direction evidence in [.impeccable/direction-contract.md](.impeccable/direction-contract.md); the current catalog and details flow is described under Components below. FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.
 
 **Key Characteristics:**
 
@@ -232,7 +232,7 @@ Material tertiary and its container/content partners reuse the secondary roles i
 - **Outlines:** `outline` serves Material outlined controls; `outline-muted` serves dividers and the mini-player progress track.
 - **Error:** the explicit Night error pair remains part of the theme. Day inherits the Material light scheme's default error roles; no custom Day error palette was extracted.
 
-Featured artwork is a component-specific exception: its cream text and dark green scrim remain fixed over the garden. Its listening action uses the selected scheme's primary/onPrimary pair. Per-book cover palettes belong to artwork, not global interface tokens.
+The original garden cover is an artwork-specific exception: its cream text and dark green scrim remain fixed over the image while provider art loads or when no cover is available. Per-book cover palettes belong to artwork, not global interface tokens.
 
 **The Paired Scheme Rule.** Resolve interface colors through the selected palette's MaterialTheme.colorScheme. Night, Day, and System are independent of palette choice. Listening room retains its authored schemes; optional presets and custom palettes derive contrast-aware roles from separate Night and Day seeds. The app does not use wallpaper-derived dynamic color.
 
@@ -253,13 +253,13 @@ Newsreader is expressive at normal weight; Manrope gives metadata and actions an
 | Native role | Family | Size / line height (sp) | Weight | Typical use |
 | --- | --- | --- | --- | --- |
 | displaySmall | Newsreader | 36 / 40 | 400 | Repeated page headings in Discover, My shelf, and Settings. |
-| headlineLarge | Newsreader | 32 / 36 | 400 | Recording titles, large cover lettering, and tabletop book context. |
+| headlineLarge | Newsreader | 32 / 36 | 400 | Book and recording titles, large cover lettering, and tabletop book context. |
 | headlineMedium | Newsreader | 28 / 32 | 400 | Wordmark, player title, sheet/dialog headings, and empty-state titles. |
 | headlineSmall | Newsreader | 24 / 28 | 400 | Shelf, description, source, and settings section headings. |
 | titleLarge | Newsreader | 22 / 28 | 500 | Regular cover lettering and the quiet player closing line. |
-| titleMedium | Manrope | 16 / 23 | 600 | Recording rows, context bars, preparation state, and bookmark times. |
-| titleSmall | Manrope | 14 / 20 | 600 | Shelf titles, source options, parts, and account status. |
-| bodyLarge | Manrope | 16 / 26 | 400 | Recording author and the Material text-field body role. |
+| titleMedium | Manrope | 16 / 23 | 600 | Book and shelf rows, context bars, preparation state, and bookmark times. |
+| titleSmall | Manrope | 14 / 20 | 600 | Matching recording releases, source options, parts, and account status. |
+| bodyLarge | Manrope | 16 / 26 | 400 | Book and recording author and the Material text-field body role. |
 | bodyMedium | Manrope | 14 / 22 | 400 | Descriptions, instructions, and supporting context. |
 | bodySmall | Manrope | 12 / 19 | 400 | Author, narrator, source, and playback metadata. |
 | labelLarge | Manrope | 14 / 20 | 600 | Material action labels. |
@@ -274,17 +274,17 @@ Appearance provides Narrio (the original pairing), Manrope throughout, Newsreade
 
 ## Layout
 
-The usual page inset is generous (24 dp). Discover uses a slightly tighter top inset (20 dp) and a lower inset (28 dp). Related metadata uses shorter gaps (4, 8, or 12 dp); recording rows separate art and text (16 dp). Section and page groups commonly use 24 or 28 dp. Component-specific gaps also occur; the build is not a strict universal grid.
+The usual page inset is generous (24 dp). Discover uses a slightly tighter top inset (20 dp) and a lower inset (28 dp). Related metadata uses shorter gaps (4, 8, or 12 dp); book and shelf rows separate art and text (16 dp). Section and page groups commonly use 24 or 28 dp. Component-specific gaps also occur; the build is not a strict universal grid.
 
 [NarrioApp.kt](app/src/main/java/app/narrio/ui/NarrioApp.kt) chooses expanded composition at a current window width of at least 600 dp, except during open tabletop playback. Compact catalog destinations use a three-destination Material navigation bar; an active mini-player sits above it. Detail and full player replace the catalog view on compact windows.
 
-Expanded composition uses an 80 dp navigation rail. Without a separating vertical hinge, the catalog begins at 53% of the width remaining after the rail; its width is bounded by the source's 250 dp pane minima. The secondary pane displays the selected recording, current player, or welcome state. With a separating vertical hinge, pane positioning uses the reported bounds and leaves a gap at least 1 dp wide. Both content panes scroll independently.
+Expanded composition uses an 80 dp navigation rail. Without a separating vertical hinge, the catalog begins at 53% of the width remaining after the rail; its width is bounded by the source's 250 dp pane minima. The secondary pane displays the selected book or recording, current player, or welcome state. With a separating vertical hinge, pane positioning uses the reported bounds and leaves a gap at least 1 dp wide. Both content panes scroll independently.
 
 Horizontal HALF_OPENED posture becomes tabletop only while the player is open. The upper pane is bounded by the hinge after subtracting the status inset. Its cover height is the smaller of available height or `upper width × 0.55 × 1.45`; cover width is `height ÷ 1.45`. The context column scrolls within that upper region. The hinge gap is the greater of the reported gap and 12 dp; the lower transport pane scrolls with 24 dp padding. These are current layout calculations, not physical device measurements.
 
-Safe drawing insets protect the top and horizontal edges; full/detail/expanded content also applies navigation-bar padding. Settings applies IME padding. System Back is handled in the app to return from player/detail or to Discover.
+Safe drawing insets protect the top and horizontal edges; full/detail/expanded content also applies navigation-bar padding. Settings applies IME padding. System Back collapses the player, returns a recording chosen from source results to its catalog details, closes details, or returns another destination to Discover.
 
-The source-scope chips now scroll horizontally at compact and expanded widths. SourcePicker keeps its content in a vertically scrollable native sheet, with weighted option text that can wrap around its radio controls. Long release names and larger system text expand the content instead of clipping the source and preparation actions. App and sheet system-bar icons use foreground contrast against the actual scheme background, including custom palettes. These behaviors are implemented in NarrioApp.kt and DetailAndSettings.kt; they do not introduce new breakpoints or fixed modal geometry.
+Browse category chips scroll horizontally at compact and expanded widths and disappear while a search query is entered. SourcePicker keeps its content in a vertically scrollable native sheet, with weighted option text that can wrap around its radio controls. Long release names and larger system text expand the sheet content instead of clipping the source and preparation actions. App and sheet system-bar icons use foreground contrast against the actual scheme background, including custom palettes. These behaviors are implemented in CatalogScreens.kt, NarrioApp.kt, and DetailAndSettings.kt; they do not introduce new breakpoints or fixed modal geometry.
 
 **The Window First Rule.** Choose the composition from current window width and WindowManager features. Do not select a layout from the device name or assume physical Fold dimensions.
 
@@ -296,21 +296,23 @@ The [1.1 finish review](.impeccable/review/v1.1/finish-review.md) returns ship w
 
 The separate [Appearance finish review](.impeccable/review/appearance/finish-review.md) returns ship with no material fixes for this branch's customization feature. Its 18 named native region captures cover phone, expanded, and enlarged-text windows, including system scaling 1.3 with app Large 1.2. The previews use synthetic story content and a custom Aurora palette. This review and [appearance.json](verification/appearance.json) establish the scoped emulator appearance behavior; they add no signed-release, physical-phone, or audio certification to the historical evidence above.
 
+The metadata-first catalog and Find sources increment is documented from current Compose source. Rendered Android QA remains unverified: the T3 Android device is unavailable, no adb devices are connected, and no screenshots exist for this increment. The historical reviews above remain valid only for their recorded scope; they do not establish the new catalog, matching-recording rows, or return navigation at phone, expanded, Night/Day, or enlarged-text sizes.
+
 ## Elevation & Depth
 
 Depth is primarily tonal. Catalog rows sit directly on the ground; dividers separate longer sections. The secondary pane uses surfaceContainerLow, the mini-player and functional status containers use surfaceContainer, and selected rows use secondaryContainer. The mini-player explicitly sets tonal elevation to zero (0 dp). Material sheets and dialogs retain their library elevation behavior; no custom shadow token or elevation scale has been authored.
 
-Atmospheric depth comes from the original garden image and the contrast scrims in the feature and covers. These are static artwork treatments, not looping effects or a substitute for real media. No custom decorative animation duration or easing token exists.
+Atmospheric depth comes from the original garden cover image and its contrast scrim. These are static artwork treatments, not looping effects or a substitute for real media. No custom decorative animation duration or easing token exists.
 
 **The Quiet Surface Rule.** Use tonal surfaces and outlineVariant dividers to distinguish functional regions. Preserve Material sheet and dialog elevation; the implementation has no custom shadow vocabulary.
 
-**The Artwork Contrast Rule.** Keep original artwork and its text scrims together. The gradients in the featured scene and image covers are legibility treatments already present in the build.
+**The Artwork Contrast Rule.** Keep original artwork and its text scrim together. The gradient over the garden cover is a legibility treatment already present in the build.
 
 Playback publication follows visibility: the service loop runs at one second while visible and five seconds while hidden, publishing in the hidden state while playback or a sleep timer is active. Background audio updates do not literally stop. These intervals appear in [ListeningService.kt](app/src/main/java/app/narrio/playback/ListeningService.kt), with lifecycle visibility set in NarrioApp.kt.
 
 ## Shapes
 
-Covers have quietly rounded corners (8 dp). Selection rows and the credential field use a compact curve (12 dp). Search, recovery, and preparation containers use a slightly softer curve (14 dp). The featured artwork's corner (16 dp) is component-specific and is not promoted into a general shape token.
+Covers have quietly rounded corners (8 dp). Selection rows and the credential field use a compact curve (12 dp). Search, recovery, and preparation containers use a slightly softer curve (14 dp).
 
 The prominent play control is a true CircleShape (82 dp). Other buttons, chips, navigation indicators, sheets, and dialogs use Material defaults because the app does not override MaterialTheme.shapes. Preserve those native silhouettes rather than assigning all controls the container radius.
 
@@ -318,7 +320,7 @@ The prominent play control is a true CircleShape (82 dp). Other buttons, chips, 
 
 ### Buttons and transport
 
-Filled primary buttons carry Listen, Discover, and Connect actions. Filled tonal buttons support quieter actions. Outlined controls hold Save, speed, sleep, and parts; text buttons carry retry, read-more, and subordinate actions. Their default colors and interaction states come from Material 3. Source-level enabled conditions express loading, account, and saved state.
+Filled primary buttons carry Find sources, Listen, Discover, and Connect actions. Filled tonal buttons support quieter actions. Outlined controls hold Save, speed, sleep, and parts; text buttons carry retry, read-more, and subordinate actions. Their default colors and interaction states come from Material 3. Source-level enabled conditions express loading, account, and saved state.
 
 Player transport gives the circular play/pause control a larger target (82 dp) and skip controls medium targets (56 dp), with real buffering progress inside the primary control. The slider is disabled until duration is known, exposes the listening-position description, and seeks when dragging finishes. See [PlayerScreen.kt](app/src/main/java/app/narrio/ui/PlayerScreen.kt).
 
@@ -326,17 +328,17 @@ Player transport gives the circular play/pause control a larger target (82 dp) a
 
 Search is a single-line OutlinedTextField with a search icon, clear action, and the container corner. The credential field is a password-transformed OutlinedTextField with the selection corner. Native field focus, outlines, keyboard interaction, and disabled state remain Material-owned.
 
-FilterChip drives category, source scope when connected, and Appearance mode, text-size, and custom color-role selection. Chip groups use short gaps (8 dp); categories scroll horizontally and Appearance groups wrap. Their selected states remain native Material states.
+FilterChip drives browse category and Appearance mode, text-size, and custom color-role selection. Chip groups use short gaps (8 dp); categories scroll horizontally and Appearance groups wrap. Category chips appear only with a blank query, and entering a query resets the browse category to All. Discovery has no source-scope chip row. Selected states remain native Material states.
 
 ### Navigation and context
 
-Discover, My shelf, and Settings use the same Material icon and label pair in navigation bar and rail. In compact detail, an auto-mirrored back control precedes the recording context. The player has a collapse control and bookmark action. Full-screen state and destination selection come from the view model, not decorative visual state.
+Discover, My shelf, and Settings use the same Material icon and label pair in navigation bar and rail. In compact detail, an auto-mirrored back control precedes The book or The recording context. A recording chosen from matching results offers Choose another recording; it and System Back return to the catalog details with the source results retained. The player has a collapse control and bookmark action. Full-screen state and destination selection come from the view model, not decorative visual state.
 
-### Recording rows and covers
+### Book and recording rows and covers
 
-[BookRow](app/src/main/java/app/narrio/ui/CatalogScreens.kt) pairs a cover (76 × 112 dp) with grouped title, author, narrator, and available duration; a trailing action can resume a saved recording. The featured shelf uses taller cover tiles (140 × 204 dp) and separate captions. Text truncation is bounded by role and context.
+[BookRow](app/src/main/java/app/narrio/ui/CatalogScreens.kt) pairs a cover (76 × 112 dp) with grouped title and author. Catalog rows add a description excerpt of up to three lines and a quiet metadata-provider label; one row represents each normalized title/author identity. Saved recording rows retain narrator, available duration, source/cache context, and a trailing resume action when available. Titles use up to three lines. Discover uses these open rows beneath the page heading, search, and browse categories; the original featured hero and tall cover-tile shelf are historical compositions.
 
-[BookCover.kt](app/src/main/java/app/narrio/ui/BookCover.kt) draws the original typographic covers or displays the original garden image; non-curated recordings can display provider artwork. Cover lettering adapts to available width and the large presentation flag, and is omitted below 60 dp width. Preserve [docs/ART.md](docs/ART.md), its generation prompt provenance, and the bundled Newsreader/Manrope SIL Open Font License references.
+[BookCover.kt](app/src/main/java/app/narrio/ui/BookCover.kt) displays available provider artwork using ContentScale.Fit. While an image loads or when it fails or is absent, it draws the original typographic covers or garden image. Fallback lettering adapts to available width and the large presentation flag, and is omitted below 60 dp width. Preserve [docs/ART.md](docs/ART.md), its generation prompt provenance, and the bundled Newsreader/Manrope SIL Open Font License references.
 
 ### Mini-player
 
@@ -348,9 +350,11 @@ RecoveryState pairs a title, readable message, and Try again action inside the c
 
 Source options and current parts use selection-colored rows with radio or current-part indicators. Source, parts, and bookmarks open in ModalBottomSheet. Speed and sleep use scrollable AlertDialog content. Shelf removal uses an explicit Material confirmation dialog. See [DetailAndSettings.kt](app/src/main/java/app/narrio/ui/DetailAndSettings.kt).
 
-### Source scope and cache-aware selection
+### Book details and cache-aware source selection
 
-Connected discovery starts with **Ready to stream**. Its horizontally scrolling FilterChip row also exposes All sources, Public books, and My TorBox; disconnected discovery exposes Public books and All sources. Category chips apply to Public books. Keep partial-source notices and errors visible alongside any available results, and let the empty ready-source state offer See all sources. See [CatalogScreens.kt](app/src/main/java/app/narrio/ui/CatalogScreens.kt) and the source-scope default in [NarrioViewModel.kt](app/src/main/java/app/narrio/ui/NarrioViewModel.kt).
+Discovery identifies books through metadata without checking audio availability. Catalog details retain the existing large cover, title, author, description, provider attribution, and Save action. Their primary action is **Find sources**, disabled during lookup. Supporting copy explains that book information does not guarantee an audiobook source; disconnected listeners can connect TorBox for more sources. See [CatalogScreens.kt](app/src/main/java/app/narrio/ui/CatalogScreens.kt), [DetailAndSettings.kt](app/src/main/java/app/narrio/ui/DetailAndSettings.kt), and [NarrioViewModel.kt](app/src/main/java/app/narrio/ui/NarrioViewModel.kt).
+
+Find sources adds a Listening sources section within the same scrollable detail pane. Open, divided recording rows group the original release title, narration label, provider, language, available formats, and a primary-colored readiness label. Only matching recordings with usable public or cached audio appear, with cached sources first. Native progress, retry, and No suitable sources found states occupy that section; partial-provider errors remain visible alongside available results. Selecting a row opens recording details, whose **Listen** action opens the existing SourcePicker sheet.
 
 Recording rows add quiet provider/cache context through labelSmall. Detail and source sheets retain visible indexed metadata uncertainty: narration and edition can be unverified, and the listener should inspect the release and files. Do not replace unknown author, language, narrator, or abridgment details with inferred facts. Indexed discovery is not a promise of cache availability or commercial catalog coverage.
 

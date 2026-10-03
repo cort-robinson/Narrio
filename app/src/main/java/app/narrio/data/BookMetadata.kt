@@ -79,16 +79,16 @@ class BookMetadata(
         catch (_: Exception) { book } // Metadata outages must not prevent listening or erase saved details.
     }
 
-    private suspend fun audible(query: String): List<BookDetails> {
+    internal suspend fun audible(query: String, count: Int = 20): List<BookDetails> {
         val url = (audibleUrl + "products").toHttpUrl().newBuilder()
-            .addQueryParameter("keywords", query).addQueryParameter("num_results", "20")
+            .addQueryParameter("keywords", query).addQueryParameter("num_results", count.toString())
             .addQueryParameter("products_sort_by", "Relevance")
             .addQueryParameter("response_groups", "product_desc,product_attrs,product_extended_attrs,contributors,media")
             .addQueryParameter("image_sizes", "500,1024").build()
         return get(url).objects("products").mapNotNull { product ->
             val asin = product.text("asin")
             val authors = product.objects("authors").map { it.text("name") }.filter(String::isNotBlank)
-            if (product.text("content_type") != "Product" || !asin.matches(Regex("[A-Z0-9]{10}")) || authors.isEmpty()) return@mapNotNull null
+            if (product.text("content_type") != "Product" || product.text("title").isBlank() || !asin.matches(Regex("[A-Z0-9]{10}")) || authors.isEmpty()) return@mapNotNull null
             val images = product["product_images"] as? JsonObject
             BookDetails(product.text("title"), authors, product.objects("narrators").map { it.text("name") }.filter(String::isNotBlank),
                 MetadataText.clean(product.text("publisher_summary").ifBlank { product.text("merchandising_summary") }.ifBlank { product.text("short_description") }),
@@ -98,26 +98,35 @@ class BookMetadata(
     }
 
     private suspend fun openLibrary(book: Audiobook, query: String): List<BookDetails> {
+        val candidates = librarySearch(query)
+        val selected = match(book, candidates) ?: return candidates
+        val full = libraryDetails(selected)
+        return candidates.map { if (it.url == selected.url) full else it }
+    }
+
+    internal suspend fun librarySearch(query: String): List<BookDetails> {
         val url = (libraryUrl + "search.json").toHttpUrl().newBuilder()
             .addQueryParameter("q", query).addQueryParameter("limit", "10")
             .addQueryParameter("fields", "key,title,author_name,cover_i").build()
-        val candidates = get(url).objects("docs").mapNotNull { doc ->
+        return get(url).objects("docs").mapNotNull { doc ->
             val key = doc.text("key").let { if (it.startsWith("/")) it else "/works/$it" }
             val authors = (doc["author_name"] as? JsonArray)?.map { it.stringValue() }?.filter(String::isNotBlank).orEmpty()
-            if (!key.matches(Regex("/works/OL[0-9]+W")) || authors.isEmpty()) return@mapNotNull null
+            if (!key.matches(Regex("/works/OL[0-9]+W")) || doc.text("title").isBlank() || authors.isEmpty()) return@mapNotNull null
             BookDetails(doc.text("title"), authors, emptyList(), "",
                 doc.number("cover_i").takeIf { it > 0 }?.let { "https://covers.openlibrary.org/b/id/$it-L.jpg?default=false" }.orEmpty(),
                 "", "Open Library", "https://openlibrary.org$key")
         }
-        val selected = match(book, candidates) ?: return candidates
-        val work = try { get((libraryUrl.trimEnd('/') + selected.url.substringAfter("https://openlibrary.org") + ".json").toHttpUrl()) }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { return candidates }
-        val description = work["description"].let { if (it is JsonObject) it.text("value") else it.stringValue() }
-        return candidates.map { if (it.url == selected.url) it.copy(description = MetadataText.clean(description)) else it }
     }
 
-    private suspend fun get(url: HttpUrl): JsonObject = withContext(Dispatchers.IO) {
+    internal suspend fun libraryDetails(selected: BookDetails): BookDetails {
+        val work = try { get((libraryUrl.trimEnd('/') + selected.url.substringAfter("https://openlibrary.org") + ".json").toHttpUrl()) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { return selected }
+        val description = work["description"].let { if (it is JsonObject) it.text("value") else it.stringValue() }
+        return selected.copy(description = MetadataText.clean(description))
+    }
+
+    internal suspend fun get(url: HttpUrl): JsonObject = withContext(Dispatchers.IO) {
         val response = suspendCancellableCoroutine { continuation ->
             val call = http.newCall(Request.Builder().url(url).build())
             continuation.invokeOnCancellation { call.cancel() }
@@ -182,7 +191,7 @@ class BookMetadata(
     }
 }
 
-private data class BookDetails(
+internal data class BookDetails(
     val title: String, val authors: List<String>, val narrators: List<String>, val description: String,
     val coverUrl: String, val language: String, val provider: String, val url: String,
 )
