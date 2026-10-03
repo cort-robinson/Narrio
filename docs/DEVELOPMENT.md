@@ -20,6 +20,12 @@ gh pr create --base dev
 
 PR policy checks Conventional Commit titles and meaningful release-note summaries. CI runs JVM tests, Android lint/build checks, release-tooling tests, and emulator smoke tests for persistence, encrypted credential removal, link renewal, metadata-only book details and source selection, source choices, offline settings, follow-along interaction/source binding, and the text-schema migration. These required tests use controlled fixtures; live provider and listening checks remain separate because provider availability should not decide whether a release can build.
 
+### CI runtime
+
+The build/lint/unit-test and Android smoke jobs run in parallel. The smoke job restores a clean API 35 Pixel 6 emulator snapshot when available. Only trusted branch pushes save snapshots, before installing the app or test APK; test runs do not save their device state. The cache key includes the runner platform and workflow configuration. A cache miss generates a fresh snapshot and can take longer; after SDK/emulator compatibility changes, increment the cache-key generation to invalidate old snapshots.
+
+PRs targeting `dev` that change only `README.md`, `AGENTS.md`, or Markdown files under `docs/` skip Android setup, compilation, lint, and emulator tests. Release-tooling and CI path-selection tests still run, and the required **CI** check explicitly verifies the intentional skip. Unknown files, empty/failed comparisons, workflow/build/tooling changes, PRs to `master`, branch pushes, and manual runs execute the full Android suite. The workflow itself always runs, so documentation PRs do not leave required checks pending. No smoke tests are removed.
+
 ## Test a development build
 
 Bookmark [Narrio Dev downloads](https://github.com/cort-robinson/Narrio/releases?q=dev-&expanded=true) on your phone. Open the newest **Narrio Dev** prerelease, tap **Download Narrio Dev APK**, and open the downloaded APK. Allow your browser or Files app to install unknown apps if Android asks. No USB connection, GitHub login, or ZIP extraction is needed.
