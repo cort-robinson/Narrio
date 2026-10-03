@@ -2,9 +2,16 @@ package app.narrio.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,8 +38,10 @@ import kotlinx.coroutines.isActive
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modifier) {
-    val selected by vm.selection.collectAsStateWithLifecycle()
+fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier: Modifier = Modifier, listState: LazyListState = rememberLazyListState()) {
+    val currentSelection by vm.selection.collectAsStateWithLifecycle()
+    // While this pane animates away, the selection may already belong to another book (or none).
+    val selected = currentSelection.takeIf { it.book?.id == book.id } ?: SelectionState(book)
     val preparation by vm.preparation.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
@@ -40,38 +49,48 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val sourceSearch by vm.sourceSearch.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var sourcePicker by remember(selected.book?.id) { mutableStateOf(false) }
-    var expandedDescription by remember(selected.book?.id) { mutableStateOf(false) }
-    val book = selected.book ?: return
+    var sourcePicker by remember(book.id) { mutableStateOf(false) }
+    var expandedDescription by remember(book.id) { mutableStateOf(false) }
+    // A page that is leaving (or being reused mid-exit) never carries its source sheet with it.
+    LaunchedEffect(currentSelection.book?.id) { if (currentSelection.book?.id != book.id) sourcePicker = false }
     val catalogBook = book.provider == "catalog"
     val saved = shelf.any { it.bookId == book.id }
     LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, connected) {
         if (preparation != null && preparation?.ready != true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
     }
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    LazyColumn(modifier.fillMaxSize(), listState, contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") }
                 Text(if (catalogBook) "The book" else "The recording", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.weight(1f))
-                IconButton({ vm.save(book) }) { Icon(if (saved) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder, if (saved) "Saved to shelf" else "Save to shelf") }
             }
             Spacer(Modifier.height(20.dp))
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(book, Modifier.width(190.dp).height(278.dp), large = true) }
-            Spacer(Modifier.height(24.dp))
-            Text(book.title, style = MaterialTheme.typography.headlineLarge)
-            Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(12.dp))
-            if (!catalogBook || book.narratorFromCatalog) Text(narrationLabel(book), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
-                if (!catalogBook) {
-                    Text(book.language, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            val identity: @Composable ColumnScope.() -> Unit = {
+                Text(book.title, style = MaterialTheme.typography.headlineLarge)
+                Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(12.dp))
+                if (!catalogBook || book.narratorFromCatalog) Text(narrationLabel(book), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
+                    if (!catalogBook) {
+                        Text(book.language, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(providerLabel(book), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Text(providerLabel(book), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (!catalogBook && book.provider != "archive") Text("Narration, language, and abridgment of this release remain unverified.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
             }
-            if (!catalogBook && book.provider != "archive") Text("Narration, language, and abridgment of this release remain unverified.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                // Wide panes put the book beside its identity instead of stretching a phone column.
+                if (maxWidth >= 560.dp) Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
+                    BookCover(book, Modifier.width(210.dp).height(306.dp), large = true, sharedKey = "cover-${book.id}")
+                    Column(Modifier.weight(1f), content = identity)
+                } else Column {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(book, Modifier.width(190.dp).height(278.dp), large = true, sharedKey = "cover-${book.id}") }
+                    Spacer(Modifier.height(24.dp))
+                    identity()
+                }
+            }
         }
         if (selected.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         selected.error?.let { item { RecoveryState("Couldn't load this edition", it) { vm.open(book) } } }
@@ -80,7 +99,13 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
                 Button({ if (catalogBook) vm.findSources(book) else sourcePicker = true }, Modifier.weight(1f), enabled = if (catalogBook) !sourceSearch.loading else !selected.loading && book.sources.isNotEmpty() && !busy) {
                     Icon(if (catalogBook) Icons.Rounded.Search else Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(if (catalogBook) "Find sources" else "Listen")
                 }
-                OutlinedButton({ vm.save(book) }, enabled = !saved) { Icon(if (saved) Icons.Rounded.Check else Icons.Rounded.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (saved) "Saved" else "Save") }
+                OutlinedButton({ vm.save(book) }, enabled = !saved) {
+                    AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (done) Icons.Rounded.Check else Icons.Rounded.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
+                        }
+                    }
+                }
             }
             if (catalogBook) {
                 Spacer(Modifier.height(12.dp))
@@ -105,11 +130,22 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
             }
             sourceSearch.error?.let { message -> item { RecoveryState("Some sources couldn't be checked", message) { vm.findSources(book) } } }
             items(sourceSearch.recordings, key = { it.id }) { recording ->
-                Column(Modifier.fillMaxWidth().clickable { vm.chooseRecording(recording) }.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(recording.releaseTitle.ifBlank { recording.title }, style = MaterialTheme.typography.titleSmall)
-                    Text(narrationLabel(recording), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                    Text("${providerLabel(recording)} · ${recording.language} · ${recording.sources.joinToString(" / ") { it.format }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(when { recording.cacheState == "cached" -> "Ready in TorBox"; recording.provider == "archive" -> "Public audio · Ready to stream"; else -> "Requires TorBox preparation" }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                val interaction = remember { MutableInteractionSource() }
+                Column(Modifier.animateItem().fillMaxWidth()) {
+                    Row(Modifier.fillMaxWidth().pressScale(interaction).clip(RoundedCornerShape(12.dp)).clickable(interaction, LocalIndication.current) { vm.chooseRecording(recording) }.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(recording.releaseTitle.ifBlank { recording.title }, style = MaterialTheme.typography.titleSmall)
+                            Text(narrationLabel(recording), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                            Text("${providerLabel(recording)} · ${recording.language} · ${recording.sources.joinToString(" / ") { it.format }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(when { recording.cacheState == "cached" -> Icons.Rounded.Bolt; recording.provider == "archive" -> Icons.Rounded.Headphones; else -> Icons.Rounded.CloudDownload }, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                Text(when { recording.cacheState == "cached" -> "Ready in TorBox"; recording.provider == "archive" -> "Public audio · Ready to stream"; else -> "Requires TorBox preparation" }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.height(8.dp))
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
@@ -126,7 +162,8 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
                 }
                 Spacer(Modifier.height(12.dp))
                 if (!prep.ready) {
-                    LinearProgressIndicator(progress = { prep.progress }, modifier = Modifier.fillMaxWidth())
+                    val progress by animateFloatAsState(prep.progress, tween(Motion.LONG, easing = Motion.Emphasized), label = "preparation")
+                    LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
                     Text("${(prep.progress * 100).toInt()}%${if (prep.downloadBytesPerSecond > 0) " · ${sizeLabel(prep.downloadBytesPerSecond)}/s" else ""}${if (prep.etaSeconds > 0) " · About ${durationLabel(prep.etaSeconds * 1000)} remaining" else " · ETA unavailable"}", style = MaterialTheme.typography.bodyMedium)
                     prep.seeds?.let { Text("$it connected ${if (it == 1L) "seed" else "seeds"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -136,7 +173,7 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
                 TextButton({ vm.refreshPreparation(book) }, enabled = !busy && connected) { Text("Check availability") }
             }
         } }
-        item {
+        item { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(24.dp))
             Text("Behind the story", style = MaterialTheme.typography.headlineSmall)
@@ -151,7 +188,7 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
                 if (selected.metadataLoading) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
                 Text(if (selected.metadataLoading) "Fetching book details\u2026" else "Refresh book details")
             }
-        }
+        } }
         if (book.sources.isNotEmpty()) item {
             Text("Available audio", style = MaterialTheme.typography.headlineSmall)
             book.sources.forEach { source ->
@@ -238,7 +275,8 @@ fun OfflineStatus(vm: NarrioViewModel, download: OfflineBook) {
         }
         Text("${download.source.format} · ${download.completedFiles} of ${download.source.parts.size} files${if (download.bytesDownloaded > 0) " · ${sizeLabel(download.bytesDownloaded)}" else ""}${if (download.totalBytes > 0 && !download.complete) " of ${sizeLabel(download.totalBytes)}" else ""}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (!download.complete && download.totalBytes > 0) {
-            LinearProgressIndicator(progress = { download.progress }, modifier = Modifier.fillMaxWidth())
+            val progress by animateFloatAsState(download.progress, tween(Motion.LONG, easing = Motion.Emphasized), label = "download")
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
             Text("${(download.progress * 100).toInt()}% saved to phone", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -256,29 +294,33 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val busy by vm.busy.collectAsStateWithLifecycle()
     val appearance by vm.appearance.collectAsStateWithLifecycle()
     val wifiOnly by vm.wifiOnly.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     var key by remember { mutableStateOf("") }
     var appearanceOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(connected) { if (connected) key = "" }
-    if (appearanceOpen) {
-        AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false }, modifier)
-        return
+    AnimatedContent(appearanceOpen, modifier, transitionSpec = { Motion.sharedAxisX(targetState) }, label = "settings page") { open ->
+        if (open) AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
+        else SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }) { appearanceOpen = true }
     }
-    LazyColumn(modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+}
+
+@Composable
+private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, key: String, setKey: (String) -> Unit, openAppearance: () -> Unit) {
+    val context = LocalContext.current
+    LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Make it yours.", style = MaterialTheme.typography.displaySmall); Spacer(Modifier.height(8.dp)); Text("Your listening room, your rules.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        item { AppearanceEntry(appearance) { appearanceOpen = true } }
+        item { AppearanceEntry(appearance, openAppearance) }
         item {
-            Text("TorBox", style = MaterialTheme.typography.headlineMedium)
+            Text("TorBox", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(if (connected) Icons.Rounded.CheckCircle else Icons.Rounded.CloudQueue, null, tint = MaterialTheme.colorScheme.secondary)
+                Crossfade(connected, label = "account") { Icon(if (it) Icons.Rounded.CheckCircle else Icons.Rounded.CloudQueue, null, tint = MaterialTheme.colorScheme.secondary) }
                 Text(if (connected) "Connected on this device" else "Connect your delivery account", style = MaterialTheme.typography.titleSmall)
             }
             Spacer(Modifier.height(12.dp))
             Text("Use your TorBox API key to deliver recordings and browse the audio in your account. Your plan needs API access.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
             if (!connected) {
-                OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text("TorBox API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp))
+                OutlinedTextField(key, setKey, Modifier.fillMaxWidth(), label = { Text("TorBox API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp))
                 Spacer(Modifier.height(12.dp))
                 Button({ vm.connect(key) }, Modifier.fillMaxWidth(), enabled = key.isNotBlank() && !busy) { if (busy) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }; Text(if (busy) "Connecting…" else "Connect TorBox") }
                 TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }) { Text("Find my API key") }

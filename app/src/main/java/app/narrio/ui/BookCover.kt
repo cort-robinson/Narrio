@@ -16,12 +16,21 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import androidx.compose.ui.platform.LocalContext
+import android.os.Build
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.blur
 import app.narrio.R
 import app.narrio.domain.Audiobook
 
+/** Covers already decoded this session render immediately, so shared transitions never flash a fallback. */
+private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>())
+
 @Composable
-fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false) {
+fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null) {
     val key = book.title.lowercase()
     val palette = when {
         "pride" in key -> Pair(Color(0xFF694851), Color(0xFFEAD7B4))
@@ -32,13 +41,15 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         else -> Pair(Color(0xFF435C4A), Color(0xFFF0E4CC))
     }
     val curated = listOf("secret garden", "pride", "sherlock", "gatsby", "dracula", "alice").any { it in key }
-    BoxWithConstraints(modifier.clip(RoundedCornerShape(8.dp)).background(palette.first)) {
+    BoxWithConstraints(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(palette.first)) {
         val tiny = maxWidth < 100.dp
-        var coverLoaded by remember(book.coverUrl) { mutableStateOf(false) }
-        if (!coverLoaded && "secret garden" in key) {
+        var coverLoaded by remember(book.coverUrl) { mutableStateOf(book.coverUrl in loadedCovers) }
+        val reveal by animateFloatAsState(if (coverLoaded) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate), label = "cover")
+        val fallback = reveal < 1f
+        if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))
-        } else if (!coverLoaded) {
+        } else if (fallback) {
             Canvas(Modifier.matchParentSize()) {
                 val w = size.width; val h = size.height
                 when {
@@ -73,7 +84,7 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                 }
             }
         }
-        if (!coverLoaded && maxWidth >= 60.dp) Column(Modifier.fillMaxSize().padding(if (large) 22.dp else if (tiny) 6.dp else 12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+        if (fallback && maxWidth >= 60.dp) Column(Modifier.fillMaxSize().padding(if (large) 22.dp else if (tiny) 6.dp else 12.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Text(book.title.replace(Regex(" \\(.*?\\)$"), ""),
                 color = if ("secret garden" in key || !curated) Color(0xFFF4E4C9) else palette.second,
                 style = if (large) MaterialTheme.typography.headlineLarge else if (tiny) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleLarge,
@@ -82,9 +93,18 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                 style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (book.coverUrl.isNotBlank()) {
-            AsyncImage(book.coverUrl, "Cover of ${book.title}",
-                Modifier.matchParentSize(), contentScale = ContentScale.Fit,
-                onSuccess = { coverLoaded = true }, onError = { coverLoaded = false })
+            // One fixed decode size gives every row, detail, and player instance the same memory-cache key,
+            // so a cover that is already decoded draws on its first frame (no blank shared-element flight).
+            val context = LocalContext.current
+            val request = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(720).build() }
+            val painter = rememberAsyncImagePainter(request,
+                onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true }, onError = { coverLoaded = false })
+            // Square audiobook art in a book-shaped frame: its own softened light fills the margins.
+            if (Build.VERSION.SDK_INT >= 31 && coverLoaded) {
+                Image(painter, null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }.blur(18.dp), contentScale = ContentScale.Crop)
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
+            }
+            Image(painter, "Cover of ${book.title}", Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Fit)
         }
     }
 }
