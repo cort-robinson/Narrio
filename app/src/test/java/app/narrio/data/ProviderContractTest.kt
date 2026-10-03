@@ -69,6 +69,26 @@ class ProviderContractTest {
             assertEquals(book.sources, checked.sources)
         } finally { server.shutdown() }
     }
+    @Test fun cacheAndReadyFileRefreshCannotAddAnotherBooksAudioFormat() = runTest {
+        val server = MockWebServer(); server.start(); val hash = "a".repeat(40)
+        try {
+            val files = """[{"id":1,"name":"Christopher Paolini/Eragon/Eragon.m4b"},{"id":2,"name":"Christopher Paolini/Eldest/Eldest.mp3"}]"""
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":{"$hash":{"files":$files}}}"""))
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":[{"id":7,"hash":"$hash","download_finished":true,"download_present":true,"files":$files}]}"""))
+            val source = AudioSource("eragon", "Whole book", "M4B", listOf(AudioPart("eragon", "Eragon/Eragon.m4b", "Eragon")), delivery = "torbox")
+            val sibling = AudioSource("eldest", "Parts", "MP3", listOf(AudioPart("eldest", "Eldest/Eldest.mp3", "Eldest")), delivery = "torbox")
+            val collection = Audiobook("collection", "Eragon, Eldest - Christopher Paolini", "Author not verified", provider = "knaben", torrentHash = hash,
+                sources = listOf(source, sibling), cacheState = "cached", cachedFormats = listOf("M4B", "MP3"))
+            val book = SourceQuality.filter(Audiobook("catalog:eragon", "Eragon", "Christopher Paolini", provider = "catalog"), listOf(collection)).single()
+            val client = TorBoxDelivery(OkHttpClient(), { "test-secret" }, server.url("/").toString())
+            val checked = client.checkCached(listOf(book)).single()
+            assertEquals(listOf("M4B"), checked.cachedFormats)
+            assertEquals(listOf("Christopher Paolini/Eragon/Eragon.m4b"), checked.sources.single().parts.map { it.name })
+            val ready = client.sources(checked, 7)
+            assertEquals(listOf("M4B"), ready.map { it.format })
+            assertEquals(listOf(1L), ready.single().parts.map { it.fileId })
+        } finally { server.shutdown() }
+    }
     @Test fun preparationReportsProviderProgressSpeedAndEta() {
         val item = NarrioJson.parseToJsonElement("""{"id":7,"progress":0.35,"download_speed":1048576.5,"eta":3600,"seeds":2,"download_finished":false,"download_present":false,"download_state":"downloading"}""").jsonObject
         val result = TorBoxDelivery(OkHttpClient(), { "unused" }).preparation(item)
