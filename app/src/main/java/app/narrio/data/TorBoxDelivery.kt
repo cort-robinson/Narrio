@@ -62,13 +62,14 @@ class TorBoxDelivery(
         books.map { book ->
             val item = cached[book.torrentHash.lowercase()]
             val files = item?.objects("files").orEmpty()
+            val indexedSources = if (book.provider == "knaben" && item != null) mapSources(item, book).map { source ->
+                source.copy(id = "cache:${book.torrentHash}:${source.format}", parts = source.parts.map { it.copy(torrentId = null, fileId = null) })
+            } else null
             val formats = if (book.provider == "archive") book.sources.filter { source ->
                 source.parts.isNotEmpty() && source.parts.all { part -> files.any { sameFile(it.text("name"), part.name) } }
-            }.map { it.format } else files.map { audioFormat(it.text("name")) }.distinct()
+            }.map { it.format } else indexedSources?.map { it.format } ?: files.map { audioFormat(it.text("name")) }.distinct()
             book.copy(cacheState = if (formats.isNotEmpty()) "cached" else "uncached", cachedFormats = formats,
-                sources = if (book.provider == "knaben" && item != null) mapSources(item, book).map { source ->
-                    source.copy(id = "cache:${book.torrentHash}:${source.format}", parts = source.parts.map { it.copy(torrentId = null, fileId = null) })
-                } else book.sources)
+                sources = indexedSources?.takeIf { it.isNotEmpty() } ?: book.sources)
         }
     }
 

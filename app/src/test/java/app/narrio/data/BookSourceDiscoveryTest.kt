@@ -44,13 +44,43 @@ class BookSourceDiscoveryTest {
             assertEquals("", query)
             listOf(accountBook)
         }, { candidates ->
-            assertEquals(listOf(series.id, surname.id, titleOnly.id), candidates.map { it.id })
+            assertEquals(listOf(series.id, surname.id, titleOnly.id, bundle.id), candidates.map { it.id })
             candidates.map { it.copy(sources = listOf(cachedSource), cacheState = "cached", cachedFormats = listOf("M4B")) }
         })
         val result = discovery.search(eragon, true)
         assertNull(result.error)
         assertEquals(listOf(accountBook.id, series.id, surname.id), result.recordings.map { it.id })
         assertTrue(result.recordings.all { it.sources.single().parts.single().name == "Christopher Paolini/Eragon/Eragon.m4b" })
+    }
+
+    @Test fun cachedCollectionSelectsOnlyTheRequestedBookAndKeepsDifferentBooksSeparate() = runBlocking {
+        val eragon = book.copy(title = "Eragon", author = "Christopher Paolini")
+        // Real public DED827306725EB1F65E98D8642B74264A9BAD752 release and manifest filenames.
+        val collection = release("Eragon, Eldest, Brisingr - Christopher Paolini").copy(cacheState = "unchecked", sources = emptyList())
+        val files = listOf("Brisingr/Brisingr Part 1.m4b", "Brisingr/Brisingr Part 2.m4b",
+            "Eldest/Eldest Part 2.m4b", "Eldest/Eldest Part1.m4b", "Eragon/Eragon.m4b")
+        val cached = collection.copy(cacheState = "cached", sources = listOf(release().sources.single().copy(parts = files.mapIndexed { i, path -> AudioPart("file:$i", path, path) })))
+        val discovery = BookSourceDiscovery(provider(emptyList()), provider(listOf(collection)), { emptyList() }, { candidates ->
+            assertEquals(listOf(collection.id), candidates.map { it.id })
+            listOf(cached)
+        })
+        val chosen = discovery.search(eragon, true).recordings.single()
+        assertEquals(listOf("Eragon/Eragon.m4b"), chosen.sources.single().parts.map { it.name })
+        assertEquals("cached", chosen.cacheState)
+        assertEquals(listOf("M4B"), chosen.cachedFormats)
+        assertEquals(listOf(chosen), SourceQuality.filter(eragon, listOf(chosen)))
+        val eldest = SourceQuality.filter(eragon.copy(title = "Eldest"), listOf(cached)).single()
+        assertNotEquals(chosen.id, eldest.id)
+        assertEquals(listOf("Eldest/Eldest Part 2.m4b", "Eldest/Eldest Part1.m4b"), eldest.sources.single().parts.map { it.name })
+        assertTrue(SourceQuality.filter(eragon, listOf(cached.copy(title = "Someone Else - Eragon Collection"))).isEmpty())
+        assertTrue(SourceQuality.filter(eragon, listOf(cached.copy(title = "Eragon Collection - Someone Else and Christopher Paolini"))).isEmpty())
+        assertTrue(SourceQuality.filter(eragon, listOf(cached.copy(title = "Christopher Paolini - Summary of Eragon"))).isEmpty())
+        assertTrue(SourceQuality.filter(eragon, listOf(cached.copy(title = "Christopher Paolini - Eragon 2"))).isEmpty())
+        assertTrue(SourceQuality.filter(eragon, listOf(cached.copy(title = "Inheritance (Eragon Book 4) - Christopher Paolini"))).isEmpty())
+        val noBookFolder = cached.copy(sources = listOf(cached.sources.single().copy(parts = listOf(AudioPart("wrong", "Inheritance (Eragon Book 4).m4b", "Wrong volume")))))
+        assertTrue(SourceQuality.filter(eragon, listOf(noBookFolder)).isEmpty())
+        // Account names can be just the author; actual fresh files still identify this book.
+        assertEquals(listOf("Eragon/Eragon.m4b"), SourceQuality.filter(eragon, listOf(cached.copy(title = "Christopher Paolini", provider = "torbox"))).single().sources.single().parts.map { it.name })
     }
 
     @Test fun catalogSubtitleFallbackFindsBaseTitleAndPreservesPartialProviderSuccess() = runBlocking {

@@ -51,6 +51,8 @@ data class Audiobook(
     val metadataUrl: String = "",
     val metadataUpdatedAtMs: Long = 0,
     val narratorFromCatalog: Boolean = false,
+    val seeders: Long = 0,
+    val filesVerified: Boolean = false,
 )
 
 data class Chapter(val title: String, val startMs: Long)

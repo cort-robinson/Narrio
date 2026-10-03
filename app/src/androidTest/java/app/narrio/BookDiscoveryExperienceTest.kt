@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.narrio.domain.*
+import app.narrio.data.SourceQuality
 import app.narrio.ui.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -18,6 +19,20 @@ class BookDiscoveryExperienceTest {
     private val vm get() = ViewModelProvider(compose.activity)[NarrioViewModel::class.java]
     private val book = Audiobook("catalog:fixture", "Project Hail Mary", "Andy Weir", provider = "catalog", detailsLoaded = true,
         description = "A lone astronaut must save the Earth.", metadataSource = "Test catalog", metadataUrl = "https://example.com/book", metadataUpdatedAtMs = System.currentTimeMillis())
+
+    @Test fun verifiedUncachedSourceIsLabelledAndRequiresExplicitPreparation() {
+        val eragon = book.copy(title = "Eragon", author = "Christopher Paolini")
+        val recording = Audiobook("uncached-fixture", "Christopher Paolini - Eragon", "Author not verified", provider = "knaben", detailsLoaded = true,
+            torrentHash = "a".repeat(40), magnetUri = "magnet:?xt=urn:btih:${"a".repeat(40)}", cacheState = "uncached", seeders = 10, filesVerified = true,
+            sources = listOf(AudioSource("manifest-fixture", "Ordered audio parts", "MP3", listOf(AudioPart("part", "Eragon.mp3", "Eragon")), delivery = "torbox")))
+        compose.runOnIdle { vm.connected.value = true; vm.open(eragon); vm.sourceSearch.value = SourceSearchState(eragon, listOf(recording), searched = true) }
+        compose.onNodeWithText("Requires TorBox preparation").performScrollTo().assertIsDisplayed()
+        // Inject the selected recording state to keep native CI free of live cache/metadata requests.
+        compose.runOnIdle { vm.selection.value = SelectionState(SourceQuality.describe(recording, eragon)) }
+        compose.onNodeWithText("Listen").performScrollTo().performClick()
+        compose.onNodeWithText("Stream now").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithText("Prepare in TorBox").performScrollTo().assertIsEnabled()
+    }
 
     @Test fun bookDetailsWaitForExplicitSourceDiscoveryAndRecordingSelectionRetainsIdentity() {
         compose.runOnIdle { vm.connected.value = false; vm.open(book) }
