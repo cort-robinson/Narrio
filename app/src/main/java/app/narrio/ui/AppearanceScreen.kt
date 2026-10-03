@@ -2,6 +2,11 @@ package app.narrio.ui
 
 import android.graphics.Color as AndroidColor
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,11 +60,16 @@ fun AppearanceScreen(settings: AppearanceSettings, change: (AppearanceSettings) 
     var editing by rememberSaveable { mutableStateOf(false) }
     val dark = settings.mode.isDark(isSystemInDarkTheme())
     BackHandler { if (editing) editing = false else back() }
-    if (editing) {
-        CustomThemeEditor(settings, { custom -> change(settings.copy(palette = ThemePalette.CUSTOM, custom = custom)); editing = false }, { editing = false }, modifier)
-        return
+    AnimatedContent(editing, modifier, transitionSpec = { Motion.sharedAxisX(targetState) }, label = "appearance page") { edit ->
+        if (edit) CustomThemeEditor(settings, { custom -> change(settings.copy(palette = ThemePalette.CUSTOM, custom = custom)); editing = false }, { editing = false }, Modifier)
+        else AppearanceOptions(settings, dark, change, back) { editing = true }
     }
-    Column(modifier.fillMaxSize()) {
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, change: (AppearanceSettings) -> Unit, back: () -> Unit, edit: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("Appearance") }, navigationIcon = {
             IconButton(back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to settings") }
         })
@@ -85,14 +95,14 @@ fun AppearanceScreen(settings: AppearanceSettings, change: (AppearanceSettings) 
                 Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     pair.forEach { palette ->
                         PaletteOption(settings, palette, dark, Modifier.weight(1f)) {
-                            if (palette == ThemePalette.CUSTOM && settings.custom == null) editing = true
+                            if (palette == ThemePalette.CUSTOM && settings.custom == null) edit()
                             else change(settings.copy(palette = palette))
                         }
                     }
                 }
             } }
             item {
-                OutlinedButton({ editing = true }, Modifier.fillMaxWidth().testTag("edit-custom-theme")) {
+                OutlinedButton({ edit() }, Modifier.fillMaxWidth().testTag("edit-custom-theme")) {
                     Icon(Icons.Rounded.Palette, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
                     Text(if (settings.palette == ThemePalette.CUSTOM) "Edit custom theme" else "Create custom theme")
                 }
@@ -153,14 +163,18 @@ private fun PaletteOption(settings: AppearanceSettings, palette: ThemePalette, d
     val name = if (palette == ThemePalette.CUSTOM) settings.custom?.name ?: "Custom" else palette.label
     val description = if (palette == ThemePalette.CUSTOM && settings.custom == null) "Create your own" else palette.description
     val shape = RoundedCornerShape(14.dp)
-    Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLow, shape)
-        .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
-        .selectable(selected, role = Role.RadioButton, onClick = choose).testTag("palette-${palette.name}").padding(12.dp)) {
+    val interaction = remember { MutableInteractionSource() }
+    val ring by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, tween(Motion.MEDIUM), label = "palette ring")
+    Column(modifier.pressScale(interaction).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerLow, shape)
+        .border(2.dp, ring, shape)
+        .selectable(selected, interaction, LocalIndication.current, role = Role.RadioButton, onClick = choose).testTag("palette-${palette.name}").padding(12.dp)) {
         Row(Modifier.fillMaxWidth().background(scheme.background, RoundedCornerShape(8.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Aa", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontFamily = appFontFamily(settings.font, true), color = scheme.onBackground)
             Box(Modifier.size(14.dp).background(scheme.secondary, CircleShape))
             Box(Modifier.size(24.dp).background(scheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-                if (selected) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = scheme.onPrimary)
+                androidx.compose.animation.AnimatedVisibility(selected, enter = scaleIn(Motion.responsive()) + fadeIn(), exit = scaleOut() + fadeOut()) {
+                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = scheme.onPrimary)
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
