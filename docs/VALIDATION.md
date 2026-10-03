@@ -2,7 +2,7 @@
 
 ## 1.2 metadata update
 
-Validated on October 2, 2026. The signed 1.2.0 update (version code 3) improves book metadata without changing recording/source identity or the Room schema.
+Validated on October 2, 2026. These observations apply to the manually built signed 1.2.0 update (version code 3), before release automation. Automated releases derive larger Android version codes from SemVer; their manifest and linked Actions run record the exact package and CI checks. CI emulator checks do not establish a new physical-phone/provider acceptance result. The metadata update preserves recording/source identity and the Room schema.
 
 - All **32 JVM tests** pass, including 15 new metadata contracts. They cover title/author ambiguity, summaries and collections, podcast rejection, multiple narrators, release narrator hints, bilingual/reversed-author names, source narrator preservation, secure high-resolution images, cached information across independent releases, Open Library fallback, partial work-detail failure, outages, forced refresh, cancellation, HTML entities/initials, and backward-compatible saved book JSON.
 - Debug, instrumentation, and R8-optimized signed release APKs build successfully. Android lint reports **zero errors and 39 warnings**, primarily the existing dependency/SDK/Kotlin suggestions and URI helper suggestions.
