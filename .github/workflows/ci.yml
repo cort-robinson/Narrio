@@ -112,7 +112,6 @@ jobs:
   preview:
     name: Development APK
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-    needs: gate
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: preview
@@ -154,6 +153,62 @@ jobs:
       - name: Remove signing material
         if: always()
         run: node scripts/release/signing.mjs clean
+
+  preview-publish:
+    name: Publish phone preview
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Download verified preview from this run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "Narrio-Dev-$GITHUB_RUN_NUMBER" --dir artifacts
+      - name: Publish verified APK with direct phone download
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/release/publish-preview.mjs
+
+  preview-status:
+    name: Update preview test status
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.preview-publish.result == 'success'
+    needs: [build, native, preview-publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Download original preview metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "Narrio-Dev-$GITHUB_RUN_NUMBER" --dir artifacts
+      - name: Record the completed test results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: node scripts/release/publish-preview.mjs --status
 
   release:
     name: Stable release
