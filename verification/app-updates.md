@@ -22,3 +22,11 @@ Use a disposable emulator selected explicitly in every ADB command. Supply local
 5. Remove the disposable emulator overlay and temporary APK. Do not install fixture builds onto the user's physical phone or count this as stable/preview signing acceptance.
 
 PowerShell callers should quote dotted `-PappVersionName=...` arguments when invoking `gradlew.bat`. The opt-in fixture is excluded from normal CI; controlled updater UI tests are included in the required native job.
+
+## Published preview and first-launch correction
+
+PR #28 merged as `155148f`; [dev-64](https://github.com/cort-robinson/Narrio/releases/tag/dev-64) and its [original workflow](https://github.com/cort-robinson/Narrio/actions/runs/37151632027) completed successfully. Downloaded APK and manifest checksums match, package/code are `app.narrio.dev`/64, and the APK retains the preview signing certificate. The published R8 APK launches without a crash and its manual check returns “You're up to date.” Stable remains v1.4.2.
+
+That startup check exposed duplicate lifecycle delivery: attaching an observer replays ON_START, then synchronizing the current lifecycle state canceled the newly started update request after advancing its attempt throttle. Repeated visibility states now refresh permission/playback controls without canceling or restarting the job; actual foreground/background transitions retain their debounce and cancellation.
+
+A fresh, non-debuggable R8 Dev-channel fixture at code 10000/version 1.5.0-dev.10000, signed only with the local test key and installed only in a disposable read-only API 36 emulator, automatically returned “You're up to date” on its first launch without tapping Check for updates. The high fixture code prevents downloads of real published previews. It is not a published version or a signing-identity acceptance test. No production versions or release assets changed. This small correction receives its own checked dev PR.
