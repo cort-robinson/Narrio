@@ -11,6 +11,7 @@ class BookSourceDiscovery(
     private val indexed: RecordingDiscovery,
     private val account: suspend (String) -> List<Audiobook>,
     private val checkCached: suspend (List<Audiobook>) -> List<Audiobook>,
+    private val loadFiles: suspend (Audiobook) -> Audiobook? = { null },
 ) {
     suspend fun search(book: Audiobook, connected: Boolean): BookSourceResults = coroutineScope {
         suspend fun read(block: suspend () -> List<Audiobook>): Pair<List<Audiobook>, String?> = try { block() to null }
@@ -36,6 +37,15 @@ class BookSourceDiscovery(
             errors += listOfNotNull(checked.second)
             cloud = cloud.filter { it.provider != "knaben" } + checked.first
         }
+        // A cache miss says nothing about the recording's files. Inspect public torrent metadata
+        // without adding a torrent, and leave preparation to the listener's explicit action.
+        val uncached = cloud.filter { it.provider == "knaben" && it.cacheState == "uncached" && it.seeders > 0 }
+            .sortedBy { !SourceQuality.matches(book, it) }.take(12)
+        val verified = uncached.chunked(4).flatMap { batch ->
+            batch.map { recording -> async { read { listOfNotNull(loadFiles(recording)) } } }.awaitAll()
+                .also { fetched -> errors += fetched.mapNotNull { it.second } }.flatMap { it.first }
+        }.associateBy { it.id }
+        cloud = cloud.map { verified[it.id] ?: it }
         BookSourceResults(SourceQuality.filter(book, cloud + hydrated), errors.distinct().joinToString(" ").ifBlank { null })
     }
 }
@@ -108,7 +118,9 @@ object SourceQuality {
                 source.parts.isNotEmpty() && source.parts.all { part ->
                     isBookAudioFile(part.name) &&
                         (source.delivery != "archive" || part.archiveUrl.startsWith("https://"))
-                } && (recording.provider == "archive" || recording.cacheState == "cached" && source.format in recording.cachedFormats)
+                } && (recording.provider == "archive" || recording.cacheState == "cached" && source.format in recording.cachedFormats ||
+                    recording.provider == "knaben" && recording.cacheState == "uncached" && recording.filesVerified && recording.seeders > 0 &&
+                        recording.torrentHash.matches(Regex("[a-fA-F0-9]{40}")) && recording.magnetUri.startsWith("magnet:?"))
             }
             if (sources.isEmpty()) null else recording.copy(sources = sources, cachedFormats = recording.cachedFormats.filter { format -> sources.any { it.format == format } })
         }

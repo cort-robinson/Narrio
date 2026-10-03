@@ -37,7 +37,7 @@ class KnabenDiscovery(private val http: OkHttpClient, private val endpoint: Stri
                 description = "Audiobook release indexed by Knaben from ${hit.text("tracker").ifBlank { "a source provider" }}. Narration, language and abridgment are not verified. Check the release title and audio filenames before choosing this recording.",
                 torrentHash = hash, provider = "knaben", detailsLoaded = true,
                 magnetUri = hit.text("magnetUrl").takeIf { it.startsWith("magnet:?", true) }
-                    ?: "magnet:?xt=urn:btih:$hash", releaseSizeBytes = hit.number("bytes"))
+                    ?: "magnet:?xt=urn:btih:$hash", releaseSizeBytes = hit.number("bytes"), seeders = hit.number("seeders").coerceAtLeast(0))
         }.distinctBy { it.torrentHash }
     }
 }

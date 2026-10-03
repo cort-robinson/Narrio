@@ -1,6 +1,14 @@
 # Narrio validation
 
-## Source-discovery matching regression: unreleased fix
+## Verified uncached source discovery: patch candidate
+
+v1.4.1 still required every indexed source to be cached. Source discovery now reads hash-verified public torrent file metadata for uncached releases with reported seeders, rechecks book identity, and presents them with explicit TorBox preparation. Cached sources stay first. Partial cached file lists cannot mark an entire verified recording ready. Streaming and phone downloads remain disabled until the selected source is ready.
+
+A separate read-only live probe ran the new production discovery code against Knaben and iTorrents on October 3, 2026, with a **controlled** TorBox cache miss. It returned `Christopher Paolini - Eragon`, hash `b027dbb27615ab2ec9a434ad4cb7d74455d28be6`, ten reported seeders, and 141 non-sample MP3 files. The bencoded metadata's original info hash matched the indexed hash. No torrent was created, no audio was fetched, and no authenticated TorBox request was made. This confirms live public metadata discovery, not the user's cache state or playback.
+
+Controlled regression tests cover the full index/cache-miss/file-metadata path, absence of account creation/audio requests, credential separation, hash mismatch, malformed/oversized metadata, unsafe paths, other titles/authors, samples, dead releases, cache ordering, and partial cache readiness. All 70 JVM tests, debug/instrumentation builds, and lint pass locally (zero errors, 39 existing warnings). Native CI includes an uncached source label and explicit-preparation check. Physical-device and authenticated-provider playback remain unverified; the local T3 Android surface lacks SDK command-line tools and no ADB device is attached.
+
+## Source-discovery matching regression: v1.4.1
 
 The Eragon investigation reproduced false rejections using the public Knaben release names `Christopher Paolini.Eragon.The Inheritance Cycle 1` and `Paolini - Eragon`. Release-name matching now accepts explicit series annotations and surname/initials author segments for distinctive titles. Cached audio paths can supply full title/author evidence omitted from a release name; author validation runs again after cache checks or public metadata hydration. Catalog subtitles receive one bounded base-title lookup, and account recordings are matched locally rather than discarded by provider substring filtering.
 

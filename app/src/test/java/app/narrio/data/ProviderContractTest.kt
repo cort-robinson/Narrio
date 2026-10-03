@@ -57,6 +57,18 @@ class ProviderContractTest {
             assertTrue(form.contains("magnet:?xt=urn:btih:$hash")); assertFalse(form.contains("filename="))
         } finally { server.shutdown() }
     }
+    @Test fun partiallyCachedIndexedFilesCannotMakeAVerifiedWholeRecordingReady() = runTest {
+        val server = MockWebServer(); server.start(); val hash = "a".repeat(40)
+        try {
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":{"$hash":{"files":[{"name":"root/chapter_1.mp3"}]}}}"""))
+            val source = AudioSource("verified", "Parts", "MP3", listOf(AudioPart("1", "chapter_1.mp3", "1"), AudioPart("2", "chapter_2.mp3", "2")), delivery = "torbox")
+            val book = Audiobook("indexed", "Book", "Author", provider = "knaben", torrentHash = hash, sources = listOf(source), filesVerified = true)
+            val checked = TorBoxDelivery(OkHttpClient(), { "test-secret" }, server.url("/").toString()).checkCached(listOf(book)).single()
+            assertEquals("uncached", checked.cacheState)
+            assertTrue(checked.cachedFormats.isEmpty())
+            assertEquals(book.sources, checked.sources)
+        } finally { server.shutdown() }
+    }
     @Test fun preparationReportsProviderProgressSpeedAndEta() {
         val item = NarrioJson.parseToJsonElement("""{"id":7,"progress":0.35,"download_speed":1048576.5,"eta":3600,"seeds":2,"download_finished":false,"download_present":false,"download_state":"downloading"}""").jsonObject
         val result = TorBoxDelivery(OkHttpClient(), { "unused" }).preparation(item)
