@@ -56,21 +56,61 @@ object SourceQuality {
         return listOf(title, title.substringBefore(':').trim()).filter(String::isNotBlank).distinct()
     }
 
-    internal fun isCandidate(book: Audiobook, recording: Audiobook) = matchingTitle(book, recording) != null &&
-        (BookMetadata.unknown(recording.author) || BookIdentity.authors(book.author) == BookIdentity.authors(recording.author))
+    internal fun isCandidate(book: Audiobook, recording: Audiobook): Boolean {
+        if (BookMetadata.unknown(book.author) || !compatibleAuthor(book, recording)) return false
+        val release = " ${BookIdentity.normalize(recording.releaseTitle.ifBlank { recording.title })} "
+        return matchingTitle(book, recording) != null || searchTitles(book).any { " ${BookIdentity.normalize(it)} " in release } ||
+            recording.sources.any { it.parts.any { part -> bookFile(book, part.name) } }
+    }
+
+    private fun compatibleAuthor(book: Audiobook, recording: Audiobook) = BookMetadata.unknown(recording.author) ||
+        BookIdentity.authors(book.author) == BookIdentity.authors(recording.author)
+
+    private fun hasAuthor(book: Audiobook, value: String): Boolean {
+        val evidence = " ${BookIdentity.normalize(value)} "
+        return BookIdentity.normalize(book.author).split(' ').filter(String::isNotBlank).all { " $it " in evidence }
+    }
+
+    /** A collection is usable only when its files identify this book independently of sibling titles. */
+    private fun bookFile(book: Audiobook, name: String): Boolean = isBookAudioFile(name) && name.split('/', '\\').any { segment ->
+        val title = BookIdentity.normalize(BookIdentity.title(if (isAudioFile(segment)) segment.substringBeforeLast('.') else segment))
+            .let { if (BookIdentity.normalize(book.title).firstOrNull()?.isDigit() == true) it else it.replace(Regex("^0\\d{1,2}\\s+"), "") }
+        searchTitles(book).any { title == BookIdentity.normalize(it) }
+    }
+
+    private fun selectBookFiles(book: Audiobook, recording: Audiobook): Audiobook? {
+        if (matches(book, recording)) return recording
+        if (!compatibleAuthor(book, recording) || BookMetadata.unknown(book.author)) return null
+        val release = recording.releaseTitle.ifBlank { recording.title }
+        val normalizedRelease = BookIdentity.normalize(release)
+        if (searchTitles(book).any { title ->
+            Regex("\\b${Regex.escape(BookIdentity.normalize(title))}\\s+(?:(?:book|volume|vol|part)\\s+)?\\d{1,3}\\b").containsMatchIn(normalizedRelease)
+        }) return null
+        val evidence = (" ${BookIdentity.normalize(release)} ").replaceFirst(" ${BookIdentity.normalize(book.title)} ", " ")
+        if (Regex("\\b(?:summar(?:y|ies)|study guide|analysis|sequel|sample|trailer|preview)\\b").containsMatchIn(evidence)) return null
+        val sources = recording.sources.mapNotNull { source ->
+            val parts = source.parts.filter { bookFile(book, it.name) }
+            if (parts.isEmpty()) null else source.copy(parts = parts)
+        }
+        if (sources.isEmpty()) return null
+        fun explicitAuthor(value: String) = value.split(Regex("\\s+[-\u2013\u2014]\\s+|[/\\\\\\[\\]()]"))
+            .any { BookIdentity.authors(it) == BookIdentity.authors(book.author) }
+        val authorVerified = !BookMetadata.unknown(recording.author) || explicitAuthor(release) ||
+            sources.any { it.parts.any { part -> explicitAuthor(part.name) } }
+        if (!authorVerified) return null
+        // Different books in one torrent must keep separate shelf and listening histories.
+        val suffix = ":book:${BookIdentity.key(book.title, book.author)}"
+        return recording.copy(id = if (recording.id.endsWith(suffix)) recording.id else recording.id + suffix, sources = sources)
+    }
 
     fun matches(book: Audiobook, recording: Audiobook): Boolean {
         val title = matchingTitle(book, recording) ?: return false
         if (!BookMetadata.unknown(recording.author)) return BookIdentity.authors(book.author) == BookIdentity.authors(recording.author)
         val names = BookIdentity.normalize(book.author).split(' ').filter(String::isNotBlank)
         val release = recording.releaseTitle.ifBlank { recording.title }
-        fun hasAuthor(value: String): Boolean {
-            val evidence = " ${BookIdentity.normalize(value)} "
-            return names.all { " $it " in evidence }
-        }
-        if (hasAuthor(release)) return true
+        if (hasAuthor(book, release)) return true
         if (recording.sources.flatMap { it.parts }.any { part ->
-                isBookAudioFile(part.name) && " $title " in " ${BookIdentity.normalize(part.name)} " && hasAuthor(part.name)
+                isBookAudioFile(part.name) && " $title " in " ${BookIdentity.normalize(part.name)} " && hasAuthor(book, part.name)
             }) return true
         // A distinct title plus an explicit surname/initials author segment is sufficient release evidence.
         // Short/common titles still need the full name or authoritative recording metadata.
@@ -112,7 +152,7 @@ object SourceQuality {
     }
 
     fun filter(book: Audiobook, recordings: List<Audiobook>): List<Audiobook> = recordings
-        .filter { matches(book, it) }
+        .mapNotNull { selectBookFiles(book, it) }
         .mapNotNull { recording ->
             val sources = recording.sources.filter { source ->
                 source.parts.isNotEmpty() && source.parts.all { part ->
