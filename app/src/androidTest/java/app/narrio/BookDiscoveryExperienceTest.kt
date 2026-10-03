@@ -23,7 +23,8 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { vm.connected.value = false; vm.open(book) }
         compose.waitUntil { vm.selection.value.book?.id == book.id && !vm.selection.value.loading }
         compose.onNodeWithText("The book").assertIsDisplayed()
-        compose.onNodeWithText("Andy Weir").assertIsDisplayed()
+        // Fallback cover art also draws the author; the final node is the details text below it.
+        compose.onAllNodesWithText("Andy Weir").onLast().assertIsDisplayed()
         compose.onNodeWithText("Find sources").performScrollTo().assertIsEnabled()
         compose.onNodeWithText("Listen").assertDoesNotExist()
         compose.runOnIdle { assertFalse(vm.sourceSearch.value.searched); assertTrue(vm.sourceSearch.value.recordings.isEmpty()) }
