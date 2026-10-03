@@ -17,6 +17,61 @@ class BookSourceDiscoveryTest {
         override suspend fun recording(id: String) = full ?: books.first { it.id == id }
     }
 
+    @Test fun eragonLiveReleaseNamesKeepIndividualBooksAndRejectOtherVolumesAndBundles() {
+        val eragon = book.copy(title = "Eragon", author = "Christopher Paolini")
+        // Public Knaben names observed during the regression investigation; no account or cache data.
+        val matching = listOf("Christopher Paolini - Eragon", "Christopher Paolini - Eragon 2002",
+            "Christopher Paolini.Eragon.The Inheritance Cycle 1", "Paolini - Eragon", "C. Paolini - Eragon")
+        for (name in matching) assertTrue(name, SourceQuality.matches(eragon, release(name)))
+        val wrong = listOf("Eragon Series Audio Books", "Inheritance (Eragon Book 4) Audiobook MP3 format",
+            "Eragon book 4 inheritance audiobook", "Eragon, Eldest, Brisingr - Christopher Paolini",
+            "Eragon, Eldest, Brisingr - Christopher Paolini.The Inheritance Cycle 1",
+            "Christopher Paolini - Eragon 2", "Christopher Paolini - Eragon 10", "Someone Paolini - Eragon", "P. Paolini - Eragon",
+            "Christopher Paolini - Eragon [Summary]", "Christopher Paolini - Eragon [Complete Series]", "Eragon")
+        for (name in wrong) assertFalse(name, SourceQuality.matches(eragon, release(name)))
+        assertFalse(SourceQuality.matches(book.copy(title = "It", author = "Stephen King"), release("King - It")))
+    }
+
+    @Test fun cachedSeriesAndAccountFilesReachEragonSourceChoices() = runBlocking {
+        val eragon = book.copy(title = "Eragon", author = "Christopher Paolini")
+        val series = release("Christopher Paolini.Eragon.The Inheritance Cycle 1").copy(sources = emptyList(), cacheState = "unchecked")
+        val surname = release("Paolini - Eragon").copy(torrentHash = "b".repeat(40), sources = emptyList(), cacheState = "unchecked")
+        val titleOnly = release("01_ERAGON Audiobook").copy(torrentHash = "c".repeat(40), sources = emptyList(), cacheState = "unchecked")
+        val bundle = release("Eragon, Eldest, Brisingr - Christopher Paolini")
+        val cachedSource = release().sources.single().copy(parts = listOf(AudioPart("part", "Christopher Paolini/Eragon/Eragon.m4b", "Eragon")))
+        val accountBook = titleOnly.copy(provider = "torbox", id = "torbox:42", sources = listOf(cachedSource), cacheState = "cached")
+        val discovery = BookSourceDiscovery(provider(emptyList()), provider(listOf(series, surname, titleOnly, bundle)), { query ->
+            assertEquals("", query)
+            listOf(accountBook)
+        }, { candidates ->
+            assertEquals(listOf(series.id, surname.id, titleOnly.id), candidates.map { it.id })
+            candidates.map { it.copy(sources = listOf(cachedSource), cacheState = "cached", cachedFormats = listOf("M4B")) }
+        })
+        val result = discovery.search(eragon, true)
+        assertNull(result.error)
+        assertEquals(listOf(accountBook.id, series.id, surname.id), result.recordings.map { it.id })
+        assertTrue(result.recordings.all { it.sources.single().parts.single().name == "Christopher Paolini/Eragon/Eragon.m4b" })
+    }
+
+    @Test fun catalogSubtitleFallbackFindsBaseTitleAndPreservesPartialProviderSuccess() = runBlocking {
+        val detailed = book.copy(title = "Project Hail Mary: A Novel")
+        val recording = release("Project Hail Mary", "Andy Weir", "archive")
+        val queries = mutableListOf<String>()
+        val archive = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String): List<Audiobook> {
+                queries += query
+                if (':' in query) throw ProviderException("Unavailable")
+                return listOf(recording)
+            }
+            override suspend fun recording(id: String) = recording
+        }
+        val result = BookSourceDiscovery(archive, provider(emptyList()), { error("Disconnected") }, { error("Disconnected") }).search(detailed, false)
+        assertEquals(listOf("Project Hail Mary: A Novel", "Project Hail Mary"), queries)
+        assertEquals(recording.id, result.recordings.single().id)
+        assertNotNull(result.error)
+        assertFalse(SourceQuality.matches(detailed, release("Andy Weir - Project Hail Mary 2")))
+    }
+
     @Test fun titleAuthorAndReleaseEvidenceRejectWrongBooks() {
         assertTrue(SourceQuality.matches(book, release()))
         assertTrue(SourceQuality.matches(book, release("Project Hail Mary", "Weir, Andy", "archive")))
