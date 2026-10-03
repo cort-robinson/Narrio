@@ -1,6 +1,14 @@
 # Narrio validation
 
-## Metadata-first discovery: unreleased branch
+## Source-discovery matching regression: unreleased fix
+
+The Eragon investigation reproduced false rejections using the public Knaben release names `Christopher Paolini.Eragon.The Inheritance Cycle 1` and `Paolini - Eragon`. Release-name matching now accepts explicit series annotations and surname/initials author segments for distinctive titles. Cached audio paths can supply full title/author evidence omitted from a release name; author validation runs again after cache checks or public metadata hydration. Catalog subtitles receive one bounded base-title lookup, and account recordings are matched locally rather than discarded by provider substring filtering.
+
+Local JVM regression coverage includes those live release-name examples, wrong Eragon volumes, a multi-book bundle, incorrect author initials, ready account/indexed sources, filename author evidence, deduplication, subtitle lookup, and partial-provider failure. All 66 JVM tests, debug build, and lint pass. Cache state, compatible non-sample audio, and direct HTTPS availability remain required; no bitrate floor was introduced.
+
+The public lookup verifies release names and catalog responses. It does not verify authenticated TorBox cache availability or streaming on a physical device. Those checks were not performed for this fix.
+
+## Metadata-first discovery: v1.4.0
 
 Initial discovery identifies books through catalog metadata and collapses known editions by title/author. Source lookup is explicit from book details and requires matching recording evidence, usable non-sample audio, and direct public or checked cached availability. Selecting a recording retains its original playback identity.
 
