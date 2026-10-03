@@ -85,11 +85,15 @@ class AppUpdates(private val application: Application, private val playback: Pla
     }
 
     fun visibility(visible: Boolean) {
+        val changed = foreground != visible
         foreground = visible
-        hiddenAt = if (visible) 0 else android.os.SystemClock.elapsedRealtime()
-        visibilityJob?.cancel()
         mutableState.update { it.copy(permissionNeeded = channel != null && !installer.permissionGranted(),
             waitingForPlayback = it.available != null && (playback.state.value.playing || playback.state.value.buffering)) }
+        // Lifecycle observers replay ON_START when attached. The subsequent initial-state sync
+        // must not cancel that check after it has already advanced the attempt throttle.
+        if (!changed) return
+        hiddenAt = if (visible) 0 else android.os.SystemClock.elapsedRealtime()
+        visibilityJob?.cancel()
         visibilityJob = scope.launch {
             if (visible) runAutomatic() else { delay(5_000); installAutomatically() }
         }
