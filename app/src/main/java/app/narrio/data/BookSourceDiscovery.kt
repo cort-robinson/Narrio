@@ -16,13 +16,15 @@ class BookSourceDiscovery(
         suspend fun read(block: suspend () -> List<Audiobook>): Pair<List<Audiobook>, String?> = try { block() to null }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { emptyList<Audiobook>() to "Some source providers are unavailable. Try again to check them." }
-        val title = BookIdentity.title(book.title)
-        val public = async { read { archive.search(title) } }
-        val releases = async { if (connected) read { indexed.search(title) } else emptyList<Audiobook>() to null }
-        val library = async { if (connected) read { account(title) } else emptyList<Audiobook>() to null }
-        val results = listOf(public.await(), releases.await(), library.await())
+        val titles = SourceQuality.searchTitles(book)
+        val public = async { titles.map { title -> read { archive.search(title) } } }
+        val releases = async { if (connected) titles.map { title -> read { indexed.search(title) } } else emptyList() }
+        // Read the account once: provider substring search cannot match catalog subtitles or punctuation reliably.
+        val library = async { if (connected) read { account("") } else emptyList<Audiobook>() to null }
+        val results = public.await() + releases.await() + library.await()
         val errors = results.mapNotNull { it.second }.toMutableList()
-        val candidates = results.flatMap { it.first }.filter { SourceQuality.matches(book, it) }
+        // Cached filenames and hydrated public metadata can supply author evidence missing from release names.
+        val candidates = results.flatMap { it.first }.distinctBy { it.id }.filter { SourceQuality.isCandidate(book, it) }
         val hydrated = candidates.filter { it.provider == "archive" }.take(12).chunked(4).flatMap { batch ->
             batch.map { recording -> async { read { listOf(if (recording.detailsLoaded) recording else archive.recording(recording.id)) } } }.awaitAll()
                 .also { fetched -> errors += fetched.mapNotNull { it.second } }.flatMap { it.first }
@@ -39,26 +41,64 @@ class BookSourceDiscovery(
 }
 
 object SourceQuality {
+    internal fun searchTitles(book: Audiobook): List<String> {
+        val title = BookIdentity.title(book.title)
+        return listOf(title, title.substringBefore(':').trim()).filter(String::isNotBlank).distinct()
+    }
+
+    internal fun isCandidate(book: Audiobook, recording: Audiobook) = matchingTitle(book, recording) != null &&
+        (BookMetadata.unknown(recording.author) || BookIdentity.authors(book.author) == BookIdentity.authors(recording.author))
+
     fun matches(book: Audiobook, recording: Audiobook): Boolean {
-        if (BookMetadata.unknown(book.author)) return false
-        val title = BookIdentity.normalize(BookIdentity.title(book.title))
-        val evidence = (" ${BookIdentity.normalize(recording.releaseTitle.ifBlank { recording.title })} ").replaceFirst(" $title ", " ")
-        if (Regex("\\b(?:summar(?:y|ies)|study guide|analysis|collection|box ?set|bundle|omnibus|anthology|sequel|complete series|sample|trailer|preview)\\b").containsMatchIn(evidence)) return false
-        var release = BookIdentity.normalize(BookIdentity.title(recording.releaseTitle.ifBlank { recording.title })
-            .replace(Regex("\\((?:version \\d+(?: dramatic reading)?|version by [^)]*|dramatic reading|solo)\\)", RegexOption.IGNORE_CASE), " "))
-        if (title.isBlank() || !(" $release ").contains(" $title ")) return false
-        if (!BookMetadata.unknown(recording.author)) {
-            if (BookIdentity.authors(book.author) != BookIdentity.authors(recording.author)) return false
-        } else {
-            val names = BookIdentity.normalize(book.author).split(' ').filter(String::isNotBlank)
-            if (!names.all { " $it " in " $release " }) return false
+        val title = matchingTitle(book, recording) ?: return false
+        if (!BookMetadata.unknown(recording.author)) return BookIdentity.authors(book.author) == BookIdentity.authors(recording.author)
+        val names = BookIdentity.normalize(book.author).split(' ').filter(String::isNotBlank)
+        val release = recording.releaseTitle.ifBlank { recording.title }
+        fun hasAuthor(value: String): Boolean {
+            val evidence = " ${BookIdentity.normalize(value)} "
+            return names.all { " $it " in evidence }
         }
-        release = (" $release ").replaceFirst(" $title ", " ")
-        // Every remaining word needs recording evidence; a sequel, summary, or collection fails.
+        if (hasAuthor(release)) return true
+        if (recording.sources.flatMap { it.parts }.any { part ->
+                isBookAudioFile(part.name) && " $title " in " ${BookIdentity.normalize(part.name)} " && hasAuthor(part.name)
+            }) return true
+        // A distinct title plus an explicit surname/initials author segment is sufficient release evidence.
+        // Short/common titles still need the full name or authoritative recording metadata.
+        if (title.replace(" ", "").length < 6 || names.size != 2 || ',' in book.author) return false
+        val aliases = setOf(names.last(), "${names.first().first()} ${names.last()}")
+        return release.split(Regex("\\s+[-–—]\\s+|[.\\[\\]()]"))
+            .any { BookIdentity.normalize(it) in aliases }
+    }
+
+    private fun matchingTitle(book: Audiobook, recording: Audiobook): String? {
+        if (BookMetadata.unknown(book.author)) return null
+        val raw = recording.releaseTitle.ifBlank { recording.title }
+        var release = BookIdentity.normalize(BookIdentity.title(raw)
+            .replace(Regex("\\((?:version \\d+(?: dramatic reading)?|version by [^)]*|dramatic reading|solo)\\)", RegexOption.IGNORE_CASE), " ")
+            .replace(Regex("\\([^)]*\\b(?:book|volume|part|cycle|series|saga|trilogy)\\b[^)]*\\)", RegexOption.IGNORE_CASE), " "))
+        if (BookIdentity.normalize(book.title).firstOrNull()?.isDigit() != true) {
+            release = release.replace(Regex("^0\\d{1,2}\\s+"), "")
+        }
         val names = listOf(book.author, recording.author) + listOf(book.narrator, recording.narrator).filter { !BookMetadata.unknown(it) && !it.contains("depends on source") }
-        val allowed = names.flatMap { BookIdentity.normalize(it).split(' ') }.toSet() +
-            setOf("by", "read", "narrated", "narrator", "english", "en", "eng", "retail", "edition", "audio", "book", "complete")
-        return release.trim().split(' ').filter(String::isNotBlank).all { it in allowed || it.matches(Regex("(?:19|20)\\d{2}")) }
+        val authorWords = BookIdentity.normalize(book.author).split(' ').filter(String::isNotBlank)
+        val allowed = names.flatMap { BookIdentity.normalize(it).split(' ') }.toSet() + authorWords.dropLast(1).map { it.take(1) } +
+            setOf("by", "read", "narrated", "narrator", "english", "en", "eng", "retail", "edition", "audio", "book", "complete",
+                "audible", "cbr", "vbr", "stereo", "mono", "kbps")
+        for (title in searchTitles(book).map(BookIdentity::normalize)) {
+            if (title.isBlank() || !(" $release ").contains(" $title ")) continue
+            val evidence = (" ${BookIdentity.normalize(raw)} ").replaceFirst(" $title ", " ")
+            if (Regex("\\b(?:summar(?:y|ies)|study guide|analysis|collection|box ?set|bundle|omnibus|anthology|sequel|complete series|sample|trailer|preview)\\b").containsMatchIn(evidence)) continue
+            val extra = (" $release ").replaceFirst(" $title ", " ").trim().split(' ').filter(String::isNotBlank)
+                .filterNot { it in allowed || it.matches(Regex("(?:19|20)\\d{2}|\\d{2,3}k")) }.joinToString(" ")
+            // Keep a named series and its position, but reject extra book titles and bare sequel numbers.
+            if (extra.isBlank()) return title
+            val series = Regex("(?:[\\p{L}][\\p{L}\\p{N}]* ){1,8}(?:cycle|series|saga|trilogy|chronicles?) (?:book |volume |vol |part )?\\d{1,3}")
+            val seriesLabels = raw.split(Regex("\\s+[-–—]\\s+|[.\\[\\]():]"))
+                .map(BookIdentity::normalize).filter { series.matches(it) && " $title " !in " $it " }
+                .map { label -> label.split(' ').filterNot { it in allowed }.joinToString(" ") }
+            if (extra in seriesLabels) return title
+        }
+        return null
     }
 
     fun filter(book: Audiobook, recordings: List<Audiobook>): List<Audiobook> = recordings
