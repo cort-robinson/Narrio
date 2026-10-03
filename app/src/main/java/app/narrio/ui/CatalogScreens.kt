@@ -5,20 +5,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.narrio.R
 import app.narrio.data.ShelfEntry
 import app.narrio.domain.*
 
@@ -27,10 +21,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val catalog by vm.catalog.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
     val category by vm.category.collectAsStateWithLifecycle()
-    val connected by vm.connected.collectAsStateWithLifecycle()
-    val scope by vm.sourceScope.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
-    val browse = query.isBlank() && category == "All" && scope == "Public"
+    val browse = query.isBlank() && category == "All"
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -42,7 +34,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             Spacer(Modifier.height(20.dp))
             Text(if (browse) "Your next chapter." else "Find your next story.", style = MaterialTheme.typography.displaySmall)
             Spacer(Modifier.height(8.dp))
-            Text("Good stories. A little more room to listen.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Find the book. Explore its listening sources from the details.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
             OutlinedTextField(query, onValueChange = { vm.search(it) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
@@ -50,80 +42,28 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { vm.search("") }) { Icon(Icons.Rounded.Close, "Clear search") } },
                 shape = RoundedCornerShape(14.dp))
             Spacer(Modifier.height(10.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(if (connected) listOf("Cached", "All sources", "Public", "TorBox") else listOf("Public", "All sources")) { FilterChip(scope == it, { vm.search(cat = "All", scope = it) }, { Text(when (it) { "TorBox" -> "My TorBox"; "Public" -> "Public books"; "Cached" -> "Ready to stream"; else -> it }) }) }
-            }
-            if (scope == "Public") LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (query.isBlank()) LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(listOf("All", "Fiction", "Mystery", "Wonder", "Nonfiction")) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) }) }
             }
         }
         if (catalog.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary) }
         catalog.notice?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-        catalog.error?.let { error -> item { RecoveryState(if (catalog.books.isEmpty()) "Couldn't load the catalog" else "Some sources are unavailable", error, { vm.search() }) } }
-        if (browse && catalog.books.isNotEmpty()) {
-            val featured = catalog.books.first()
-            item { FeaturedBook(featured, { vm.open(featured) }) }
-            val current = shelf.firstOrNull { it.playedAt > 0 && it.sourceJson.isNotBlank() }
-            if (current != null) item {
+        catalog.error?.let { error -> item { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
+        if (browse) {
+            shelf.firstOrNull { it.playedAt > 0 && it.sourceJson.isNotBlank() }?.let { current -> item {
                 Text("Pick up the thread", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(14.dp))
                 ShelfRow(current, { vm.resume(current) }, { vm.open(current.book()) })
-            }
+            } }
+        }
+        if (catalog.books.isNotEmpty()) {
             item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("A shelf of possibilities", style = MaterialTheme.typography.headlineSmall)
-                    IconButton(onClick = { vm.search(cat = "Fiction") }) { Icon(Icons.AutoMirrored.Rounded.ArrowForward, "Browse fiction") }
-                }
-                Spacer(Modifier.height(12.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                    items(catalog.books.drop(1), key = { it.id }) { book ->
-                        Column(Modifier.width(140.dp).clickable { vm.open(book) }) {
-                            BookCover(book, Modifier.fillMaxWidth().height(204.dp))
-                            Spacer(Modifier.height(10.dp))
-                            Text(book.title.substringBefore(" ("), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(book.author.removePrefix("Sir "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                    }
-                }
-            }
-            item {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Spacer(Modifier.height(18.dp))
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Rounded.Public, null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(20.dp))
-                    Column {
-                        Text("Open books. Real voices.", style = MaterialTheme.typography.titleSmall)
-                        Text("Discover public-domain recordings from LibriVox. Connect TorBox to search cached audiobook releases and stream through your account.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-        } else if (catalog.books.isNotEmpty()) {
-            item {
-                Text(if (scope == "TorBox") "Audio in your TorBox" else if (scope == "Cached") "${catalog.books.size} ready to stream" else "${catalog.books.size} recordings", style = MaterialTheme.typography.headlineSmall)
-                Text(when (scope) { "Cached" -> "Cache checked in TorBox · No phone download required"; "Public" -> "LibriVox · Public-domain catalog · Editions stay separate"; else -> "Choose the exact release. Indexed narration and language can be unverified." }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (browse) "A shelf of possibilities" else "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}", style = MaterialTheme.typography.headlineSmall)
+                Text("One result per book · Listening availability checked in details", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.open(book) }) }
         } else if (!catalog.loading && catalog.error == null) item {
-            EmptyState(if (scope == "Cached") "No cached releases found" else "No recordings yet", when (scope) { "TorBox" -> "Your TorBox account has no matching audio files. Try All sources."; "Cached" -> "Try another title or author. All sources can show uncached releases, and Public books can stream directly."; else -> "Try a title or author, or clear the category." }, Icons.Rounded.Search)
-            if (scope == "Cached") OutlinedButton({ vm.search(scope = "All sources") }, Modifier.fillMaxWidth()) { Text("See all sources") }
-        }
-    }
-}
-
-@Composable
-private fun FeaturedBook(book: Audiobook, open: () -> Unit) {
-    Box(Modifier.fillMaxWidth().heightIn(min = 286.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceContainer)) {
-        Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop, alignment = Alignment.Center)
-        Box(Modifier.matchParentSize().background(Brush.horizontalGradient(listOf(Color(0xF40C2118), Color(0xC70C2118), Color(0x240C2118)))))
-        Column(Modifier.padding(24.dp).fillMaxWidth(.8f)) {
-            Text("A world\nworth wandering.", style = MaterialTheme.typography.headlineLarge, color = Color(0xFFF8EACC))
-            Spacer(Modifier.height(26.dp))
-            Text(book.title, style = MaterialTheme.typography.titleMedium, color = Color(0xFFF8EACC))
-            Text(book.author, style = MaterialTheme.typography.bodySmall, color = Color(0xFFD2DEC7))
-            Spacer(Modifier.height(14.dp))
-            FilledTonalButton(open, colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) {
-                Icon(Icons.Rounded.Headphones, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Explore recording")
-            }
+            EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
     }
 }
@@ -135,9 +75,12 @@ fun BookRow(book: Audiobook, open: () -> Unit, trailing: (@Composable () -> Unit
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (book.provider == "catalog") {
+                if (book.description.isNotBlank()) Text(book.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(providerLabel(book), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            } else Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (book.durationMs > 0) Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (book.provider != "archive" || book.cacheState != "unchecked") Text(if (book.cacheState == "cached") "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}" else "${providerLabel(book)} · ${if (book.cacheState == "uncached") "Not cached" else "Cache not checked"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (book.provider != "catalog" && (book.provider != "archive" || book.cacheState != "unchecked")) Text(if (book.cacheState == "cached") "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}" else "${providerLabel(book)} · ${if (book.cacheState == "uncached") "Not cached" else "Cache not checked"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         trailing?.invoke()
     }

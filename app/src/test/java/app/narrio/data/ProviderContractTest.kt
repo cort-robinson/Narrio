@@ -82,6 +82,8 @@ class ProviderContractTest {
               {"name":"chapter_10.mp3","source":"original","format":"VBR MP3","length":"20","title":"Chapter 10"},
               {"name":"chapter_2.mp3","source":"original","format":"VBR MP3","length":"30","title":"Chapter 2"},
               {"name":"chapter_2_64kb.mp3","source":"derivative","format":"64Kbps MP3"},
+              {"name":"preview.mp3","source":"original"},
+              {"name":"sample.m4b","source":"original"},
               {"name":"whole.m4b","source":"original"},
               {"name":"edition-1_archive.torrent","btih":"abc"},
               {"name":"cover.jpg"}]

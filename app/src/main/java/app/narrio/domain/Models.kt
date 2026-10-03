@@ -77,6 +77,7 @@ object AudioOrdering : Comparator<String> {
 }
 
 fun isAudioFile(name: String) = name.substringAfterLast('.').lowercase() in setOf("mp3", "m4b", "m4a", "aac", "flac", "ogg", "opus", "wav")
+fun isBookAudioFile(name: String) = isAudioFile(name) && !Regex("(?i)(^|[/ _-])(sample|trailer|preview)([/ _.-]|$)").containsMatchIn(name)
 fun resumeIndex(parts: List<AudioPart>, partId: String): Int = parts.indexOfFirst { it.id == partId }.coerceAtLeast(0)
 fun parseDuration(value: String): Long {
     val bits = value.trim().split(':')
@@ -88,7 +89,7 @@ fun formatTime(ms: Long): String {
 }
 fun durationLabel(ms: Long): String = if (ms > 0) "${ms / 3_600_000}h ${(ms / 60_000) % 60}m" else "Length on playback"
 fun sizeLabel(bytes: Long): String = when { bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0); bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0); else -> "%.0f KB".format(bytes / 1000.0) }
-fun providerLabel(book: Audiobook) = when (book.provider) { "torbox" -> "My TorBox"; "knaben" -> "Indexed release"; else -> "LibriVox" }
+fun providerLabel(book: Audiobook) = when (book.provider) { "catalog" -> book.metadataSource.ifBlank { "Book catalog" }; "torbox" -> "My TorBox"; "knaben" -> "Indexed release"; else -> "LibriVox" }
 fun narrationLabel(book: Audiobook) = when {
     book.narratorFromCatalog -> "Catalog narrator: ${book.narrator}"
     book.narrator.startsWith("Narrator not ") -> book.narrator

@@ -126,8 +126,8 @@ private fun WelcomePane(vm: NarrioViewModel) {
         Spacer(Modifier.height(32.dp))
         Text("A place to get lost.", style = MaterialTheme.typography.headlineLarge)
         Spacer(Modifier.height(12.dp))
-        Text("Pick a story on the left. Your recording and listening controls will open here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Pick a book on the left. Read its details, then find a listening source.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
-        FilledTonalButton({ vm.open(vm.catalog.value.books.firstOrNull() ?: NarrioViewModel.curated.first()) }) { Text("Meet The Secret Garden") }
+        FilledTonalButton({ vm.search("The Secret Garden") }) { Text("Find The Secret Garden") }
     }
 }
