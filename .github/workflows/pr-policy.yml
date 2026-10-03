@@ -1,0 +1,28 @@
+name: Pull request policy
+
+on:
+  pull_request_target:
+    branches: [dev, master]
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: PR policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # Metadata only. Never check out a PR or execute its code in pull_request_target.
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const conventional = /^(feat|fix|perf|refactor|docs|test|chore|ci|build|style|revert)(\([^)]+\))?!?: .+/;
+            if (!conventional.test(pr.title)) core.setFailed('Use a Conventional Commit PR title, e.g. feat(metadata): show audiobook descriptions');
+            const notes = (pr.body || '').match(/## Release notes\s*\n([\s\S]*?)(?=\n## |$)/i)?.[1]?.trim();
+            if (!notes || notes.startsWith('Describe the user-facing change')) core.setFailed('Describe the user-facing change under ## Release notes; use None for maintenance.');
+            if (pr.base.ref === 'master' && (pr.head.repo?.full_name !== pr.base.repo.full_name || !(pr.head.ref === 'dev' || pr.head.ref.startsWith('hotfix/')))) {
+              core.setFailed('Stable changes must arrive from dev or a hotfix/* branch.');
+            }

@@ -4,7 +4,7 @@ A native Android listening room for audiobooks. Discover recordings, stream cach
 
 ## Install the update
 
-The signed package is `artifacts/Narrio-1.2.0.apk`. A copy is also delivered to the Windows Downloads folder. Android 8.0 or later is required. Install over 1.0 or 1.1 to retain your TorBox connection, shelf, bookmarks, and listening progress.
+Download the signed APK from the [latest GitHub release](https://github.com/cort-robinson/Narrio/releases/latest). Each release includes checksums, its source commit, and Android/signing details. Android 8.0 or later is required. Install over an earlier Narrio release to retain your TorBox connection, shelf, bookmarks, and listening progress.
 
 1. Transfer the APK to your Android phone and open it in Files.
 2. If Android requests it, allow that app to install unknown apps, then install Narrio.
@@ -39,6 +39,8 @@ The service owns playback, so folding, rotation, or multi-window resizing does n
 No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to the selected discovery providers. Metadata lookup sends cleaned book/release names to Audible or Open Library; artwork loads from the returned provider image URLs. TorBox credentials, file lists, listening positions, and bookmarks are never sent to metadata providers. Room contains recording metadata, stable part IDs, positions, and bookmarks. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads and history, without deleting files from TorBox.
 
 ## Build
+
+[Development and releases](docs/DEVELOPMENT.md) describes feature branches, `dev` preview APKs, Conventional Commits, and automatic signed releases from `master`. Versions are supplied by automation; local builds use the latest release tag plus `-dev`.
 
 Use JDK 17 or 21, Android SDK platform 36, and the included Gradle wrapper. Set `ANDROID_HOME` or add an ignored `local.properties` containing your SDK directory.
 
