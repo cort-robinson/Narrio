@@ -100,7 +100,7 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
             item {
                 Text("Listening sources", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(8.dp))
-                Text("Matching books with playable audio · Ready sources first", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Matching books with verified audio files · Cached sources first", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (sourceSearch.loading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth()) }
             }
             sourceSearch.error?.let { message -> item { RecoveryState("Some sources couldn't be checked", message) { vm.findSources(book) } } }
@@ -109,12 +109,12 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
                     Text(recording.releaseTitle.ifBlank { recording.title }, style = MaterialTheme.typography.titleSmall)
                     Text(narrationLabel(recording), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                     Text("${providerLabel(recording)} · ${recording.language} · ${recording.sources.joinToString(" / ") { it.format }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(if (recording.cacheState == "cached") "Ready in TorBox" else "Public audio · Ready to stream", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(when { recording.cacheState == "cached" -> "Ready in TorBox"; recording.provider == "archive" -> "Public audio · Ready to stream"; else -> "Requires TorBox preparation" }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
             if (!sourceSearch.loading && sourceSearch.recordings.isEmpty()) item {
-                EmptyState("No suitable sources found", "Try again later. Only matching recordings with usable public or cached audio appear here.", Icons.Rounded.Headphones)
+                EmptyState("No suitable sources found", "Try again later. Sources need a title and author match, verified audio files, and public, cached, or seeded availability.", Icons.Rounded.Headphones)
             }
         }
         downloads.filter { it.book.id == book.id }.forEach { download -> item { OfflineStatus(vm, download) } }
@@ -305,7 +305,7 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
             Text("A small, honest first edition", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
-            Text("Narrio ${BuildConfig.VERSION_NAME} · Native Android\n\nSearch audiobook releases from Knaben, public-domain LibriVox recordings, and your TorBox library. Connected search defaults to cached audio ready to stream. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Narrio ${BuildConfig.VERSION_NAME} · Native Android\n\nSearch identifies books from catalog metadata. Find sources from a book's details to check Knaben releases, public-domain LibriVox recordings, and your TorBox library. Cached sources appear first. Matching releases with verified audio files and available seeders can be explicitly prepared in TorBox. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             Text("Matched book details and cover art come from Audible or Open Library. Catalog narrator information does not verify the release's recording. Book names go directly to these metadata providers; your TorBox key and listening history stay private.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
