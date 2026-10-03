@@ -34,7 +34,7 @@ class SourceExperienceTest {
     @Test fun cachedChoicesPreparationAndOfflineSettingsRemainReadable() {
         val window = compose.activity.resources.configuration
         val suffix = if (window.screenWidthDp >= 600) "fold" else if (window.fontScale > 1.2f) "phone-large-text" else "phone"
-        compose.runOnIdle { vm.connected.value = true; vm.theme.value = "Night"; vm.selection.value = SelectionState(book()); vm.chooseFormat(book(), "M4B") }
+        compose.runOnIdle { vm.connected.value = true; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.NIGHT)); vm.selection.value = SelectionState(book()); vm.chooseFormat(book(), "M4B") }
         compose.onNodeWithText("Listen").performScrollTo().performClick()
         compose.onNodeWithText("Stream now").performScrollTo().assertIsEnabled()
         compose.onNodeWithText("Phone storage: 500 MB for this format").assertExists()
@@ -49,7 +49,7 @@ class SourceExperienceTest {
         compose.onNodeWithText("35%", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Check availability").performScrollTo().assertIsDisplayed()
         capture("preparation-$suffix")
-        compose.runOnIdle { vm.connected.value = false; vm.preparation.value = null; vm.navigate(2); vm.theme.value = "Day" }
+        compose.runOnIdle { vm.connected.value = false; vm.preparation.value = null; vm.navigate(2); vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.DAY)) }
         compose.onNodeWithText("Download only on Wi-Fi").performScrollTo().assertIsDisplayed()
         capture("offline-settings-$suffix")
     }

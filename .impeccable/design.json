@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T23:36:04.473Z",
+  "generatedAt": "2026-10-03T02:45:07Z",
   "title": "Design System: Narrio",
   "extensions": {
     "colorMeta": {
@@ -414,14 +414,14 @@
         "role": "neutral",
         "displayName": "Day Muted Text",
         "tonalRamp": [
-          "oklch(15.00% 0.02507 157.92)",
-          "oklch(26.43% 0.02507 157.92)",
-          "oklch(37.86% 0.02507 157.92)",
-          "oklch(49.29% 0.02507 157.92)",
-          "oklch(60.71% 0.02507 157.92)",
-          "oklch(72.14% 0.02507 157.92)",
-          "oklch(83.57% 0.02507 157.92)",
-          "oklch(95.00% 0.02507 157.92)"
+          "oklch(15.00% 0.02520 157.89)",
+          "oklch(26.43% 0.02520 157.89)",
+          "oklch(37.86% 0.02520 157.89)",
+          "oklch(49.29% 0.02520 157.89)",
+          "oklch(60.71% 0.02520 157.89)",
+          "oklch(72.14% 0.02520 157.89)",
+          "oklch(83.57% 0.02520 157.89)",
+          "oklch(95.00% 0.02520 157.89)"
         ]
       },
       "day-outline": {
@@ -544,7 +544,8 @@
       "states": "CSS hover, focus-visible, and active effects are panel-only affordances. Actual Android state layers, ripple, focus, and disabled behavior are supplied by Material 3.",
       "fonts": "Snippets name Newsreader and Manrope with CSS fallbacks; the panel does not load the app's bundled TTF resources. Native screenshots use the actual fonts.",
       "icons": "Inline SVG samples represent the same actions. The app uses Android Material rounded/auto-mirrored vector icons.",
-      "tonalRamps": "Eight-step OKLCH ramps are synthesized from each extracted color at fixed hue/chroma for panel display. These are not shipped theme scales; wide-gamut samples can clip in sRGB."
+      "tonalRamps": "Eight-step OKLCH ramps are synthesized from each extracted color at fixed hue/chroma for panel display. These are not shipped theme scales; wide-gamut samples can clip in sRGB.",
+      "appearanceScope": "Frontmatter and panel snippets show Listening room, the Narrio font pairing, and Default text size. Selectable/generated settings live in extensions.android.appearance and native evidence."
     },
     "android": {
       "platform": "android",
@@ -556,7 +557,8 @@
         "PlayerScreen.kt",
         "BookCover.kt",
         "CatalogScreens.kt",
-        "DetailAndSettings.kt"
+        "DetailAndSettings.kt",
+        "AppearanceScreen.kt"
       ],
       "nativeUnits": {
         "geometry": "dp",
@@ -585,6 +587,10 @@
           "onSecondary": "{colors.night-on-sage}",
           "secondaryContainer": "{colors.night-selected}",
           "onSecondaryContainer": "{colors.night-on-selected}",
+          "tertiary": "{colors.night-sage}",
+          "onTertiary": "{colors.night-on-sage}",
+          "tertiaryContainer": "{colors.night-selected}",
+          "onTertiaryContainer": "{colors.night-on-selected}",
           "background": "{colors.night-ground}",
           "surface": "{colors.night-ground}",
           "onBackground": "{colors.night-text}",
@@ -592,10 +598,18 @@
           "surfaceContainerLow": "{colors.night-surface-low}",
           "surfaceContainer": "{colors.night-surface}",
           "surfaceContainerHigh": "{colors.night-surface-high}",
+          "surfaceContainerLowest": "{colors.night-ground}",
+          "surfaceContainerHighest": "{colors.night-surface-high}",
+          "surfaceDim": "{colors.night-ground}",
+          "surfaceBright": "{colors.night-surface-high}",
+          "surfaceTint": "{colors.night-copper}",
           "surfaceVariant": "{colors.night-surface-high}",
           "onSurfaceVariant": "{colors.night-muted-text}",
           "outline": "{colors.night-outline}",
           "outlineVariant": "{colors.night-outline-muted}",
+          "inverseSurface": "{colors.night-text}",
+          "inverseOnSurface": "{colors.day-text}",
+          "inversePrimary": "{colors.day-copper}",
           "error": "{colors.night-error}",
           "onError": "{colors.night-on-error}"
         },
@@ -608,6 +622,10 @@
           "onSecondary": "{colors.day-on-sage}",
           "secondaryContainer": "{colors.day-selected}",
           "onSecondaryContainer": "{colors.day-on-selected}",
+          "tertiary": "{colors.day-sage}",
+          "onTertiary": "{colors.day-on-sage}",
+          "tertiaryContainer": "{colors.day-selected}",
+          "onTertiaryContainer": "{colors.day-on-selected}",
           "background": "{colors.day-ground}",
           "surface": "{colors.day-ground}",
           "onBackground": "{colors.day-text}",
@@ -615,21 +633,168 @@
           "surfaceContainerLow": "{colors.day-surface-low}",
           "surfaceContainer": "{colors.day-surface}",
           "surfaceContainerHigh": "{colors.day-surface-high}",
+          "surfaceContainerLowest": "{colors.day-ground}",
+          "surfaceContainerHighest": "{colors.day-surface-high}",
+          "surfaceDim": "{colors.day-surface-high}",
+          "surfaceBright": "{colors.day-ground}",
+          "surfaceTint": "{colors.day-copper}",
           "surfaceVariant": "{colors.day-surface}",
           "onSurfaceVariant": "{colors.day-muted-text}",
           "outline": "{colors.day-outline}",
-          "outlineVariant": "{colors.day-outline-muted}"
+          "outlineVariant": "{colors.day-outline-muted}",
+          "inverseSurface": "{colors.day-text}",
+          "inverseOnSurface": "{colors.night-text}",
+          "inversePrimary": "{colors.night-copper}"
         },
         "selection": {
-          "Night": "authored dark scheme",
-          "Day": "authored light scheme",
+          "Night": "Selected palette's Night version; mappings above are the authored Listening room scheme",
+          "Day": "Selected palette's Day version; mappings above are the authored Listening room scheme",
           "System": "isSystemInDarkTheme()",
           "dynamicColor": false,
-          "unlistedRoles": "Material darkColorScheme/lightColorScheme defaults; Day error roles were not customized or extracted."
+          "unlistedRoles": "Listening room retains Material darkColorScheme/lightColorScheme defaults for unlisted roles; Day error roles were not customized or extracted. Generated palettes explicitly supply error and error-container roles."
         }
+      },
+      "appearance": {
+        "source": "AppearanceScreen.kt / Theme.kt",
+        "modelSource": "app/src/main/java/app/narrio/domain/Appearance.kt",
+        "storeSource": "app/src/main/java/app/narrio/data/AppearanceStore.kt",
+        "defaults": {
+          "mode": "Night",
+          "palette": "Listening room",
+          "font": "Narrio",
+          "textSize": "Default"
+        },
+        "independence": "Mode, palette, font, and text size save independently. System follows isSystemInDarkTheme().",
+        "presetSeedOrder": [
+          "Accent",
+          "Supporting",
+          "Background"
+        ],
+        "presets": [
+          {
+            "name": "Listening room",
+            "character": "Copper & sage",
+            "schemes": "colorSchemes.Night / colorSchemes.Day"
+          },
+          {
+            "name": "Ocean",
+            "character": "Sea glass & blue ink",
+            "nightSeeds": [
+              "#8ACED8",
+              "#B0BEDF",
+              "#101D26"
+            ],
+            "daySeeds": [
+              "#226875",
+              "#525F84",
+              "#F0F5F7"
+            ]
+          },
+          {
+            "name": "Forest",
+            "character": "Fern & golden light",
+            "nightSeeds": [
+              "#B5D49C",
+              "#E3C28A",
+              "#161E16"
+            ],
+            "daySeeds": [
+              "#4C6838",
+              "#7C5D2C",
+              "#F2F4EA"
+            ]
+          },
+          {
+            "name": "Rosewood",
+            "character": "Rose & plum",
+            "nightSeeds": [
+              "#E9B1BE",
+              "#CCBAE0",
+              "#261A22"
+            ],
+            "daySeeds": [
+              "#914D64",
+              "#69567D",
+              "#FAF1F3"
+            ]
+          },
+          {
+            "name": "Graphite",
+            "character": "Quiet, neutral tones",
+            "nightSeeds": [
+              "#D3D8DF",
+              "#B8C1CA",
+              "#191C20"
+            ],
+            "daySeeds": [
+              "#454C56",
+              "#58626F",
+              "#F3F4F6"
+            ]
+          }
+        ],
+        "custom": {
+          "savedSlots": 1,
+          "nameMaxCharacters": 28,
+          "colors": "Separate Night/Day opaque sRGB Accent, Supporting, and Background seeds",
+          "editor": "Preset starter, twelve 48 dp swatches, HSV sliders, strict six-digit hex with optional #, contained live preview",
+          "draft": "rememberSaveable serializer retains draft, edit mode, color role, and controls through activity recreation",
+          "save": "Save & use theme normalizes, applies, and persists the draft; disabled for invalid hex or blank name",
+          "cancel": "Back leaves the applied appearance intact",
+          "retention": "Switching presets and restoring defaults retain the saved custom slot"
+        },
+        "generation": {
+          "source": "Theme.kt colourSchemeFor / domain ThemeContrast",
+          "scope": "Ocean, Forest, Rosewood, Graphite, and Custom; Listening room keeps authored schemes",
+          "surfaces": "Background seed plus contrast-aware tonal mixes at 0.035, 0.065, 0.10, and 0.13",
+          "foreground": "Black or white by strongest sRGB contrast; accent/supporting move toward readable ink as needed across the surfaces",
+          "contentMinimumContrast": 4.5,
+          "outlineRoleMinimumContrast": 3.0,
+          "containers": "Background mixed 0.18 toward the derived accent/supporting, with derived content foregrounds",
+          "tertiary": "Mirrors secondary and its container/content roles",
+          "otherRoles": "Derived muted ink, outlines, error/error-container, surface tint, and inverse surface/content/primary"
+        },
+        "fonts": [
+          {
+            "name": "Narrio",
+            "headings": "Newsreader",
+            "bodyAndControls": "Manrope"
+          },
+          {
+            "name": "Manrope",
+            "allRoles": "Manrope"
+          },
+          {
+            "name": "Newsreader",
+            "allRoles": "Newsreader"
+          },
+          {
+            "name": "Android",
+            "allRoles": "FontFamily.Default"
+          }
+        ],
+        "textSizes": [
+          {
+            "name": "Default",
+            "scale": 1.0
+          },
+          {
+            "name": "Comfort",
+            "scale": 1.1
+          },
+          {
+            "name": "Large",
+            "scale": 1.2
+          }
+        ],
+        "typography": "Preserve semantic role hierarchy and weights; multiply font size and line height in sp, plus Newsreader tracking, while retaining system scaling. Bundled/device fonts require no downloads.",
+        "controls": "Scrollable settings page, two-column selectable palette choices with checkmark/outline, radio font rows, wrapping mode/size/color chips, persistent editor save action",
+        "persistence": "appearance.v1 normalized local JSON; unknown optional fields ignored and enums coerced, damaged data falls back to legacy theme mode or Night. Saving removes theme and preserves unrelated preferences.",
+        "reset": "Listening room, Night, Narrio fonts, Default size; saved custom palette retained"
       },
       "typography": {
         "source": "Theme.kt",
+        "baseline": "Narrio original pairing at Default text size; selectable variants are described in appearance",
         "roles": {
           "displayLarge": {
             "fontFamily": "Newsreader",
@@ -821,7 +986,8 @@
         "separatingVerticalHinge": "Catalog width begins at fold.bounds.left converted to dp minus 80 dp rail; bounded by 250 dp pane minima. Reported fold width is inserted as a gap, at least 1 dp.",
         "tabletopCondition": "Horizontal FoldingFeature + HALF_OPENED + playerOpen",
         "insets": "safeDrawing Horizontal + Top; navigationBarsPadding on expanded/player/detail; Settings uses imePadding.",
-        "navigation": "BackHandler collapses player/selection first or returns non-Discover destination to Discover. No claim of physical predictive-back validation is made.",
+        "navigation": "BackHandler collapses player/selection first or returns non-Discover destination to Discover. Appearance handles Back to Settings and custom-editor cancellation. No claim of physical predictive-back validation is made.",
+        "systemBarIcons": "Foreground contrast against the actual scheme background selects light/dark icons, including custom palettes",
         "offlineVisibility": "NarrioApp sets offline.visible alongside playback.visible on lifecycle start/stop and clears both on disposal; no additional UI cadence is inferred."
       },
       "tabletop": {
@@ -953,9 +1119,12 @@
           "art": "secret_garden.png",
           "localOverrides": {
             "headline": "#F8EACC",
-            "author": "#D2DEC7",
-            "buttonContainer": "#E8AF79",
-            "buttonContent": "#342312"
+            "author": "#D2DEC7"
+          },
+          "listeningAction": {
+            "containerRole": "primary",
+            "contentRole": "onPrimary",
+            "scope": "Selected app scheme"
           },
           "scrim": "Brush.horizontalGradient with source-defined dark green alpha values; retained for text contrast.",
           "scope": "Discover component-specific artwork treatment"
@@ -1040,7 +1209,7 @@
             "storageContext": "Sum of chosen parts sizeBytes when positive"
           },
           "indexedFiles": "Chosen parts show their file names for indexed releases; narration, edition, and language remain subject to visible uncertainty.",
-          "systemBarAppearance": "DialogWindowProvider window icons use current background luminance to match the theme; no physical-device claim."
+          "systemBarAppearance": "DialogWindowProvider window icons use foreground contrast against the actual scheme background; no physical-device claim."
         },
         "cloudPreparation": {
           "source": "DetailAndSettings.kt",
@@ -1214,7 +1383,37 @@
             "temporaryControllerRemoved": true
           }
         },
-        "physicalHardwareValidationScope": "Signed-release listening on the connected phone; exact hinge/gesture/performance validation remains limited as recorded below."
+        "physicalHardwareValidationScope": "Signed-release listening on the connected phone; exact hinge/gesture/performance validation remains limited as recorded below.",
+        "appearance": {
+          "record": "verification/appearance.json",
+          "review": ".impeccable/review/appearance/finish-review.md",
+          "disposition": "ship",
+          "materialFixes": [],
+          "scope": "Current-branch local Appearance feature; emulator matrix within the Listening room world",
+          "nativeCapturesReviewed": 18,
+          "captureScope": "Scrolled named regions with synthetic Aurora colors and story preview; existing artwork retained",
+          "jvmTestsPassed": 22,
+          "nativeExecutionsPassed": {
+            "phone": 4,
+            "expanded": 4,
+            "largeText": 2
+          },
+          "largeText": {
+            "systemScale": 1.3,
+            "appScale": 1.2
+          },
+          "physicalDeviceValidated": false,
+          "signedReleaseUpdated": false,
+          "limits": "No new physical-phone, live-audio, release, or performance certification; existing 1.1 evidence remains historical",
+          "integration": {
+            "record": "verification/appearance-integration.json",
+            "baseDevCommit": "94154c34291350762b347be186b940930f6a76cc",
+            "jvmTestsPassed": 37,
+            "releaseToolingTestsPassed": 16,
+            "nativePhoneCasesPassed": 4,
+            "scope": "Combined dev metadata/release workflow and appearance; original capture review retained"
+          }
+        }
       },
       "notCanonized": [
         {
@@ -1320,10 +1519,11 @@
   ],
   "narrative": {
     "northStar": "Listening room",
-    "overview": "Narrio is a quiet, personal listening room. Warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. Serif titles carry the story; the sans serif carries the task.\n\nThe implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected recording or listening session beside each other.\n\nThis guide records the current Compose implementation. The surface concept and first-viewport strategy remain in [.impeccable/direction-contract.md](.impeccable/direction-contract.md). FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.",
+    "overview": "Narrio is a quiet, personal listening room. In the default palette, warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. The original type pairing gives story titles a serif voice and tasks a clear sans serif.\n\nThe implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected recording or listening session beside each other.\n\nListening room remains the default. Local Appearance settings offer paired palettes, one custom palette, and font and text-size choices within the same layouts and semantic roles.\n\nThis guide records the current Compose implementation. The surface concept and first-viewport strategy remain in [.impeccable/direction-contract.md](.impeccable/direction-contract.md). FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.",
     "keyCharacteristics": [
-      "Warm ink at night; warm paper by day.",
-      "Newsreader for story titles; Manrope for metadata and controls.",
+      "Default warm ink at night; warm paper by day.",
+      "Default Newsreader story titles and Manrope metadata and controls.",
+      "Paired local palettes and independent font and text-size choices.",
       "Artwork is the centerpiece; functional content stays legible around it.",
       "Material navigation adapts to available window width and reported hinge posture.",
       "Explicit loading, preparation, empty, selected, and recovery states.",
@@ -1332,12 +1532,12 @@
     "rules": [
       {
         "name": "The Paired Scheme Rule",
-        "body": "Resolve interface colors through MaterialTheme.colorScheme. Night and Day are complete authored schemes, selected explicitly or through System; the current app does not use wallpaper-derived dynamic color.",
+        "body": "Resolve interface colors through the selected palette's MaterialTheme.colorScheme. Night, Day, and System are independent of palette choice. Listening room retains its authored schemes; optional presets and custom palettes derive contrast-aware roles from separate Night and Day seeds. The app does not use wallpaper-derived dynamic color.",
         "section": "colors"
       },
       {
         "name": "The Two Voices Rule",
-        "body": "Use semantic Material typography roles. Newsreader owns display, headline, and titleLarge; Manrope owns the remaining titles, body, labels, and controls. Keep system font scaling in sp.",
+        "body": "In the default Narrio pairing, Newsreader owns display, headline, and titleLarge; Manrope owns remaining titles, body, labels, and controls. Selected fonts still use those semantic Material roles and their hierarchy. Keep system font scaling in sp.",
         "section": "typography"
       },
       {
@@ -1369,6 +1569,8 @@
     "dos": [
       "Do use the matching Night or Day Material role for interface text, actions, surfaces, and dividers.",
       "Do reuse semantic typography roles and keep native text sizes in sp.",
+      "Do keep palette, mode, font, and text-size choices independent, and apply custom drafts only when saved.",
+      "Do derive custom content and control colors from the seeds with the existing contrast generator.",
       "Do keep recording title, author, narrator, language, and source visibly grouped.",
       "Do use 24 dp page padding and the existing compact spacing steps for related metadata.",
       "Do preserve independently scrollable panes and real hinge clearance when the window changes.",
@@ -1383,6 +1585,7 @@
     "donts": [
       "Don't replace the warm paper scheme with an automatic inversion of the night palette.",
       "Don't apply per-book artwork colors to interface-wide controls or surfaces.",
+      "Don't recolor the garden artwork or its fixed cream text and scrim when applying a palette.",
       "Don't wrap every catalog row or text section in another decorative container.",
       "Don't shrink the tabletop cover to a fixed thumbnail when the upper pane has room for the artwork.",
       "Don't place content through a reported separating hinge.",

@@ -26,6 +26,17 @@ Book details fill in progressively after playable search results appear. Open a 
 - Media3 background service and system media controls; pause on headphone disconnection and Android audio-focus handling.
 - Night, Day, and System appearance; retrieved cover art with original artwork fallbacks and bundled Newsreader/Manrope typography.
 
+## Appearance on this branch
+
+This development branch adds the expanded **Settings → Appearance** page. Build this branch or use its Narrio Dev preview to try it; stable releases are published from `master` through the [development workflow](docs/DEVELOPMENT.md).
+
+- Choose **Night**, **Day**, or **System** independently of **Listening room**, **Ocean**, **Forest**, **Rosewood**, or **Graphite**. Each palette has paired light and dark colors; selections apply and save immediately.
+- Choose **Custom** or **Create custom theme** to edit one named theme. Start from a preset, then edit Night and Day accent, supporting, and background colors using swatches, HSV sliders, or six-digit hex. The live preview derives readable text and controls. Tap **Save & use theme** to apply the draft; Back cancels it.
+- Choose **Narrio** for the original pairing of Newsreader titles and Manrope controls, **Manrope** or **Newsreader** throughout, or **Android** for the device's default family. Fonts are bundled or built in. **Default**, **Comfort**, and **Large** text sizes use 1.0×, 1.1×, or 1.2× multipliers while retaining your device's text-size setting.
+- **Restore default appearance** returns to Listening room, Night, Narrio fonts, and Default size. Your saved custom palette remains available when resetting or switching presets.
+
+Appearance preferences stay on the device and work offline. [Appearance validation](docs/VALIDATION.md#current-branch-appearance-evidence) records the branch's build, native emulator, and visual review evidence.
+
 ## Adaptive Android layouts
 
 Narrio targets Android 16 and adapts to current window bounds. Compact phone windows have bottom navigation and a mini-player. Windows at least 600 dp wide reveal an 80 dp navigation rail and two independently scrolling panes, including larger screens and multi-window sessions.

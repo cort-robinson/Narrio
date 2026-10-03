@@ -32,6 +32,7 @@ Direct connections to catalog and delivery providers; no custom backend. The use
 - Discovery combines Knaben's audiobook release index, Internet Archive's LibriVox catalog, and the user's TorBox audio. Indexed release metadata remains visibly unverified; files and TorBox cache availability determine playability.
 - Matched book descriptions, authors, catalog narrators, and cover art enrich indexed/account releases through Audible with an Open Library fallback. Recording identity and source availability remain separate; catalog narration is labeled, original releases stay visible, and metadata failures preserve listening and saved details.
 - Connected search defaults to ready sources. Uncached cloud preparation and phone downloads require separate explicit actions. Phone downloads use Wi-Fi by default and can be paused, resumed, retried, or removed.
+- Local Appearance settings offer five paired palettes, one named custom palette with separate Night/Day colors, four bundled or system font choices, and three app text sizes. Mode, palette, font, and size remain independent; custom edits require an explicit save, and restoring defaults retains the saved custom palette. These settings preserve the Listening room defaults, system text scaling, artwork, and listening behavior without requiring network access.
 
 ## Brand Commitments
 

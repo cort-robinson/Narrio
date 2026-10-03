@@ -1,5 +1,21 @@
 # Narrio validation
 
+## Current branch Appearance evidence
+
+The Appearance update has a **ship** finish-review disposition. The initial checks below used the 1.1.0 source baseline before integration with the latest `dev` metadata and release workflow. Signed 1.1/1.2 installation, audio, and physical-phone results below remain historical release evidence.
+
+| Area | Result and evidence |
+| --- | --- |
+| Build and lint | `assembleDebug`, `assembleDebugAndroidTest`, `testDebugUnitTest`, and `lintDebug` pass. See [appearance-build.txt](../verification/appearance-build.txt) and [appearance-build-final.txt](../verification/appearance-build-final.txt). |
+| JVM tests | All 22 pass: the existing 17 provider/audio-identity tests plus five Appearance tests. Appearance covers codec fallback/normalization and generated contrast across 256 grey and 500 random backgrounds. |
+| Native executions | Ten pass in `AppearanceExperienceTest`: four on phone 1080×2400/density420, four on expanded 1848×2448/density360, and two complete interaction workflows on the phone at system font scale 1.3. The enlarged run includes Android font and app Large (1.2). See [appearance-phone.txt](../verification/appearance-phone.txt), [appearance-expanded.txt](../verification/appearance-expanded.txt), and [appearance-large-text.txt](../verification/appearance-large-text.txt). |
+| Interaction and persistence | Native checks cover legacy-mode migration, unrelated-preference preservation, independent settings, local store round-trip, activity recreation, preset starters, swatches, HSV, strict hex validation, separate Day/Night edits, save/cancel, retained custom palettes on switch/reset, and saveable drafts. Contrast checks include all five presets and eight extreme custom seed sets in both modes. |
+| Visual review | All 18 named region captures in [.impeccable/review/appearance](../.impeccable/review/appearance/) were reviewed across phone, expanded, and enlarged-text layouts. Synthetic Aurora colors and story previews establish Appearance rendering. These are scrolled window captures of named regions. The [finish review](../.impeccable/review/appearance/finish-review.md) returns **ship** with no material fixes. |
+
+[appearance.json](../verification/appearance.json) contains the complete matrix, five log references, capture inventory, and exact scope. A test-only side-by-side application ID protected the installed Narrio app. This update adds no physical-device, live-audio, signed-release, or performance validation claims.
+
+After integrating `dev` at `94154c3` on October 3, **37 JVM tests**, **16 release-tooling tests**, debug/instrumentation builds, and lint pass. All **four Appearance native cases** also pass on the private phone emulator at 1080×2400/density420 and system font scale 1.0. The new metadata UI test now uses the typed appearance mode API. See [appearance-integration.json](../verification/appearance-integration.json), [integration build](../verification/appearance-integration-build.txt), [release-tooling tests](../verification/appearance-integration-release.txt), and [native tests](../verification/appearance-integration-native.txt). The original matrix above remains its separately scoped baseline.
+
 ## 1.2 metadata update
 
 Validated on October 2, 2026. These observations apply to the manually built signed 1.2.0 update (version code 3), before release automation. Automated releases derive larger Android version codes from SemVer; their manifest and linked Actions run record the exact package and CI checks. CI emulator checks do not establish a new physical-phone/provider acceptance result. The metadata update preserves recording/source identity and the Room schema.
@@ -18,7 +34,7 @@ This update was verified on emulators. It does not claim a new physical-phone pl
 
 Validated on Windows on October 2, 2026. Narrio is a native Android application. The signed 1.1.0 update adds cache-first discovery and optional phone downloads. This document distinguishes real network/audio evidence, controlled provider fixtures, and checks that still require the user's account and phone.
 
-## Current build and contract evidence
+## Signed 1.1 build and contract evidence
 
 | Area | Result and evidence |
 | --- | --- |
