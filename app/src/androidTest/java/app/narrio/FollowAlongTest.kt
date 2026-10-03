@@ -74,7 +74,7 @@ Somewhere beyond the trees, a bell began to ring."""
     private fun open(book: Audiobook) {
         compose.waitUntil(15_000) { graph.playback.service?.initialized == true }
         runBlocking { withContext(Dispatchers.Main) { graph.playback.service!!.load(book, book.sources.single(), false, book.sources.single().parts.first().id, 0) } }
-        compose.runOnIdle { graph.preferences.edit().putBoolean("notificationAsked", true).apply(); vm.theme.value = "Night"; vm.playerOpen.value = true }
+        compose.runOnIdle { graph.preferences.edit().putBoolean("notificationAsked", true).apply(); vm.updateAppearance(AppearanceSettings()); vm.playerOpen.value = true }
         compose.onNodeWithText("Follow along").performScrollTo().performClick()
     }
 
@@ -127,9 +127,9 @@ Somewhere beyond the trees, a bell began to ring."""
             compose.waitUntil(10_000) { vm.bookText.value.bindings.any { it.anchors.isNotEmpty() } }
             assertEquals(matched, vm.bookText.value.bindings.single())
             compose.onNodeWithText("Follow along").assertIsSelected()
-            compose.runOnIdle { vm.theme.value = "Day" }
+            compose.runOnIdle { vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.DAY)) }
             capture("follow-day")
-            compose.runOnIdle { vm.theme.value = "Night" }
+            compose.runOnIdle { vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.NIGHT)) }
             compose.onNodeWithContentDescription("Manage book text").performClick()
             compose.onNodeWithText("Choose EPUB, text, or VTT").assertIsDisplayed()
             capture("follow-sources")
