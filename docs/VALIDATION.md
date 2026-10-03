@@ -1,5 +1,9 @@
 # Narrio validation
 
+## In-app updates: dev candidate
+
+Stable and Dev updates follow their installed package's separate release channel. Dev additionally requires a completed successful original workflow. Local validation passes 83 JVM tests, 25 release-tooling tests, debug/instrumentation builds, and lint with zero errors. All five controlled updater UI cases pass at phone, expanded, and 1.5 text layouts. Native package replacement from a signed non-debuggable Local fixture to a newer R8 release retained a Room shelf entry and private preferences after normal Play Protect scan/confirmation. This is confirmation-fallback acceptance, not a claim of fully unattended installation on every device. No physical phone or actual older Android OS was tested. Exact scope and reproducible steps are in [updater verification](../verification/app-updates.md).
+
 ## Verified uncached source discovery: patch candidate
 
 v1.4.1 still required every indexed source to be cached and rejected collections before inspecting their cached files. The matcher now accepts a collection only when author evidence and an exact book file/folder identify a separate recording. A public manifest for `Eragon, Eldest, Brisingr - Christopher Paolini` (hash `ded827306725eb1f65e98d8642b74264a9bad752`) contains a separate `Eragon/Eragon.m4b`; controlled cache tests now select that file and exclude all Eldest/Brisingr audio. Different books in the same torrent receive distinct recording identities. The user's previously streamed release is unknown, so this is a confirmed rejection path rather than a verified account diagnosis.

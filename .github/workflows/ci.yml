@@ -87,7 +87,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=app.narrio.PersistenceAndRenewalTest,app.narrio.SourceExperienceTest,app.narrio.BookDiscoveryExperienceTest,app.narrio.FollowAlongMigrationTest,app.narrio.FollowAlongTest#localTextHighlightsSeeksAndRestoresTimingMatches,app.narrio.FollowAlongTest#suppliedTimestampsNeverCarryOverToAnotherAudioPart,app.narrio.FollowAlongTest#wholeBookChapterNavigationKeepsTheWholeRecordingTimeline
+          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=app.narrio.PersistenceAndRenewalTest,app.narrio.SourceExperienceTest,app.narrio.BookDiscoveryExperienceTest,app.narrio.AppUpdatesExperienceTest,app.narrio.FollowAlongMigrationTest,app.narrio.FollowAlongTest#localTextHighlightsSeeksAndRestoresTimingMatches,app.narrio.FollowAlongTest#suppliedTimestampsNeverCarryOverToAnotherAudioPart,app.narrio.FollowAlongTest#wholeBookChapterNavigationKeepsTheWholeRecordingTimeline
       - name: Upload native test reports
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

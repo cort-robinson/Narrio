@@ -34,6 +34,18 @@ The **Narrio-Dev-<run>** Actions artifact remains available as a fallback for 30
 
 Check the current candidate on a phone: discovery/details, streaming, shelf/resume, offline downloads, and relevant layouts. Check real provider behavior where the change affects it. Successful emulator checks do not establish physical-device or provider acceptance.
 
+### In-app updates
+
+Install a signed APK containing the updater once. Earlier installations cannot acquire updater code without that initial manual update. Stable Narrio checks normal GitHub releases; Narrio Dev checks only `dev-<run>` prereleases whose original `dev` push workflow completed successfully. The installed application ID fixes the channel. Debug and Narrio Local builds do not check for updates.
+
+In **Settings → App updates**, automatic updates are on by default and can be disabled. Background checks are scheduled about hourly for Dev and every 12 hours for stable, subject to Android's battery/network scheduling. Opening the app also checks when the last attempt is old enough (10 minutes for Dev, six hours for stable). Downloads wait for an unmetered connection; **Download update** explicitly permits the current connection, including mobile data.
+
+Tap **Allow app updates** in Settings and enable Android's permission for Narrio to install its own updates. You can do this before an update is available. Automatic installation runs only while Narrio is closed and playback is neither playing nor buffering, on Android 12+. Android may still require confirmation: use the update notification or Settings to finish. Older Android versions use the explicit **Install update** button and the system confirmation. Installation updates the existing signed package and retains its app data; it does not switch channels or uninstall the app.
+
+The updater checks the manifest against the installed signing certificate, channel/version code, protected release URL, asset size, and source/run metadata. It verifies downloaded bytes, the APK package/version, non-debuggable build, and signing certificate before opening a PackageInstaller session. Interrupted/corrupt downloads never install. No provider credentials, audio, or listening history are sent to the update service. GitHub receives the usual network request and app-version user agent.
+
+Local regression tests cover channel separation, downgrade/signature/asset rejection, full-CI preview selection, bounded downloads, corrupted caches, permission/playback controls, and disabled local builds. Controlled emulator checks do not establish automatic installation on a particular physical phone; report that separately. Preserve signing identities, release asset immutability, and preview run-number continuity when changing this code.
+
 ### Fast local testing over Wi-Fi
 
 For rapid iterations at home, Android 11+ supports [wireless ADB pairing](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi). The phone and PC must share the same Wi-Fi network. Enable Developer options and Wireless debugging on the phone, choose **Pair device with pairing code**, then run the following with SDK platform-tools on your PATH:
@@ -107,4 +119,4 @@ Published versions and assets are never replaced. For a bad published release, s
 - PR jobs receive read-only repository access and no signing secrets. The metadata-only `pull_request_target` policy job never checks out or executes PR code. Stable publication and the trusted `dev` preview publication/status jobs receive `contents: write`. Preview publication/status jobs use the original verified artifact and receive no signing secrets; the preview build remains read-only.
 - Action revisions and release dependencies are pinned. Update them through a tested PR to `dev`; keep a compatible Conventional Commits preset for the notes generator.
 
-Public source and public release assets do not expose environment secrets. The pipeline publishes GitHub APK releases; it does not publish to Google Play or implement in-app updates.
+Public source and public release assets do not expose environment secrets. The pipeline publishes GitHub APK releases; the installed app checks its own release channel using those public assets. It does not publish to Google Play.

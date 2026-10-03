@@ -1,0 +1,13 @@
+// Opt-in, isolated non-debuggable Local fixture for real package replacement verification.
+// Build the newer APK without this script so its normal release R8 optimization is retained.
+allprojects {
+    plugins.withId('com.android.application') {
+        if (project.findProperty('narrioLocal') != 'true') throw new GradleException('Use an isolated Narrio Local fixture')
+        extensions.getByName('android').testBuildType = 'release'
+        extensions.getByName('androidComponents').finalizeDsl { android ->
+            // AndroidJUnitRunner needs dependencies removed by R8 in the base fixture.
+            android.buildTypes.getByName('release').minifyEnabled = false
+            if (project.hasProperty('fixtureVerifier')) android.defaultConfig.testInstrumentationRunner = 'app.narrio.UpdateFixtureVerification'
+        }
+    }
+}

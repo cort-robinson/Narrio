@@ -59,11 +59,13 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             if (event == Lifecycle.Event.ON_START) vm.graph.playback.visible = true
             if (event == Lifecycle.Event.ON_STOP) vm.graph.playback.visible = false
             vm.graph.offline.visible = vm.graph.playback.visible
+            if (event == Lifecycle.Event.ON_START || event == Lifecycle.Event.ON_STOP) vm.graph.updates.visibility(vm.graph.playback.visible)
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         vm.graph.playback.visible = lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         vm.graph.offline.visible = vm.graph.playback.visible
-        onDispose { vm.graph.playback.visible = false; vm.graph.offline.visible = false; lifecycleOwner.lifecycle.removeObserver(observer) }
+        vm.graph.updates.visibility(vm.graph.playback.visible)
+        onDispose { vm.graph.playback.visible = false; vm.graph.offline.visible = false; vm.graph.updates.visibility(false); lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     LaunchedEffect(state.playing) {
@@ -87,6 +89,16 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } }
         val snackbar = remember { SnackbarHostState() }
         LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+        val updates by vm.graph.updates.state.collectAsStateWithLifecycle()
+        var announcedUpdate by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(-1L) }
+        LaunchedEffect(updates.phase, updates.available?.code, state.playing, state.buffering) {
+            val candidate = updates.available
+            if (updates.phase == app.narrio.updates.UpdatePhase.READY && candidate != null &&
+                candidate.code != announcedUpdate && !state.playing && !state.buffering) {
+                announcedUpdate = candidate.code
+                if (snackbar.showSnackbar("Narrio update ready", "Settings", duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) vm.navigate(2)
+            }
+        }
         val density = LocalDensity.current
         val fold = windowInfo?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()
         val tabletop = fold?.orientation == FoldingFeature.Orientation.HORIZONTAL && fold.state == FoldingFeature.State.HALF_OPENED && playerOpen

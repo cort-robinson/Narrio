@@ -6,6 +6,8 @@ A native Android listening room for audiobooks. Find a book, choose a matching l
 
 Download the signed APK from the [latest GitHub release](https://github.com/cort-robinson/Narrio/releases/latest). Each release includes checksums, its source commit, and Android/signing details. Android 8.0 or later is required. Install over an earlier Narrio release to retain your TorBox connection, shelf, bookmarks, and listening progress.
 
+In-app updates are available in development previews containing this feature; stable receives them when the feature is released. Install an APK with the updater once, then use **Settings → App updates** to allow Narrio to install its own updates. Stable follows normal releases; Narrio Dev follows dev previews whose full CI passed. Automatic downloads use Wi-Fi. On Android 12+, installation waits until playback is paused and the app is closed; older Android uses **Install update**. Android may ask for confirmation. You can turn automatic updates off or check manually. See the [update guide](docs/DEVELOPMENT.md#in-app-updates).
+
 1. Download the APK directly on your Android phone and open it in Files.
 2. If Android requests it, allow that app to install unknown apps, then install Narrio.
 3. Open **Settings → TorBox**, enter your API key, and tap **Connect TorBox**. Your TorBox plan must include API access.
