@@ -26,13 +26,15 @@ class AppGraph(application: Application) {
         }
     }, object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE shelf ADD COLUMN pendingFormat TEXT NOT NULL DEFAULT ''") }
-    }).build()
+    }, LibraryMigration3To4).build()
     val library = database.library()
     val credentials = CredentialStore(application)
     val catalog = ArchiveDiscovery(http)
     val indexedCatalog = KnabenDiscovery(http)
     val metadata = BookMetadata(http)
     val torbox = TorBoxDelivery(http, credentials::read)
+    val textDiscovery = GutenbergTextDiscovery(http)
+    val followAlong = FollowAlongStore(application, library, http, torbox)
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()
     val offline = OfflineStore(application, http, torbox)

@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,13 +53,37 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     var sleepOpen by remember { mutableStateOf(false) }
     var partsOpen by remember { mutableStateOf(false) }
     var bookmarksOpen by remember { mutableStateOf(false) }
+    var followOpen by rememberSaveable(book.id) { mutableStateOf(false) }
+    val heading: @Composable () -> Unit = {
+        Column {
+            PlayerHeading(vm, compact)
+            PlayerMode(followOpen) { followOpen = it }
+        }
+    }
     val controls: @Composable () -> Unit = {
         Transport(vm, state, { speedOpen = true }, { sleepOpen = true }, { partsOpen = true }, { bookmarksOpen = true })
     }
-    if (hingeY != null) {
+    if (followOpen) {
+        if (hingeY != null) {
+            Column(modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxWidth().height(hingeY.dp.coerceAtLeast(0.dp)).clipToBounds()) {
+                    Column(Modifier.padding(horizontal = 16.dp)) { heading() }
+                    FollowAlongScreen(vm, state, Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(hingeGap.dp.coerceAtLeast(12.dp)))
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) { FollowTransport(vm, state) }
+            }
+        } else {
+            Column(modifier.fillMaxSize()) {
+                Column(Modifier.padding(horizontal = 16.dp)) { heading() }
+                FollowAlongScreen(vm, state, Modifier.weight(1f))
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) { FollowTransport(vm, state, Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) }
+            }
+        }
+    } else if (hingeY != null) {
         Column(modifier.fillMaxSize()) {
             Column(Modifier.fillMaxWidth().height(hingeY.dp.coerceAtLeast(0.dp)).clipToBounds().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                PlayerHeading(vm, compact)
+                heading()
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
                     val coverHeight = minOf(maxHeight, maxWidth * .55f * 1.45f).coerceAtLeast(1.dp)
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
@@ -78,7 +103,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
         }
     } else {
         LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            item { PlayerHeading(vm, compact) }
+            item { heading() }
             item {
                 BookCover(book, Modifier.width(if (compact) 204.dp else 188.dp).height(if (compact) 295.dp else 272.dp), large = true)
                 Spacer(Modifier.height(24.dp))
@@ -131,6 +156,37 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PlayerMode(follow: Boolean, select: (Boolean) -> Unit) {
+    TabRow(selectedTabIndex = if (follow) 1 else 0, containerColor = MaterialTheme.colorScheme.surface) {
+        Tab(selected = !follow, onClick = { select(false) }, text = { Text("Audio") })
+        Tab(selected = follow, onClick = { select(true) }, text = { Text("Follow along") })
+    }
+}
+
+@Composable
+private fun FollowTransport(vm: NarrioViewModel, state: ListeningState, modifier: Modifier = Modifier) {
+    var dragging by remember { mutableStateOf(false) }
+    var position by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(state.positionMs, state.partIndex) { if (!dragging) position = state.positionMs.toFloat() }
+    Column(modifier.fillMaxWidth()) {
+        Text(state.part?.title.orEmpty(), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Slider(value = position.coerceIn(0f, state.durationMs.coerceAtLeast(1).toFloat()), onValueChange = { dragging = true; position = it },
+            onValueChangeFinished = { vm.graph.playback.service?.seek(position.toLong()); dragging = false }, valueRange = 0f..state.durationMs.coerceAtLeast(1).toFloat(), enabled = state.durationMs > 0,
+            modifier = Modifier.semantics { contentDescription = "Listening position" })
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("${formatTime(if (dragging) position.toLong() else state.positionMs)} / ${formatTime(state.durationMs)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            IconButton({ vm.graph.playback.service?.skip(-30_000) }) { Icon(Icons.Rounded.Replay30, "Rewind 30 seconds") }
+            FilledIconButton({ vm.graph.playback.service?.toggle() }, Modifier.size(56.dp)) {
+                if (state.buffering) CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                else Icon(if (state.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, if (state.playing) "Pause" else "Play", Modifier.size(32.dp))
+            }
+            IconButton({ vm.graph.playback.service?.skip(30_000) }) { Icon(Icons.Rounded.Forward30, "Skip forward 30 seconds") }
+        }
+        state.error?.let { RecoveryState("Let's find your place again", it) { vm.graph.playback.service?.retry() } }
     }
 }
 

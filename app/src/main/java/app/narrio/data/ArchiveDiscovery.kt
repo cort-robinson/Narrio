@@ -79,9 +79,15 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
             val originals = highQuality.filter { it.text("source") == "original" }.ifEmpty { highQuality }
             val multipart = originals.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::part)
             val m4b = all.filter { it.text("name").endsWith(".m4b", true) }.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::part)
+            val textFiles = all.mapNotNull { file ->
+                val name = file.text("name")
+                val format = textFileFormat(name) ?: return@mapNotNull null
+                if (Regex("(?i)(^|[/ _-])(readme|license|info|credits)([. _-]|$)").containsMatchIn(name)) return@mapNotNull null
+                BookTextSource("${book.id}:$name", name.substringAfterLast('/'), format = format, provider = "archive", url = url(name), attribution = "Internet Archive · ${book.id}")
+            }
             val sources = buildList {
-                if (multipart.isNotEmpty()) add(AudioSource("${book.id}:mp3", "Chapter files", "MP3", multipart))
-                if (m4b.isNotEmpty()) add(AudioSource("${book.id}:m4b", "Whole-book audio", "M4B", m4b))
+                if (multipart.isNotEmpty()) add(AudioSource("${book.id}:mp3", "Chapter files", "MP3", multipart, textFiles = textFiles))
+                if (m4b.isNotEmpty()) add(AudioSource("${book.id}:m4b", "Whole-book audio", "M4B", m4b, textFiles = textFiles))
             }
             val artwork = all.filter { file ->
                 file.text("name").endsWith(".jpg", true) || file.text("name").endsWith(".jpeg", true) || file.text("name").endsWith(".png", true)

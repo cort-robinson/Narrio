@@ -2,6 +2,7 @@ package app.narrio.ui
 
 import android.app.Application
 import android.content.ComponentName
+import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,11 +12,23 @@ import app.narrio.*
 import app.narrio.data.*
 import app.narrio.domain.*
 import app.narrio.playback.ListeningService
+import app.narrio.playback.ListeningState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null)
 data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
+data class BookTextState(
+    val bookId: String = "",
+    val document: BookText? = null,
+    val bindings: List<TextBinding> = emptyList(),
+    val loading: Boolean = false,
+    val working: Boolean = false,
+    val searching: Boolean = false,
+    val searched: Boolean = false,
+    val results: List<BookTextSource> = emptyList(),
+    val error: String? = null,
+)
 
 class NarrioViewModel(application: Application) : AndroidViewModel(application) {
     val graph = (application as NarrioApplication).graph
@@ -38,6 +51,10 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val shelf = graph.library.observeShelf().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val playback = graph.playback.state
+    val bookText = MutableStateFlow(BookTextState())
+    private var textSearchJob: Job? = null
+    private val textJobs = mutableMapOf<String, Job>()
+    private var textImportTarget: ListeningState? = null
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var catalogMetadataJob: Job? = null
@@ -49,6 +66,22 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     init {
         controllerFuture.addListener({ runCatching { controller = controllerFuture.get() } }, ContextCompat.getMainExecutor(application))
         search()
+        viewModelScope.launch {
+            playback.map { it.book?.id }.distinctUntilChanged().collectLatest { id ->
+                textSearchJob?.cancel()
+                bookText.value = BookTextState(bookId = id.orEmpty(), loading = id != null)
+                if (id == null) return@collectLatest
+                var loaded: BookText? = null
+                combine(graph.library.observeBookText(id), graph.library.observeTextBindings(id)) { entry, bindings -> entry to bindings }
+                    .collectLatest { (entry, bindings) ->
+                        try {
+                            loaded = if (entry == null) null else loaded?.takeIf { it.id == entry.documentId } ?: graph.followAlong.load(entry)
+                            bookText.value = bookText.value.copy(document = loaded, bindings = bindings.map { it.binding() }, loading = false)
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                        catch (error: Exception) { bookText.value = bookText.value.copy(document = null, loading = false, error = textError(error)) }
+                    }
+            }
+        }
     }
 
     fun search(value: String = query.value, cat: String = category.value, scope: String = sourceScope.value) {
@@ -182,8 +215,10 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false }
     fun save(book: Audiobook) = viewModelScope.launch { graph.library.save(book); messages.emit("Saved to your shelf") }
     fun remove(book: Audiobook) = viewModelScope.launch {
+        textJobs[book.id]?.cancel()
         if (playback.value.book?.id == book.id) graph.playback.service?.forget()
         downloads.value.filter { it.book.id == book.id }.forEach { graph.offline.remove(it.source) }
+        graph.followAlong.remove(book.id)
         graph.library.remove(book.id); messages.emit("Removed from your shelf and phone downloads")
     }
     fun resume(entry: ShelfEntry) { entry.source()?.let { start(entry.book(), it, it.delivery) } ?: open(entry.book()) }
@@ -313,6 +348,111 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
             if (entry != null && source?.id == bookmark.sourceId) { awaitService().load(entry.book(), source, true, bookmark.partId, bookmark.positionMs); playerOpen.value = true }
             else messages.emit("This bookmark belongs to a different audio source. Resume that source first.")
         }
+    }
+
+    fun searchBookText(query: String) {
+        val id = playback.value.book?.id ?: return
+        textSearchJob?.cancel()
+        textSearchJob = viewModelScope.launch {
+            bookText.value = bookText.value.copy(searching = true, searched = true, results = emptyList(), error = null)
+            try {
+                val results = graph.textDiscovery.search(query)
+                if (bookText.value.bookId == id) bookText.value = bookText.value.copy(results = results)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { if (bookText.value.bookId == id) bookText.value = bookText.value.copy(error = textError(error)) }
+            finally { if (bookText.value.bookId == id) bookText.value = bookText.value.copy(searching = false) }
+        }
+    }
+
+    fun beginTextImport() { textImportTarget = playback.value }
+    fun importBookText(uri: Uri?) {
+        val target = textImportTarget ?: return
+        textImportTarget = null
+        if (uri != null) textWork(target) { book, source, part -> graph.followAlong.import(uri, book, source.id, part.id) }
+    }
+
+    fun fetchBookText(candidate: BookTextSource) = textWork(playback.value) { book, source, part ->
+        graph.followAlong.fetch(candidate, book, source.id, part.id)
+    }
+
+    private fun textWork(target: ListeningState, action: suspend (Audiobook, AudioSource, AudioPart) -> BookText): Job? {
+        val book = target.book ?: return null
+        if (textJobs[book.id]?.isActive == true) return null
+        val job = viewModelScope.launch {
+            val source = target.source ?: return@launch
+            val part = target.part ?: return@launch
+            if (bookText.value.working) return@launch
+            if (bookText.value.bookId == book.id) bookText.value = bookText.value.copy(working = true, error = null)
+            try { action(book, source, part); messages.emit("Book text saved for follow along") }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { if (bookText.value.bookId == book.id) bookText.value = bookText.value.copy(error = textError(error)) }
+            finally { if (bookText.value.bookId == book.id) bookText.value = bookText.value.copy(working = false) }
+        }
+        textJobs[book.id] = job
+        job.invokeOnCompletion { if (textJobs[book.id] == job) textJobs.remove(book.id) }
+        return job
+    }
+
+    fun selectTextChapter(chapterId: String) = viewModelScope.launch {
+        val state = playback.value
+        val document = bookText.value.document ?: return@launch
+        if (document.timedSourceId.isNotBlank() || FollowAlongTiming.passages(document, chapterId).isEmpty()) return@launch
+        val source = state.source ?: return@launch
+        val part = state.part ?: return@launch
+        if (source.parts.size == 1 && chapterId != WHOLE_BOOK) {
+            val binding = bookText.value.bindings.firstOrNull { it.documentId == document.id && it.sourceId == source.id && it.partId == part.id && it.chapterId == WHOLE_BOOK }
+                ?: TextBinding(document.id, source.id, part.id, WHOLE_BOOK)
+            val first = document.chapters.firstOrNull { it.id == chapterId }?.passages?.firstOrNull() ?: return@launch
+            val index = FollowAlongTiming.passages(document, WHOLE_BOOK).indexOfFirst { it.id == first.id }
+            seekTextLine(binding, index)
+            return@launch
+        }
+        if (bookText.value.bindings.any { it.documentId == document.id && it.sourceId == source.id && it.partId == part.id && it.chapterId == chapterId }) return@launch
+        try { graph.followAlong.bind(state.book!!.id, TextBinding(document.id, source.id, part.id, chapterId)) }
+        catch (error: Exception) { bookText.value = bookText.value.copy(error = textError(error)) }
+    }
+
+    fun matchTextLine(binding: TextBinding, passageId: String) = viewModelScope.launch {
+        val state = playback.value
+        val document = bookText.value.document ?: return@launch
+        if (state.source?.id != binding.sourceId || state.part?.id != binding.partId || document.id != binding.documentId) return@launch
+        try {
+            graph.followAlong.bind(state.book!!.id, FollowAlongTiming.addAnchor(document, binding, passageId, state.positionMs, state.durationMs))
+            messages.emit("Timing matched to this line. Highlighting between matches is estimated.")
+        } catch (error: Exception) { bookText.value = bookText.value.copy(error = textError(error)) }
+    }
+
+    fun resetTextTiming() = viewModelScope.launch {
+        val state = playback.value
+        val source = state.source ?: return@launch
+        val part = state.part ?: return@launch
+        val binding = bookText.value.bindings.firstOrNull { it.sourceId == source.id && it.partId == part.id }
+        if (binding != null) graph.followAlong.bind(state.book!!.id, binding.copy(anchors = emptyList()))
+        bookText.value = bookText.value.copy(error = null)
+    }
+
+    fun seekTextLine(binding: TextBinding, index: Int) {
+        val state = playback.value
+        val document = bookText.value.document ?: return
+        if (state.source?.id != binding.sourceId || state.part?.id != binding.partId || document.id != binding.documentId) return
+        val time = FollowAlongTiming.timeline(document, binding, state.durationMs)?.starts?.getOrNull(index) ?: return
+        if (state.durationMs > 0 && time >= state.durationMs) { messages.tryEmit("That timestamp is beyond this audio part. Check that the timing track matches."); return }
+        graph.playback.service?.seek(time)
+    }
+
+    fun removeBookText() = viewModelScope.launch {
+        val id = playback.value.book?.id ?: return@launch
+        textJobs[id]?.cancel()
+        graph.followAlong.remove(id)
+        bookText.value = bookText.value.copy(error = null)
+        messages.emit("Book text removed. Your audio and listening progress are saved.")
+    }
+
+    fun clearTextError() { bookText.value = bookText.value.copy(error = null) }
+    private fun textError(error: Exception) = when (error) {
+        is kotlinx.serialization.SerializationException -> "Book text couldn't be read. Choose another file or try the search again."
+        is ProviderException, is IllegalArgumentException -> error.message.orEmpty()
+        else -> "Couldn't open book text. Check the file or your connection, then try again."
     }
 
     private suspend fun awaitService(): ListeningService {

@@ -18,11 +18,14 @@ Book details fill in progressively after playable search results appear. Open a 
 
 ## Included
 
+Follow along is available on this development branch and its Narrio Dev preview. Stable updates are published from `master` through the [development workflow](docs/DEVELOPMENT.md); see [current validation](docs/VALIDATION.md) for feature evidence.
+
 - Search by title and author, with separate narrated recordings and visible language/narrator metadata.
 - TorBox account connection, batched hash/file cache checks, cached-source filtering, existing-source reuse, torrent/magnet creation, detailed cloud preparation status, and temporary per-file playback links.
 - Explicit offline phone downloads with storage estimates, Wi-Fi preference, progress, pause/resume/retry, and removal. Ordinary streaming does not write to the offline audio cache.
 - Whole-book M4B and naturally ordered multipart MP3 playback, 30-second skip controls, speed, a sleep timer, and bookmarks.
 - Room-backed library and independent saved positions for different recordings and source layouts.
+- **Listening room → Follow along**: highlighted, scrolling passages from EPUB/text imports, companion source files, or public ebook lookup. Tap a passage to seek, choose the narrated chapter, and adjust estimated timing. WebVTT tracks use supplied timestamps for their attached audio part. Text and timing matches are saved locally.
 - Media3 background service and system media controls; pause on headphone disconnection and Android audio-focus handling.
 - Night, Day, and System appearance; retrieved cover art with original artwork fallbacks and bundled Newsreader/Manrope typography.
 
@@ -47,7 +50,7 @@ The service owns playback, so folding, rotation, or multi-window resizing does n
 
 ## Local privacy
 
-No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to the selected discovery providers. Metadata lookup sends cleaned book/release names to Audible or Open Library; artwork loads from the returned provider image URLs. TorBox credentials, file lists, listening positions, and bookmarks are never sent to metadata providers. Room contains recording metadata, stable part IDs, positions, and bookmarks. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads and history, without deleting files from TorBox.
+No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to the selected discovery providers; TorBox credentials are never sent to Knaben, Internet Archive, or Gutendex. Metadata lookup sends cleaned book/release names to Audible or Open Library; artwork loads from the returned provider image URLs. TorBox credentials, file lists, listening positions, and bookmarks are never sent to metadata providers. Room contains recording metadata, stable part IDs, positions, bookmarks, and text attachments/timing matches. Original and normalized book text stay in private device storage. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads, book text, and history, without deleting files from TorBox.
 
 ## Build
 
@@ -75,5 +78,7 @@ Instrumented listening tests use real Internet Archive audio and need network ac
 ## Architecture and limits
 
 [Architecture](docs/ARCHITECTURE.md) describes provider seams, source identity, persistence, and playback. [Validation](docs/VALIDATION.md) records completed signed-release phone checks, native audio and layout tests, and the precise validation limits. [Artwork](docs/ART.md) contains provenance and font licenses.
+
+[Follow along](docs/FOLLOW_ALONG.md) explains acquiring text, estimated versus supplied timing, and the plan for a full reader with a shared reading/listening cursor. Ordinary ebooks have no audio timestamps; their highlighting is adjustable estimation. Automatic exact alignment and full reader functionality are future work.
 
 V1 supports streaming and optional offline phone audio. It has no cloud sync, casting, Android Auto, or addon marketplace. Torrentio's current stream resources target movies, series, and anime; Narrio uses an audiobook-capable index instead of claiming compatibility with those addons. Chapters support Nero `chpl` M4B metadata and ID3 chapter frames; unsupported chapter encodings retain audio-part and elapsed-time navigation.

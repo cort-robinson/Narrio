@@ -1,6 +1,8 @@
 package app.narrio.data
 
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import app.narrio.domain.*
 import kotlinx.serialization.encodeToString
@@ -36,6 +38,14 @@ data class BookmarkEntry(
 @Entity(tableName = "positions", primaryKeys = ["bookId", "sourceId"])
 data class SourcePosition(val bookId: String, val sourceId: String, val sourceJson: String, val partId: String, val positionMs: Long, val updatedAt: Long)
 
+@Entity(tableName = "book_text", foreignKeys = [ForeignKey(entity = ShelfEntry::class, parentColumns = ["bookId"], childColumns = ["bookId"], onDelete = ForeignKey.CASCADE)])
+data class BookTextEntry(@PrimaryKey val bookId: String, val documentId: String)
+
+@Entity(tableName = "text_bindings", primaryKeys = ["bookId", "sourceId", "partId"], foreignKeys = [ForeignKey(entity = BookTextEntry::class, parentColumns = ["bookId"], childColumns = ["bookId"], onDelete = ForeignKey.CASCADE)])
+data class TextBindingEntry(val bookId: String, val sourceId: String, val partId: String, val bindingJson: String) {
+    fun binding(): TextBinding = NarrioJson.decodeFromString(bindingJson)
+}
+
 @Dao
 interface LibraryDao {
     @Query("SELECT * FROM shelf ORDER BY playedAt DESC, savedAt DESC") fun observeShelf(): Flow<List<ShelfEntry>>
@@ -61,6 +71,17 @@ interface LibraryDao {
     @Query("SELECT * FROM bookmarks WHERE bookId = :id ORDER BY createdAt DESC") fun bookmarks(id: String): Flow<List<BookmarkEntry>>
     @Insert suspend fun bookmark(entry: BookmarkEntry)
     @Query("DELETE FROM bookmarks WHERE id = :id") suspend fun deleteBookmark(id: Long)
+    @Query("SELECT * FROM book_text WHERE bookId = :id") fun observeBookText(id: String): Flow<BookTextEntry?>
+    @Query("SELECT * FROM book_text WHERE bookId = :id") suspend fun bookText(id: String): BookTextEntry?
+    @Query("SELECT * FROM text_bindings WHERE bookId = :id") fun observeTextBindings(id: String): Flow<List<TextBindingEntry>>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putBookText(entry: BookTextEntry)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTextBinding(entry: TextBindingEntry)
+    @Query("DELETE FROM text_bindings WHERE bookId = :id") suspend fun deleteTextBindings(id: String)
+    @Query("DELETE FROM text_bindings WHERE bookId = :id AND sourceId = :source AND partId = :part") suspend fun deleteTextBinding(id: String, source: String, part: String)
+    @Query("DELETE FROM book_text WHERE bookId = :id") suspend fun deleteBookText(id: String)
+    @Transaction suspend fun attachText(book: Audiobook, documentId: String) {
+        save(book); deleteTextBindings(book.id); putBookText(BookTextEntry(book.id, documentId))
+    }
     @Transaction suspend fun save(book: Audiobook) {
         val json = NarrioJson.encodeToString(book)
         insert(ShelfEntry(book.id, json)); metadata(book.id, json)
@@ -72,5 +93,12 @@ interface LibraryDao {
     @Transaction suspend fun remove(id: String) { deleteBookmarks(id); deletePositions(id); deleteShelf(id) }
 }
 
-@Database(entities = [ShelfEntry::class, BookmarkEntry::class, SourcePosition::class], version = 3, exportSchema = true)
+@Database(entities = [ShelfEntry::class, BookmarkEntry::class, SourcePosition::class, BookTextEntry::class, TextBindingEntry::class], version = 4, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() { abstract fun library(): LibraryDao }
+
+val LibraryMigration3To4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS book_text (bookId TEXT NOT NULL, documentId TEXT NOT NULL, PRIMARY KEY(bookId), FOREIGN KEY(bookId) REFERENCES shelf(bookId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS text_bindings (bookId TEXT NOT NULL, sourceId TEXT NOT NULL, partId TEXT NOT NULL, bindingJson TEXT NOT NULL, PRIMARY KEY(bookId, sourceId, partId), FOREIGN KEY(bookId) REFERENCES book_text(bookId) ON UPDATE NO ACTION ON DELETE CASCADE)")
+    }
+}
