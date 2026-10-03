@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-03T02:45:07Z",
+  "generatedAt": "2026-10-03T08:26:08Z",
   "title": "Design System: Narrio",
   "extensions": {
     "colorMeta": {
@@ -488,7 +488,7 @@
       },
       "headline-large": {
         "displayName": "headline large",
-        "purpose": "Recording titles, large cover lettering, and tabletop book context."
+        "purpose": "Book and recording titles, large cover lettering, and tabletop book context."
       },
       "headline-medium": {
         "displayName": "headline medium",
@@ -504,15 +504,15 @@
       },
       "title-medium": {
         "displayName": "title medium",
-        "purpose": "Recording rows, context bars, preparation state, and bookmark times."
+        "purpose": "Book and shelf rows, context bars, preparation state, and bookmark times."
       },
       "title-small": {
         "displayName": "title small",
-        "purpose": "Shelf titles, source options, parts, and account status."
+        "purpose": "Matching recording releases, source options, parts, and account status."
       },
       "body-large": {
         "displayName": "body large",
-        "purpose": "Recording author and the Material text-field body role."
+        "purpose": "Book and recording author and the Material text-field body role."
       },
       "body-medium": {
         "displayName": "body medium",
@@ -575,7 +575,8 @@
         "catalogRevision": "c3b204a1eed6",
         "buildPath": "code-led",
         "approvedComp": null,
-        "qualityBarCard": null
+        "qualityBarCard": null,
+        "contractScope": "Historical original surface concept and first viewport; current metadata-first catalog and details are described in DESIGN.md and components below."
       },
       "colorSchemes": {
         "Night": {
@@ -986,7 +987,7 @@
         "separatingVerticalHinge": "Catalog width begins at fold.bounds.left converted to dp minus 80 dp rail; bounded by 250 dp pane minima. Reported fold width is inserted as a gap, at least 1 dp.",
         "tabletopCondition": "Horizontal FoldingFeature + HALF_OPENED + playerOpen",
         "insets": "safeDrawing Horizontal + Top; navigationBarsPadding on expanded/player/detail; Settings uses imePadding.",
-        "navigation": "BackHandler collapses player/selection first or returns non-Discover destination to Discover. Appearance handles Back to Settings and custom-editor cancellation. No claim of physical predictive-back validation is made.",
+        "navigation": "BackHandler collapses the player, returns a recording chosen from matching source results to its catalog details with results retained, closes details, or returns a non-Discover destination to Discover. Appearance handles Back to Settings and custom-editor cancellation. No claim of physical predictive-back validation is made.",
         "systemBarIcons": "Foreground contrast against the actual scheme background selects light/dark icons, including custom palettes",
         "offlineVisibility": "NarrioApp sets offline.visible alongside playback.visible on lifecycle start/stop and clears both on disposal; no additional UI cadence is inferred."
       },
@@ -1035,27 +1036,14 @@
           "groupGapDp": 8,
           "categoryScrolling": "LazyRow",
           "states": "Native selected/unselected Material states",
-          "sourceScopeScrolling": "LazyRow for connected and disconnected source scopes",
-          "sourceScopes": {
-            "connected": [
-              "Ready to stream",
-              "All sources",
-              "Public books",
-              "My TorBox"
-            ],
-            "disconnected": [
-              "Public books",
-              "All sources"
-            ],
-            "internalToVisibleLabel": {
-              "Cached": "Ready to stream",
-              "Public": "Public books",
-              "TorBox": "My TorBox"
-            },
-            "connectedDefault": "Ready to stream",
-            "disconnectedDefault": "Public books",
-            "categoryScope": "Public books"
-          }
+          "categoryVisibility": "Blank query only; entering a query resets the browse category to All.",
+          "categories": [
+            "All",
+            "Fiction",
+            "Mystery",
+            "Wonder",
+            "Nonfiction"
+          ]
         },
         "bookRows": {
           "source": "CatalogScreens.kt",
@@ -1070,16 +1058,16 @@
             "cached": "Ready in TorBox plus cached formats",
             "uncached": "Provider plus Not cached",
             "unchecked": "Provider plus Cache not checked",
-            "scope": "Displayed for non-Archive providers or a checked cache state"
+            "scope": "Saved recording rows only; excludes catalog metadata rows. Displayed for non-Archive providers or a checked cache state."
+          },
+          "catalogMetadata": {
+            "titleRole": "titleMedium",
+            "authorRole": "bodySmall",
+            "descriptionRole": "bodySmall",
+            "descriptionMaxLines": 3,
+            "providerRole": "labelSmall",
+            "identity": "One catalog row per normalized title and author; audio availability is checked from details."
           }
-        },
-        "shelfTiles": {
-          "source": "CatalogScreens.kt",
-          "widthDp": 140,
-          "coverHeightDp": 204,
-          "gapDp": 18,
-          "titleMaxLines": 2,
-          "authorMaxLines": 1
         },
         "bookCover": {
           "source": "BookCover.kt",
@@ -1107,27 +1095,8 @@
             "ink": "#F0E4CC"
           },
           "raster": "app/src/main/res/drawable-nodpi/secret_garden.png",
-          "providerImageFallback": "Non-curated covers use AsyncImage when coverUrl is available; original drawing is used otherwise.",
+          "providerImageFallback": "Any nonblank coverUrl uses AsyncImage with ContentScale.Fit. Original cover drawing and lettering remain while loading, on failure, or when absent; hidden after successful image load.",
           "provenance": "docs/ART.md"
-        },
-        "feature": {
-          "source": "CatalogScreens.kt",
-          "minimumHeightDp": 286,
-          "cornerDp": 16,
-          "paddingDp": 24,
-          "textWidthFraction": 0.8,
-          "art": "secret_garden.png",
-          "localOverrides": {
-            "headline": "#F8EACC",
-            "author": "#D2DEC7"
-          },
-          "listeningAction": {
-            "containerRole": "primary",
-            "contentRole": "onPrimary",
-            "scope": "Selected app scheme"
-          },
-          "scrim": "Brush.horizontalGradient with source-defined dark green alpha values; retained for text contrast.",
-          "scope": "Discover component-specific artwork treatment"
         },
         "miniPlayer": {
           "source": "PlayerScreen.kt",
@@ -1209,7 +1178,8 @@
             "storageContext": "Sum of chosen parts sizeBytes when positive"
           },
           "indexedFiles": "Chosen parts show their file names for indexed releases; narration, edition, and language remain subject to visible uncertainty.",
-          "systemBarAppearance": "DialogWindowProvider window icons use foreground contrast against the actual scheme background; no physical-device claim."
+          "systemBarAppearance": "DialogWindowProvider window icons use foreground contrast against the actual scheme background; no physical-device claim.",
+          "entry": "Listen in selected recording details after explicit Find sources and recording selection, or existing saved recording details."
         },
         "cloudPreparation": {
           "source": "DetailAndSettings.kt",
@@ -1283,6 +1253,27 @@
           },
           "persistence": "Device preference downloadWifi",
           "scope": "Phone downloads; distinct from streaming and cloud preparation"
+        },
+        "catalogDetails": {
+          "source": "CatalogScreens.kt / DetailAndSettings.kt / NarrioViewModel.kt",
+          "discovery": "Metadata-only book identification; no audio availability calls during initial search.",
+          "context": "The book",
+          "primaryAction": "Find sources",
+          "lookupEnabledCondition": "!sourceSearch.loading",
+          "metadata": "Existing 190 by 278 dp cover, title, author, description, catalog narration when supplied, provider attribution, and Save controls.",
+          "sourceSection": "Listening sources appears in the same scrollable detail pane after explicit lookup.",
+          "recordingRows": {
+            "layout": "Open clickable Column, 8 dp vertical padding and gaps, with outlineVariant divider.",
+            "releaseTitleRole": "titleSmall",
+            "narrationRole": "bodySmall / secondary",
+            "providerLanguageFormatsRole": "bodySmall / onSurfaceVariant",
+            "readinessRole": "labelMedium / primary",
+            "eligibility": "Matching identity with usable public or cached audio; cached sources first."
+          },
+          "states": "Native progress, partial-provider retry alongside available results, and No suitable sources found.",
+          "selection": "Selecting a recording opens The recording details; Listen opens the existing SourcePicker sheet.",
+          "return": "System Back or Choose another recording returns to catalog details with the matching results retained.",
+          "renderedQa": "Unverified for this increment; documented from source only."
         }
       },
       "updates": {
@@ -1413,6 +1404,15 @@
             "nativePhoneCasesPassed": 4,
             "scope": "Combined dev metadata/release workflow and appearance; original capture review retained"
           }
+        },
+        "metadataFirstCatalog": {
+          "scope": "Metadata-only catalog, browse-only category chips, book details, matching-recording rows, existing Listen sheet entry, and return to catalog details.",
+          "basis": "Current Compose source inspection only.",
+          "renderedQa": "unverified",
+          "nativeCapturesReviewed": 0,
+          "screenshots": [],
+          "reason": "T3 Android device unavailable and no adb devices connected for this increment.",
+          "historicalReviewScope": "Prior screenshots and ship dispositions remain historical evidence at their recorded scopes; they do not establish this increment."
         }
       },
       "notCanonized": [
@@ -1436,7 +1436,63 @@
           "item": "Synthetic cache availability and cloud-progress fixture values",
           "reason": "These illustrate state rendering; they are not a theme token, expected transfer rate, ETA promise, or live-account validation."
         }
-      ]
+      ],
+      "historicalComponents": {
+        "sourceScopeChips": {
+          "source": "Former CatalogScreens.kt / NarrioViewModel.kt",
+          "status": "Historical recording-first discovery; removed from the metadata-first catalog.",
+          "sourceScopeScrolling": "LazyRow for connected and disconnected source scopes",
+          "sourceScopes": {
+            "connected": [
+              "Ready to stream",
+              "All sources",
+              "Public books",
+              "My TorBox"
+            ],
+            "disconnected": [
+              "Public books",
+              "All sources"
+            ],
+            "internalToVisibleLabel": {
+              "Cached": "Ready to stream",
+              "Public": "Public books",
+              "TorBox": "My TorBox"
+            },
+            "connectedDefault": "Ready to stream",
+            "disconnectedDefault": "Public books",
+            "categoryScope": "Public books"
+          }
+        },
+        "shelfTiles": {
+          "source": "Former CatalogScreens.kt",
+          "widthDp": 140,
+          "coverHeightDp": 204,
+          "gapDp": 18,
+          "titleMaxLines": 2,
+          "authorMaxLines": 1,
+          "status": "Historical Discover composition; replaced by open catalog BookRow results."
+        },
+        "feature": {
+          "source": "Former CatalogScreens.kt",
+          "minimumHeightDp": 286,
+          "cornerDp": 16,
+          "paddingDp": 24,
+          "textWidthFraction": 0.8,
+          "art": "secret_garden.png",
+          "localOverrides": {
+            "headline": "#F8EACC",
+            "author": "#D2DEC7"
+          },
+          "listeningAction": {
+            "containerRole": "primary",
+            "contentRole": "onPrimary",
+            "scope": "Selected app scheme"
+          },
+          "scrim": "Brush.horizontalGradient with source-defined dark green alpha values; retained for text contrast.",
+          "scope": "Historical Discover component-specific artwork treatment; no current renderer.",
+          "status": "Historical Discover composition; replaced by open catalog BookRow results."
+        }
+      }
     }
   },
   "components": [
@@ -1504,7 +1560,7 @@
     {
       "name": "Recording row — display sample",
       "kind": "custom",
-      "description": "Display-only translation of BookRow with generic metadata. Native titles, narrators, and duration come from the recording.",
+      "description": "Display-only translation of BookRow's saved-recording variant with generic metadata. Catalog rows instead group title, author, description excerpt, and provider attribution; this sample is not Android rendered evidence.",
       "html": "<button class=\"ds-book-row\"><span class=\"ds-row-cover\" aria-hidden=\"true\">A story</span><span class=\"ds-row-copy\"><strong>Recording title</strong><span>Author name</span><em>Narrator name</em></span></button>",
       "css": ".ds-book-row{display:flex;align-items:center;gap:16px;width:340px;padding:0;border:0;background:#101B1A;color:#F4EDDE;text-align:left;cursor:pointer}.ds-row-cover{display:flex;width:76px;height:112px;flex-shrink:0;padding:8px;border-radius:8px;background:#435C4A;color:#F0E4CC;font:500 22px/28px \"Newsreader\",serif}.ds-row-copy{display:flex;flex-direction:column;gap:4px;font:400 12px/19px \"Manrope\",sans-serif}.ds-row-copy strong{font:600 16px/23px \"Manrope\",sans-serif}.ds-row-copy>span{color:#B9C8BD}.ds-row-copy em{color:#B1C9AC;font-style:normal}.ds-book-row:hover{background:rgb(244 237 222 / .04)}.ds-book-row:focus-visible{outline:2px solid #E8AF79;outline-offset:4px}.ds-book-row:active{background:rgb(244 237 222 / .08)}"
     },
@@ -1519,7 +1575,7 @@
   ],
   "narrative": {
     "northStar": "Listening room",
-    "overview": "Narrio is a quiet, personal listening room. In the default palette, warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. The original type pairing gives story titles a serif voice and tasks a clear sans serif.\n\nThe implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected recording or listening session beside each other.\n\nListening room remains the default. Local Appearance settings offer paired palettes, one custom palette, and font and text-size choices within the same layouts and semantic roles.\n\nThis guide records the current Compose implementation. The surface concept and first-viewport strategy remain in [.impeccable/direction-contract.md](.impeccable/direction-contract.md). FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.",
+    "overview": "Narrio is a quiet, personal listening room. In the default palette, warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. The original type pairing gives story titles a serif voice and tasks a clear sans serif.\n\nThe implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected book, recording, or listening session beside each other.\n\nListening room remains the default. Local Appearance settings offer paired palettes, one custom palette, and font and text-size choices within the same layouts and semantic roles.\n\nThis guide records the current Compose implementation. The original surface concept and first-viewport strategy remain as historical direction evidence in [.impeccable/direction-contract.md](.impeccable/direction-contract.md); the current catalog and details flow is described under Components below. FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.",
     "keyCharacteristics": [
       "Default warm ink at night; warm paper by day.",
       "Default Newsreader story titles and Manrope metadata and controls.",
@@ -1557,7 +1613,7 @@
       },
       {
         "name": "The Artwork Contrast Rule",
-        "body": "Keep original artwork and its text scrims together. The gradients in the featured scene and image covers are legibility treatments already present in the build.",
+        "body": "Keep original artwork and its text scrim together. The gradient over the garden cover is a legibility treatment already present in the build.",
         "section": "elevation"
       },
       {

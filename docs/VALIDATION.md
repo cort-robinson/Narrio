@@ -1,5 +1,17 @@
 # Narrio validation
 
+## Metadata-first discovery: unreleased branch
+
+Initial discovery identifies books through catalog metadata and collapses known editions by title/author. Source lookup is explicit from book details and requires matching recording evidence, usable non-sample audio, and direct public or checked cached availability. Selecting a recording retains its original playback identity.
+
+- Local `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and `assembleDebugAndroidTest` pass: 63 JVM tests, zero failures, zero lint errors, and 39 lint warnings. Fifteen new JVM cases cover catalog deduplication/fallback/cancellation, edition aliases, source matching and partial-provider failures, and recording-identity retention. Provider contract fixtures also cover preview/sample exclusion.
+- All 16 release-tooling tests pass with `npm test`; `git diff --check` passes.
+- CI includes the controlled `BookDiscoveryExperienceTest` for metadata-only book details, explicit source choices, and returning from the recording to its book. Local Android execution and rendered review were unavailable: T3 reports missing SDK command-line tools and `adb devices` reports no attached device. Building the instrumentation APK is not an emulator test pass.
+- Read-only live public checks returned complete Audible metadata for Project Hail Mary, Knaben release names for that book, and Internet Archive metadata for Pride and Prejudice recordings. These checks verify representative responses, not authenticated TorBox availability or end-to-end streaming.
+- No physical-device, bitrate measurement, authenticated TorBox, enlarged-text, or rendered-layout validation was performed for this increment. Source quality here means positive book matching and usable checked audio; it does not assert a minimum measured bitrate.
+
+The independent code reviewer scored the four identified matching/category/edition fixes resolved. That verdict does not certify visual layouts. Existing listening, follow-along, and appearance evidence below remains historical to its stated builds.
+
 ## Follow-along increment: unreleased branch
 
 The new **Listening room → Follow along** increment was initially verified on the 1.1 source baseline, before integration with the newer metadata, appearance, and release automation. Those feature runs used version 1.1.0/code 2 and an unsigned release APK. The integrated branch retains automated versioning and the separate Narrio Dev preview identity. No feature update was installed on the user's physical phone.
