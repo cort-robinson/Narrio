@@ -6,7 +6,6 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -102,14 +101,14 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 OutlinedButton({ vm.save(book) }, enabled = !saved) {
                     AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (done) Icons.Rounded.Check else Icons.Rounded.BookmarkBorder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
+                            Icon(if (done) Icons.Rounded.LibraryAddCheck else Icons.Rounded.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
                         }
                     }
                 }
             }
             if (catalogBook) {
                 Spacer(Modifier.height(12.dp))
-                Text("Book information doesn't guarantee an audiobook source. Search checks matching recordings and usable audio before showing them.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Find sources checks for matching recordings with usable audio.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!connected) TextButton({ vm.navigate(2) }) { Text("Connect TorBox for more sources") }
             } else if (book.detailsLoaded && book.sources.isEmpty()) {
                 Spacer(Modifier.height(12.dp)); Text(if (book.provider == "knaben") "No cached audio files found for this release. Try another ready source. File formats appear once a source is available in TorBox." else "This edition has no compatible audio files. Try another recording.", style = MaterialTheme.typography.bodyMedium)
@@ -130,9 +129,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             }
             sourceSearch.error?.let { message -> item { RecoveryState("Some sources couldn't be checked", message) { vm.findSources(book) } } }
             items(sourceSearch.recordings, key = { it.id }) { recording ->
-                val interaction = remember { MutableInteractionSource() }
                 Column(Modifier.animateItem().fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth().pressScale(interaction).clip(RoundedCornerShape(12.dp)).clickable(interaction, LocalIndication.current) { vm.chooseRecording(recording) }.padding(vertical = 8.dp),
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.chooseRecording(recording) }.padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(recording.releaseTitle.ifBlank { recording.title }, style = MaterialTheme.typography.titleSmall)
@@ -176,7 +174,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         item { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(24.dp))
-            Text("Behind the story", style = MaterialTheme.typography.headlineSmall)
+            Text("About this book", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
             Text(book.description.ifBlank { if (catalogBook) "This catalog hasn't provided a description for the book." else "Open the recording to load its description and available sources." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -220,7 +218,7 @@ private fun SourcePicker(vm: NarrioViewModel, book: Audiobook, connected: Boolea
             WindowCompat.getInsetsController(window, window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }
         } }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Choose how you listen.", style = MaterialTheme.typography.headlineMedium)
+            Text("How to listen", style = MaterialTheme.typography.headlineMedium)
             Text("${book.narrator} · ${book.language}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             book.sources.forEach { source ->
                 Row(Modifier.fillMaxWidth().selectableRow(chosen.id == source.id) { choose(source) }, verticalAlignment = Alignment.CenterVertically) {
@@ -307,7 +305,7 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, key: String, setKey: (String) -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
-        item { Text("Make it yours.", style = MaterialTheme.typography.displaySmall); Spacer(Modifier.height(8.dp)); Text("Your listening room, your rules.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item { AppearanceEntry(appearance, openAppearance) }
         item { UpdateSettings(vm.graph.updates) }
         item {
@@ -330,7 +328,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
         }
         item {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
-            Text("Take a story with you", style = MaterialTheme.typography.headlineSmall)
+            Text("Downloads", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
             Text("Use Download to phone on a recording to save its chosen audio format. Manage downloads on your shelf. Streaming plays over the internet without saving the book.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -340,13 +338,8 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
             Text(if (wifiOnly) "Downloads wait for an unmetered connection." else "Downloads can use mobile data, including large whole-book files.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
-            Text("Built to unfold", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            Text("The cover display keeps controls close. Unfold for a library and listening canvas side by side. A supported half-open posture places the art above the hinge and the controls below it. Playback stays with you when the window changes.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        item {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
-            Text("A small, honest first edition", style = MaterialTheme.typography.headlineSmall)
+            Text("About Narrio", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
             Text("Narrio ${BuildConfig.VERSION_NAME} · Native Android\n\nSearch identifies books from catalog metadata. Find sources from a book's details to check Knaben releases, public-domain LibriVox recordings, and your TorBox library. Cached sources appear first. Matching releases with verified audio files and available seeders can be explicitly prepared in TorBox. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))

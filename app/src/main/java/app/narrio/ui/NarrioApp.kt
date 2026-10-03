@@ -234,7 +234,7 @@ private fun ExpandedPanes(vm: NarrioViewModel, windowWidth: Dp, fold: FoldingFea
             when {
                 key == "player" -> PlayerScreen(vm, false)
                 key.startsWith("detail:") -> bookFor(key.removePrefix("detail:"))?.let { DetailPane(vm, it, false, listState = scrollFor(it.id)) }
-                else -> WelcomePane(vm)
+                else -> WelcomePane()
             }
         }
     }
@@ -252,18 +252,16 @@ private fun MainDestination(vm: NarrioViewModel, destination: Int, modifier: Mod
     when (destination) { 1 -> LibraryScreen(vm, modifier); 2 -> SettingsScreen(vm, modifier); else -> DiscoverScreen(vm, modifier) }
 }
 @Composable
-private fun WelcomePane(vm: NarrioViewModel) {
+private fun WelcomePane() {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     // The garden scales down on short panes so its invitation and action always stay visible.
     val coverHeight = (maxHeight * .42f).coerceIn(120.dp, 278.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
         BookCover(NarrioViewModel.curated.first(), Modifier.width(coverHeight / 1.46f).height(coverHeight), coverHeight > 200.dp)
         Spacer(Modifier.height(32.dp))
-        Text("A place to get lost.", style = MaterialTheme.typography.headlineLarge)
+        Text("Choose a book", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(12.dp))
-        Text("Pick a book on the left. Read its details, then find a listening source.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(24.dp))
-        FilledTonalButton({ vm.search("The Secret Garden") }) { Text("Find The Secret Garden") }
+        Text("Its details and listening sources open here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
     }
 }

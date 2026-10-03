@@ -51,7 +51,7 @@ class FoldWindowTest {
         val horizontal = TestFold(compose.activity, size = 24, orientation = FoldingFeature.Orientation.HORIZONTAL)
         postures.overrideWindowLayoutInfo(TestWindowLayoutInfo(listOf(horizontal)))
         compose.waitForIdle()
-        val heading = compose.onNodeWithText("Listening room").fetchSemanticsNode().boundsInRoot
+        val heading = compose.onNodeWithText("Now playing").fetchSemanticsNode().boundsInRoot
         val controls = compose.onNodeWithContentDescription("Rewind 30 seconds").fetchSemanticsNode().boundsInRoot
         assertTrue("Artwork belongs above the tabletop hinge", heading.bottom < horizontal.bounds.top)
         assertTrue("Controls belong below the tabletop hinge", controls.top > horizontal.bounds.bottom)
