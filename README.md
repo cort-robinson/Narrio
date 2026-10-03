@@ -6,7 +6,7 @@ A native Android listening room for audiobooks. Find a book, choose a matching l
 
 Download the signed APK from the [latest GitHub release](https://github.com/cort-robinson/Narrio/releases/latest). Each release includes checksums, its source commit, and Android/signing details. Android 8.0 or later is required. Install over an earlier Narrio release to retain your TorBox connection, shelf, bookmarks, and listening progress.
 
-1. Transfer the APK to your Android phone and open it in Files.
+1. Download the APK directly on your Android phone and open it in Files.
 2. If Android requests it, allow that app to install unknown apps, then install Narrio.
 3. Open **Settings → TorBox**, enter your API key, and tap **Connect TorBox**. Your TorBox plan must include API access.
 4. Search for a title or author, open the book, and tap **Find sources**. Choose a matching recording, tap **Listen**, choose an audio format, then **Stream now**. A verified uncached release instead offers **Prepare in TorBox**; streaming becomes available after preparation. Streaming requires no phone download.
@@ -55,6 +55,8 @@ The service owns playback, so folding, rotation, or multi-window resizing does n
 No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to catalog providers; TorBox credentials are never sent to Knaben, Internet Archive, or Gutendex. Metadata lookup sends book/release names to Audible, Google Books, or Open Library; artwork loads from the returned provider image URLs. TorBox credentials, file lists, listening positions, and bookmarks are never sent to metadata providers. Room contains recording metadata, stable part IDs, positions, bookmarks, and text attachments/timing matches. Original and normalized book text stay in private device storage. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads, book text, and history, without deleting files from TorBox.
 
 ## Build
+
+For phone testing, bookmark [Narrio Dev downloads](https://github.com/cort-robinson/Narrio/releases?q=dev-&expanded=true). Each preview provides a direct APK link and its automated test status, and installs alongside stable Narrio. Builds run in parallel with tests. The [development guide](docs/DEVELOPMENT.md#test-a-development-build) also covers quick local installs over Wi-Fi using the separate **Narrio Local** app.
 
 Coding agents should read [AGENTS.md](AGENTS.md) before making changes.
 

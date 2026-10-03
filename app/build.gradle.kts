@@ -12,6 +12,8 @@ val localSigning = Properties().apply {
     rootProject.file("signing.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
 val previewBuild = providers.gradleProperty("narrioPreview").map(String::toBoolean).getOrElse(false)
+val localBuild = providers.gradleProperty("narrioLocal").map(String::toBoolean).getOrElse(false)
+check(!(previewBuild && localBuild)) { "Choose either a signed preview or a local testing app" }
 val sourceVersion = runCatching {
     providers.exec { commandLine("git", "describe", "--tags", "--match", "v[0-9]*", "--abbrev=0") }
         .standardOutput.asText.get().trim().removePrefix("v")
@@ -34,7 +36,11 @@ android {
     namespace = "app.narrio"
     compileSdk = 36
     defaultConfig {
-        applicationId = if (previewBuild) "app.narrio.dev" else "app.narrio"
+        applicationId = when {
+            localBuild -> "app.narrio.local"
+            previewBuild -> "app.narrio.dev"
+            else -> "app.narrio"
+        }
         minSdk = 26
         targetSdk = 36
         versionCode = providers.gradleProperty("appVersionCode").map(String::toInt).getOrElse(sourceVersionCode)
@@ -54,6 +60,9 @@ android {
     }
     if (previewBuild) listOf("debug", "release").forEach {
         sourceSets.getByName(it).res.srcDir("src/preview/res")
+    }
+    if (localBuild) listOf("debug", "release").forEach {
+        sourceSets.getByName(it).res.srcDir("src/local/res")
     }
     if (signingValues.isNotEmpty()) {
         signingConfigs.create("localRelease") {
