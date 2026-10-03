@@ -2,6 +2,11 @@ package app.narrio.ui
 
 import android.graphics.Color as AndroidColor
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.KeyboardOptions
@@ -55,19 +61,22 @@ fun AppearanceScreen(settings: AppearanceSettings, change: (AppearanceSettings) 
     var editing by rememberSaveable { mutableStateOf(false) }
     val dark = settings.mode.isDark(isSystemInDarkTheme())
     BackHandler { if (editing) editing = false else back() }
-    if (editing) {
-        CustomThemeEditor(settings, { custom -> change(settings.copy(palette = ThemePalette.CUSTOM, custom = custom)); editing = false }, { editing = false }, modifier)
-        return
+    AnimatedContent(editing, modifier, transitionSpec = { Motion.sharedAxisX(targetState) }, label = "appearance page") { edit ->
+        if (edit) CustomThemeEditor(settings, { custom -> change(settings.copy(palette = ThemePalette.CUSTOM, custom = custom)); editing = false }, { editing = false }, Modifier)
+        else AppearanceOptions(settings, dark, change, back) { editing = true }
     }
-    Column(modifier.fillMaxSize()) {
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, change: (AppearanceSettings) -> Unit, back: () -> Unit, edit: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("Appearance") }, navigationIcon = {
             IconButton(back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to settings") }
         })
         LazyColumn(Modifier.fillMaxSize().testTag("appearance-options"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item {
-                Text("Your listening room.", style = MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.height(8.dp))
-                Text("Find a palette and typeface that feel like you. Changes apply throughout Narrio and stay on this device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Changes apply throughout Narrio and stay on this device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(20.dp))
                 ThemePreview(settings, dark)
             }
@@ -80,19 +89,19 @@ fun AppearanceScreen(settings: AppearanceSettings, change: (AppearanceSettings) 
                 }
                 if (settings.mode == ThemeMode.SYSTEM) Text("Follows your device's light and dark setting.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            item { SectionTitle("Palette", "Five ready-made rooms, or one of your own.") }
+            item { SectionTitle("Palette", "Five presets, or one of your own.") }
             ThemePalette.entries.chunked(2).forEach { pair -> item {
                 Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     pair.forEach { palette ->
                         PaletteOption(settings, palette, dark, Modifier.weight(1f)) {
-                            if (palette == ThemePalette.CUSTOM && settings.custom == null) editing = true
+                            if (palette == ThemePalette.CUSTOM && settings.custom == null) edit()
                             else change(settings.copy(palette = palette))
                         }
                     }
                 }
             } }
             item {
-                OutlinedButton({ editing = true }, Modifier.fillMaxWidth().testTag("edit-custom-theme")) {
+                OutlinedButton({ edit() }, Modifier.fillMaxWidth().testTag("edit-custom-theme")) {
                     Icon(Icons.Rounded.Palette, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
                     Text(if (settings.palette == ThemePalette.CUSTOM) "Edit custom theme" else "Create custom theme")
                 }
@@ -153,14 +162,18 @@ private fun PaletteOption(settings: AppearanceSettings, palette: ThemePalette, d
     val name = if (palette == ThemePalette.CUSTOM) settings.custom?.name ?: "Custom" else palette.label
     val description = if (palette == ThemePalette.CUSTOM && settings.custom == null) "Create your own" else palette.description
     val shape = RoundedCornerShape(14.dp)
-    Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLow, shape)
-        .then(if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, shape) else Modifier)
-        .selectable(selected, role = Role.RadioButton, onClick = choose).testTag("palette-${palette.name}").padding(12.dp)) {
+    val interaction = remember { MutableInteractionSource() }
+    val ring by animateColorAsState(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, tween(Motion.MEDIUM), label = "palette ring")
+    Column(modifier.pressScale(interaction).clip(shape).background(MaterialTheme.colorScheme.surfaceContainerLow, shape)
+        .border(2.dp, ring, shape)
+        .selectable(selected, interaction, LocalIndication.current, role = Role.RadioButton, onClick = choose).testTag("palette-${palette.name}").padding(12.dp)) {
         Row(Modifier.fillMaxWidth().background(scheme.background, RoundedCornerShape(8.dp)).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Aa", Modifier.weight(1f), style = MaterialTheme.typography.headlineSmall, fontFamily = appFontFamily(settings.font, true), color = scheme.onBackground)
             Box(Modifier.size(14.dp).background(scheme.secondary, CircleShape))
             Box(Modifier.size(24.dp).background(scheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-                if (selected) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = scheme.onPrimary)
+                androidx.compose.animation.AnimatedVisibility(selected, enter = scaleIn(Motion.responsive()) + fadeIn(), exit = scaleOut() + fadeOut()) {
+                    Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = scheme.onPrimary)
+                }
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -177,8 +190,8 @@ private fun ThemePreview(settings: AppearanceSettings, dark: Boolean) {
         Surface(Modifier.fillMaxWidth().testTag("theme-preview"), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Preview · ${if (dark) "Night" else "Day"}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("The next chapter", style = MaterialTheme.typography.headlineMedium)
-                Text("A place for every story.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("The Secret Garden", style = MaterialTheme.typography.headlineMedium)
+                Text("Frances Hodgson Burnett", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -225,8 +238,6 @@ private fun CustomThemeEditor(settings: AppearanceSettings, save: (CustomTheme) 
         TopAppBar(title = { Text("Custom theme") }, navigationIcon = { IconButton(cancel) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Cancel custom theme") } })
         LazyColumn(Modifier.weight(1f).testTag("custom-options"), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item {
-                Text("Make room for your colours.", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(8.dp))
                 Text("Edit Day and Night separately. Text and controls automatically keep their contrast. Your app changes only when you save.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
@@ -253,7 +264,7 @@ private fun CustomThemeEditor(settings: AppearanceSettings, save: (CustomTheme) 
                 ThemePreview(settings.copy(palette = ThemePalette.CUSTOM, custom = draft), dark)
             }
             item {
-                Text("${if (dark) "Night" else "Day"} colours", style = MaterialTheme.typography.headlineSmall)
+                Text("${if (dark) "Night" else "Day"} colors", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(12.dp))
                 FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     ColourRole.entries.forEach { target -> FilterChip(role == target, { role = target }, { Text(target.label) }, modifier = Modifier.testTag("colour-role-${target.name}")) }
@@ -284,13 +295,13 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         swatches.forEach { swatch ->
             Box(Modifier.size(48.dp).background(Color(0xFF000000.toInt() or swatch), CircleShape)
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                .clickable(role = Role.Button) { change(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}" }, contentAlignment = Alignment.Center) {
+                .clickable(role = Role.Button) { change(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}"; selected = colour == swatch }, contentAlignment = Alignment.Center) {
                 if (colour == swatch) Icon(Icons.Rounded.Check, null, tint = Color(0xFF000000.toInt() or ThemeContrast.foreground(swatch)))
             }
         }
     }
     Spacer(Modifier.height(20.dp))
-    listOf("Hue", "Colour strength", "Brightness").forEachIndexed { index, title ->
+    listOf("Hue", "Color strength", "Brightness").forEachIndexed { index, title ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(title, style = MaterialTheme.typography.labelLarge)
             Text(if (index == 0) "${hsv[index].roundToInt()}°" else "${(hsv[index] * 100).roundToInt()}%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -307,7 +318,7 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         val parsed = ThemeContrast.parseHex(hex)
         valid(parsed != null)
         if (parsed != null) change(parsed)
-    }, Modifier.fillMaxWidth().testTag("colour-hex"), label = { Text("$label hex colour") }, singleLine = true,
+    }, Modifier.fillMaxWidth().testTag("colour-hex"), label = { Text("$label hex color") }, singleLine = true,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), isError = invalid,
         supportingText = { Text(if (invalid) "Enter six hex digits, such as #8ACED8." else "The preview adjusts contrast where needed.") })
 }

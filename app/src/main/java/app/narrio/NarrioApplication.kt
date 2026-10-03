@@ -41,4 +41,5 @@ class AppGraph(application: Application) {
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()
     val offline = OfflineStore(application, http, torbox)
+    val updates = app.narrio.updates.AppUpdates(application, playback)
 }

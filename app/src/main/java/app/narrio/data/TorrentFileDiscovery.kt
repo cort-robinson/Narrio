@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -12,24 +13,23 @@ import kotlin.coroutines.resumeWithException
 
 /** Reads public file metadata only. It never joins peers, fetches audio, or creates a TorBox download. */
 class TorrentFileDiscovery(http: OkHttpClient, private val baseUrl: String = "https://itorrents.org/torrent/") {
-    private val client = http.newBuilder().callTimeout(12, TimeUnit.SECONDS).build()
+    // The mirror redirects through cleartext, which Android blocks, and sends unknown hashes to unrelated
+    // pages. Follow redirects manually so only the same torrent file is requested, over HTTPS.
+    private val client = http.newBuilder().callTimeout(12, TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
 
     suspend fun recording(book: Audiobook): Audiobook? = withContext(Dispatchers.IO) {
         val hash = book.torrentHash.lowercase()
         if (!hash.matches(Regex("[a-f0-9]{40}"))) return@withContext null
-        val response = suspendCancellableCoroutine { continuation ->
-            val call = client.newCall(Request.Builder().url("$baseUrl${hash.uppercase()}.torrent").build())
-            continuation.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(e) }
-                override fun onResponse(call: Call, response: Response) {
-                    continuation.resume(response) { _, value, _ -> value.close() }
-                }
-            })
+        var url = "$baseUrl${hash.uppercase()}.torrent".toHttpUrl()
+        var response = fetch(url)
+        var hops = 0
+        while (response.isRedirect && hops++ < MAX_REDIRECTS) {
+            url = response.use { redirect(url, it.header("Location"), hash) } ?: return@withContext null
+            response = fetch(url)
         }
         response.use {
             // Missing metadata is normal for some indexed releases; it isn't proof of usable audio.
-            if (it.code == 404) return@withContext null
+            if (it.code == 404 || it.isRedirect) return@withContext null
             if (!it.isSuccessful) throw IOException("Audio file metadata is unavailable.")
             val body = it.body ?: return@withContext null
             if (body.contentLength() > TorrentFiles.MAX_BYTES) return@withContext null
@@ -46,6 +46,28 @@ class TorrentFileDiscovery(http: OkHttpClient, private val baseUrl: String = "ht
             val magnet = book.magnetUri.takeIf { Regex("[?&]xt=urn:btih:$hash(?:&|$)", RegexOption.IGNORE_CASE).containsMatchIn(it) }
                 ?: "magnet:?xt=urn:btih:$hash"
             if (sources.isEmpty()) null else book.copy(title = files.name, releaseTitle = files.name, sources = sources, filesVerified = true, magnetUri = magnet)
+        }
+    }
+
+    private suspend fun fetch(url: HttpUrl): Response = suspendCancellableCoroutine { continuation ->
+        val call = client.newCall(Request.Builder().url(url).build())
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(e) }
+            override fun onResponse(call: Call, response: Response) {
+                continuation.resume(response) { _, value, _ -> value.close() }
+            }
+        })
+    }
+
+    companion object {
+        private const val MAX_REDIRECTS = 3
+
+        /** Follows only to the same torrent file, keeping HTTPS when the mirror redirects through cleartext. */
+        internal fun redirect(from: HttpUrl, location: String?, hash: String): HttpUrl? {
+            val target = location?.let(from::resolve) ?: return null
+            if (!target.encodedPath.endsWith("/$hash.torrent", ignoreCase = true)) return null
+            return if (from.isHttps && !target.isHttps) target.newBuilder().scheme("https").build() else target
         }
     }
 }

@@ -1,6 +1,7 @@
 package app.narrio.ui
 
-import android.provider.Settings
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -58,7 +59,7 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
     val list = key(document?.id, state.part?.id, binding?.chapterId) { rememberLazyListState() }
     val dragged by list.interactionSource.collectIsDraggedAsState()
     val context = LocalContext.current
-    val animations = remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
+    val animations = animationsEnabled()
     LaunchedEffect(dragged) { if (dragged) following = false }
     LaunchedEffect(active, following, adjusting, binding?.chapterId) {
         if (active != null && following && !adjusting) {
@@ -74,7 +75,7 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                 item {
                     Text("Read as you listen", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(12.dp))
-                    Text("Bring the words into your listening room. Add the matching book edition to follow the narration, one passage at a time.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Add the same edition of the book to follow the narration passage by passage.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 item { Button(lookup, enabled = !textState.working) { Icon(Icons.Rounded.Search, null); Spacer(Modifier.width(8.dp)); Text("Find book text") } }
                 item { OutlinedButton(import, enabled = !textState.working) { Icon(Icons.Rounded.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Choose a text file") } }
@@ -133,8 +134,11 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                         itemsIndexed(passages, key = { _, line -> line.id }) { index, line ->
                             val current = index == active
                             val selected = adjusting && selectedLine == index
+                            // The highlight glides from line to line instead of blinking.
+                            val ink by animateColorAsState(if (selected) MaterialTheme.colorScheme.secondary else if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tween(Motion.LONG, easing = Motion.Emphasized), label = "passage")
                             Text(line.text, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = if (current || selected) FontWeight.SemiBold else FontWeight.Normal),
-                                color = if (selected) MaterialTheme.colorScheme.secondary else if (current) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = ink,
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
                                     if (current) stateDescription = if (timeline?.timed == true) "Current passage" else "Current passage, estimated timing"
                                     if (selected) this.selected = true
@@ -143,8 +147,10 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                                 })
                         }
                     }
-                    if (!following && !adjusting && active != null) FilledTonalButton({ following = true }, Modifier.align(Alignment.BottomCenter).padding(16.dp)) {
-                        Icon(Icons.Rounded.MyLocation, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Back to current line")
+                    androidx.compose.animation.AnimatedVisibility(!following && !adjusting && active != null, Modifier.align(Alignment.BottomCenter), enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
+                        FilledTonalButton({ following = true }, Modifier.padding(16.dp)) {
+                            Icon(Icons.Rounded.MyLocation, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Back to current line")
+                        }
                     }
                 }
                 if (adjusting) {

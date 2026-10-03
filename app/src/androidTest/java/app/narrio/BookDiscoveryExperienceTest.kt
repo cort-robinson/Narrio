@@ -50,7 +50,7 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { vm.sourceSearch.value = SourceSearchState(book, listOf(recording), searched = true) }
         compose.onNodeWithText(recording.title).performScrollTo().performClick()
         compose.waitUntil { vm.selection.value.book?.id == recording.id && !vm.selection.value.loading }
-        compose.onNodeWithText("The recording").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("The recording").assertIsDisplayed()
         compose.onNodeWithText("Read by Fixture Reader").assertIsDisplayed()
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
         compose.runOnIdle {
@@ -59,7 +59,7 @@ class BookDiscoveryExperienceTest {
             assertEquals(book.title, vm.selection.value.book!!.title)
             vm.back()
         }
-        compose.onNodeWithText("The book").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("The book").assertIsDisplayed()
         compose.onNodeWithText(recording.title).performScrollTo().assertIsDisplayed()
     }
 }

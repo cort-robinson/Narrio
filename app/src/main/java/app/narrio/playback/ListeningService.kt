@@ -166,6 +166,12 @@ class ListeningService : MediaSessionService() {
         lastSave = System.currentTimeMillis()
     }
 
+    /** Flush the paused position before package replacement can stop this process. Called on main. */
+    suspend fun saveBeforeAppUpdate() {
+        check(!player.isPlaying && player.playbackState != Player.STATE_BUFFERING) { "Pause playback before installing the update" }
+        save()
+    }
+
     private fun publish() {
         graph.playback.state.value = ListeningState(currentBook, currentSource, player.currentMediaItemIndex.coerceAtLeast(0),
             player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: currentSource?.parts?.getOrNull(player.currentMediaItemIndex)?.durationMs ?: 0,
