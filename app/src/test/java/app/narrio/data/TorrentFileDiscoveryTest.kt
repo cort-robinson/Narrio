@@ -2,6 +2,7 @@ package app.narrio.data
 
 import app.narrio.domain.*
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.*
 import okio.Buffer
@@ -67,6 +68,41 @@ class TorrentFileDiscoveryTest {
                 if (request.path!!.startsWith("/metadata/")) assertNull(request.getHeader("Authorization"))
             }
         } finally { server.shutdown() }
+    }
+
+    // Observed live: itorrents.org answers 301 to http://itorrents.net (cleartext, which Android refuses),
+    // and answers an unknown hash with 302 to an unrelated home page.
+    @Test fun followsMirrorRedirectToSameTorrentWithoutDowngradeOrLeavingTheManifest() = runBlocking {
+        val (metadata, hash) = fixture()
+        val missing = "c".repeat(40)
+        val server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                "/torrent/${hash.uppercase()}.torrent" -> MockResponse().setResponseCode(301).setHeader("Location", "/mirror/torrent/${hash.uppercase()}.torrent")
+                "/mirror/torrent/${hash.uppercase()}.torrent" -> MockResponse().setBody(Buffer().write(metadata))
+                "/torrent/${missing.uppercase()}.torrent" -> MockResponse().setResponseCode(302).setHeader("Location", "/home/")
+                else -> MockResponse().setBody("<html>unrelated</html>")
+            }
+        }
+        server.start()
+        try {
+            val provider = TorrentFileDiscovery(OkHttpClient(), server.url("/torrent/").toString())
+            fun release(value: String) = Audiobook("knaben:$value", name, "Author not verified", provider = "knaben", torrentHash = value,
+                magnetUri = "magnet:?xt=urn:btih:$value", cacheState = "uncached", seeders = 10)
+            val recording = provider.recording(release(hash))!!
+            assertTrue(recording.filesVerified)
+            assertEquals(paths.sortedWith(AudioOrdering), recording.sources.single().parts.map { it.name })
+            assertNull(provider.recording(release(missing)))
+            val requested = List(server.requestCount) { server.takeRequest().requestUrl!!.encodedPath }
+            assertFalse(requested.contains("/home/"))
+        } finally { server.shutdown() }
+
+        val origin = "https://itorrents.org/torrent/${hash.uppercase()}.torrent".toHttpUrl()
+        assertEquals("https://itorrents.net/torrent/${hash.uppercase()}.torrent",
+            TorrentFileDiscovery.redirect(origin, "http://itorrents.net/torrent/${hash.uppercase()}.torrent", hash).toString())
+        assertNull(TorrentFileDiscovery.redirect(origin, "https://www.limetorrents.fun/home/", hash))
+        assertNull(TorrentFileDiscovery.redirect(origin, "https://itorrents.net/torrent/${missing.uppercase()}.torrent", hash))
+        assertNull(TorrentFileDiscovery.redirect(origin, null, hash))
     }
 
     @Test fun rejectsWrongHashMalformedOversizedAndUnsafeFileMetadata() {
