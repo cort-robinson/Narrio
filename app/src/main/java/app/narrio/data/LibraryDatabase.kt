@@ -65,6 +65,10 @@ interface LibraryDao {
         val json = NarrioJson.encodeToString(book)
         insert(ShelfEntry(book.id, json)); metadata(book.id, json)
     }
+    @Transaction suspend fun updateBookDetails(book: Audiobook) {
+        val saved = find(book.id) ?: return
+        metadata(book.id, NarrioJson.encodeToString(saved.book().withMetadataFrom(book)))
+    }
     @Transaction suspend fun remove(id: String) { deleteBookmarks(id); deletePositions(id); deleteShelf(id) }
 }
 

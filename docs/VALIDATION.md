@@ -1,4 +1,20 @@
-# Narrio 1.1 validation
+# Narrio validation
+
+## 1.2 metadata update
+
+Validated on October 2, 2026. The signed 1.2.0 update (version code 3) improves book metadata without changing recording/source identity or the Room schema.
+
+- All **32 JVM tests** pass, including 15 new metadata contracts. They cover title/author ambiguity, summaries and collections, podcast rejection, multiple narrators, release narrator hints, bilingual/reversed-author names, source narrator preservation, secure high-resolution images, cached information across independent releases, Open Library fallback, partial work-detail failure, outages, forced refresh, cancellation, HTML entities/initials, and backward-compatible saved book JSON.
+- Debug, instrumentation, and R8-optimized signed release APKs build successfully. Android lint reports **zero errors and 39 warnings**, primarily the existing dependency/SDK/Kotlin suggestions and URI helper suggestions.
+- Five final native cases pass on the phone emulator: two new metadata cases, the two existing source-experience cases, and independent durable source positions. See `verification/metadata-native-phone-final.txt`. The earlier native run in `metadata-native-phone.txt` preceded the cover overlay correction.
+- Live Android requests retrieve **Project Hail Mary**, author **Andy Weir**, catalog narrator **Ray Porter**, the full publisher description, and an HTTPS cover image. Transactional shelf enrichment preserves the synthetic test's 123,000 ms position, source layout, part ID, and per-source history. These requests use the actual public catalog; they do not use a TorBox account or establish availability of that recording.
+- The real artwork is rendered successfully, without the generated title/author overlay. Native UI checks verify metadata attribution, original release visibility, refresh controls, failed-artwork fallback, and an enabled Listen action while metadata is loading. Audio availability in these UI states is synthetic.
+- The same metadata UI case passes with **font scale 1.3** on a compact phone and with **1848×2448/density360** expanded bounds in Day mode. See `verification/metadata-native-large-text.txt` and `metadata-native-expanded.txt`. The compact and large-text checks use Night mode. Nine final screenshots are in `.impeccable/review/v1.2/`; emulator font scale, size, and density were restored afterward.
+- `apksigner verify --print-certs` confirms the retained signing identity. A signed 1.1.0-to-1.2.0 replacement install and cold launch succeed on the release emulator; see `verification/apk-signature-1.2.txt` and `metadata-release-upgrade.txt`. The package digest and delivery paths are recorded in `verification/package-1.2.json`.
+
+This update was verified on emulators. It does not claim a new physical-phone playback, fold, or battery test. The T3 Device panel could not attach because Android SDK Command-line Tools were missing; native checks used the already installed SDK/emulators. Live Open Library fallback availability was not required by the successful Audible smoke test; its fallback behavior is covered by deterministic provider contracts. Catalog narrator/cover metadata identifies a catalog edition, and indexed recording language and abridgment remain explicitly unverified.
+
+## Retained 1.1 validation
 
 Validated on Windows on October 2, 2026. Narrio is a native Android application. The signed 1.1.0 update adds cache-first discovery and optional phone downloads. This document distinguishes real network/audio evidence, controlled provider fixtures, and checks that still require the user's account and phone.
 

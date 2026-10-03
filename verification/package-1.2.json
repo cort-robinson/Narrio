@@ -1,0 +1,16 @@
+﻿{
+    "version":  "1.2.0",
+    "versionCode":  3,
+    "builtAtUtc":  "2026-10-03T01:41:24.0986743Z",
+    "bytes":  6379405,
+    "sha256":  "799fb81f5dfb57cf3f9521e800d255cd9faa50314c9d907da6b754a686640b21",
+    "certificateSha256":  "e6d1516efadf192bd4021b8a2368a69c5428b7ff2149babd857018cff6c21020",
+    "artifact":  "C:\\Users\\cortr\\Documents\\ChatGPT\\Narrio\\artifacts\\Narrio-1.2.0.apk",
+    "downloads":  "C:\\Users\\cortr\\Downloads\\Narrio-1.2.0.apk",
+    "unitTests":  32,
+    "nativePhoneTests":  5,
+    "additionalNativeLayoutCases":  2,
+    "lintErrors":  0,
+    "lintWarnings":  39,
+    "releaseUpdateSmoke":  "Signed 1.1.0 to 1.2.0 emulator replacement install and cold start passed."
+}

@@ -15,7 +15,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null)
-data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null)
+data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
 
 class NarrioViewModel(application: Application) : AndroidViewModel(application) {
     val graph = (application as NarrioApplication).graph
@@ -38,6 +38,9 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     val playback = graph.playback.state
     private var searchJob: Job? = null
     private var detailJob: Job? = null
+    private var catalogMetadataJob: Job? = null
+    private var detailMetadataJob: Job? = null
+    private var metadataRequest = 0
     private var controller: MediaController? = null
     private val controllerFuture = MediaController.Builder(application, SessionToken(application, ComponentName(application, ListeningService::class.java))).buildAsync()
 
@@ -49,6 +52,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     fun search(value: String = query.value, cat: String = category.value, scope: String = sourceScope.value) {
         query.value = value; category.value = cat; sourceScope.value = scope
         searchJob?.cancel()
+        catalogMetadataJob?.cancel()
         searchJob = viewModelScope.launch {
             delay(if (value.isBlank()) 0 else 350)
             catalog.value = CatalogState(emptyList(), true, notice = if (scope == "Cached") "Finding releases and checking TorBox's cache…" else "Finding recordings…")
@@ -57,8 +61,25 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
                     val books = if (scope == "TorBox") graph.torbox.library(value) else if (value.isBlank() && cat == "All") curatedBooks() else graph.catalog.search(value, cat)
                     catalog.value = CatalogState(books, false)
                 } else searchSources(value, scope == "Cached")
+                enrichCatalog()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { catalog.value = CatalogState(emptyList(), false, friendly(error)) }
+        }
+    }
+
+    private fun enrichCatalog() {
+        catalogMetadataJob?.cancel()
+        catalogMetadataJob = viewModelScope.launch {
+            // Publish playable results first, then enrich in order with bounded provider requests.
+            for (book in catalog.value.books.filter { it.provider != "archive" }) {
+                val saved = graph.library.find(book.id)?.book()
+                val base = if (saved != null && saved.metadataUpdatedAtMs > book.metadataUpdatedAtMs) book.withMetadataFrom(saved) else book
+                val enriched = graph.metadata.enrich(base)
+                if (enriched != book) {
+                    catalog.update { state -> state.copy(books = state.books.map { if (it.id == book.id) it.withMetadataFrom(enriched) else it }) }
+                    graph.library.updateBookDetails(enriched)
+                }
+            }
         }
     }
 
@@ -77,10 +98,13 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         }
         books = account.await() + books
         fun publish(loading: Boolean) {
+            val previous = catalog.value.books.associateBy { it.id }
             val shown = books.distinctBy { it.id }.filter { !cachedOnly || it.cacheState == "cached" }.sortedBy { it.cacheState != "cached" }
+                .map { book -> previous[book.id]?.takeIf { it.metadataUpdatedAtMs > book.metadataUpdatedAtMs }?.let { book.withMetadataFrom(it) } ?: book }
             catalog.value = CatalogState(shown, loading, failures.distinct().joinToString(" ").takeIf { it.isNotBlank() }, if (loading) "Checking audiobook files and cached availability…" else null)
         }
         publish(true)
+        enrichCatalog()
         val publicBooks = archive.await()
         if (!connected.value) books += publicBooks
         else publicBooks.chunked(6).forEach { batch ->
@@ -102,6 +126,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         preparation.value = null
         preferredFormat.value = ""
         detailJob?.cancel()
+        detailMetadataJob?.cancel()
         selection.value = SelectionState(book, !book.detailsLoaded)
         detailJob = viewModelScope.launch {
             try {
@@ -109,21 +134,50 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
                 if (!connected.value) full = full.copy(cacheState = "unchecked", cachedFormats = emptyList())
                 selection.value = SelectionState(full)
                 val saved = graph.library.find(full.id)
+                saved?.book()?.takeIf { it.metadataUpdatedAtMs > full.metadataUpdatedAtMs }?.let { full = full.withMetadataFrom(it) }
                 preferredFormat.value = saved?.pendingFormat?.takeIf { it.isNotBlank() } ?: graph.preferences.getString("format:${full.id}", saved?.source()?.format.orEmpty()).orEmpty()
                 if (saved?.state == "preparing" || saved?.state == "ready") {
                     preparation.value = Preparation(saved.preparationId, saved.state == "ready", 0f, if (saved.state == "ready") "Ready to listen" else "Preparing in TorBox")
-                    if (connected.value) updatePreparation(full, saved)
+                    if (connected.value) {
+                        updatePreparation(full, saved)
+                        selection.value.book?.takeIf { it.id == full.id }?.let { full = it.withMetadataFrom(full) }
+                    }
                 } else if (connected.value && full.provider != "torbox" && full.torrentHash.isNotBlank()) {
                     full = graph.torbox.checkCached(listOf(full)).first()
                     if (selection.value.book?.id == full.id) selection.value = SelectionState(full)
+                }
+                if (selection.value.book?.id == full.id) {
+                    selection.value = selection.value.copy(book = full)
+                    loadMetadata(full)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { selection.value = SelectionState(book, false, friendly(error)) }
         }
     }
 
-    fun back() { if (playerOpen.value) playerOpen.value = false else selection.value = SelectionState() }
-    fun navigate(index: Int) { destination.value = index; selection.value = SelectionState(); playerOpen.value = false }
+    private fun loadMetadata(book: Audiobook, force: Boolean = false) {
+        if (book.provider == "archive") return
+        val request = ++metadataRequest
+        detailMetadataJob?.cancel()
+        selection.update { if (it.book?.id == book.id) it.copy(metadataLoading = true) else it }
+        detailMetadataJob = viewModelScope.launch {
+            try {
+                val enriched = graph.metadata.enrich(book, force)
+                val current = selection.value.book?.takeIf { it.id == book.id } ?: return@launch
+                val updated = current.withMetadataFrom(enriched)
+                selection.update { it.copy(book = updated, metadataLoading = false) }
+                catalog.update { state -> state.copy(books = state.books.map { if (it.id == book.id) it.withMetadataFrom(updated) else it }) }
+                graph.library.updateBookDetails(updated)
+                if (force && enriched == book) messages.emit("No new matching book details found. Your current details are kept.")
+            } finally {
+                if (metadataRequest == request) selection.update { if (it.book?.id == book.id) it.copy(metadataLoading = false) else it }
+            }
+        }
+    }
+
+    fun refreshMetadata(book: Audiobook) = loadMetadata(book, true)
+    fun back() { if (playerOpen.value) playerOpen.value = false else { detailJob?.cancel(); detailMetadataJob?.cancel(); selection.value = SelectionState() } }
+    fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false }
     fun save(book: Audiobook) = viewModelScope.launch { graph.library.save(book); messages.emit("Saved to your shelf") }
     fun remove(book: Audiobook) = viewModelScope.launch {
         if (playback.value.book?.id == book.id) graph.playback.service?.forget()

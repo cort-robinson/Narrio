@@ -31,6 +31,7 @@ class AppGraph(application: Application) {
     val credentials = CredentialStore(application)
     val catalog = ArchiveDiscovery(http)
     val indexedCatalog = KnabenDiscovery(http)
+    val metadata = BookMetadata(http)
     val torbox = TorBoxDelivery(http, credentials::read)
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()

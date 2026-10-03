@@ -45,6 +45,11 @@ data class Audiobook(
     val cacheState: String = "unchecked",
     val cachedFormats: List<String> = emptyList(),
     val releaseSizeBytes: Long = 0,
+    val releaseTitle: String = "",
+    val metadataSource: String = "",
+    val metadataUrl: String = "",
+    val metadataUpdatedAtMs: Long = 0,
+    val narratorFromCatalog: Boolean = false,
 )
 
 data class Chapter(val title: String, val startMs: Long)
@@ -83,6 +88,18 @@ fun formatTime(ms: Long): String {
 fun durationLabel(ms: Long): String = if (ms > 0) "${ms / 3_600_000}h ${(ms / 60_000) % 60}m" else "Length on playback"
 fun sizeLabel(bytes: Long): String = when { bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0); bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0); else -> "%.0f KB".format(bytes / 1000.0) }
 fun providerLabel(book: Audiobook) = when (book.provider) { "torbox" -> "My TorBox"; "knaben" -> "Indexed release"; else -> "LibriVox" }
+fun narrationLabel(book: Audiobook) = when {
+    book.narratorFromCatalog -> "Catalog narrator: ${book.narrator}"
+    book.narrator.startsWith("Narrator not ") -> book.narrator
+    else -> "Read by ${book.narrator}"
+}
+/** Copy descriptive fields without changing release, file, cache, or playback identity. */
+fun Audiobook.withMetadataFrom(details: Audiobook) = copy(
+    title = details.title, author = details.author, narrator = details.narrator,
+    description = details.description, coverUrl = details.coverUrl, releaseTitle = details.releaseTitle,
+    metadataSource = details.metadataSource, metadataUrl = details.metadataUrl,
+    metadataUpdatedAtMs = details.metadataUpdatedAtMs, narratorFromCatalog = details.narratorFromCatalog,
+)
 
 interface RecordingDiscovery {
     suspend fun search(query: String, category: String = "All"): List<Audiobook>
