@@ -1,5 +1,7 @@
 # Narrio architecture
 
+Follow-along text adds `GutenbergTextDiscovery`, `BookTextParser`, and `FollowAlongStore` beside the recording and delivery providers. Text retains its own content identity and locators; timing choices belong to a specific audio source/part and use the existing playback clock. Schema 4 adds attachments/bindings without replacing listening history. See [follow-along logistics](FOLLOW_ALONG.md) for current boundaries and the planned shared cursor for a full reader.
+
 ## Recording before URL
 
 `Audiobook` represents a narrated recording. Internet Archive item IDs distinguish recordings, even when titles repeat. Narrator and language are read from source metadata; missing details stay visibly unknown. `AudioSource` represents a particular delivery and file layout. `AudioPart` has a stable ID, filename, optional duration, and Archive URL or TorBox torrent/file IDs. Generated CDN links never become source identity.
@@ -32,9 +34,9 @@ Catalog/API calls have bounded deadlines. Audio requests have no whole-request d
 
 ## Persistence
 
-Room has `shelf`, `positions`, and `bookmarks` tables. Position identity is `(recordingId, sourceId, stablePartId)`, with milliseconds inside that part. Source-format changes have independent histories, so an MP3 timestamp is never copied to M4B. Restoring a source locates the stable part in its current ordered list. Bookmarks retain their source ID and can restore an earlier layout. Progress is saved periodically while playing and on relevant player events. Reopening the app reconstructs the last playlist paused; audio preparation waits for an explicit resume.
+Room has `shelf`, `positions`, `bookmarks`, `book_text`, and `text_bindings` tables. Position identity is `(recordingId, sourceId, stablePartId)`, with milliseconds inside that part. Source-format changes have independent histories, so an MP3 timestamp is never copied to M4B. Restoring a source locates the stable part in its current ordered list. Bookmarks retain their source ID and can restore an earlier layout. Progress is saved periodically while playing and on relevant player events. Reopening the app reconstructs the last playlist paused; audio preparation waits for an explicit resume.
 
-The database is schema 3. Migration 1→2 adds per-source histories; 2→3 adds the pending audio format. Old-player progress cannot overwrite an independently preparing source, and choosing M4B survives reopening the recording. Removing a shelf item clears its histories, bookmarks, and phone downloads; it does not delete provider files.
+The database is schema 4. Migration 1→2 adds per-source histories; 2→3 adds the pending audio format; 3→4 adds text attachments and source/part-specific chapter choices and timing anchors. Old-player progress cannot overwrite an independently preparing source, and choosing M4B survives reopening the recording. Removing a shelf item clears its histories, bookmarks, attached text, and phone downloads; it does not delete provider files. Removing only book text preserves the listening records.
 
 ## Appearance
 

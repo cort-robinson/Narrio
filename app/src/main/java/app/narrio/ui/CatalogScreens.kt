@@ -173,7 +173,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
     }
     remove?.let { book -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove from your shelf?") },
-        text = { Text("This removes phone downloads, saved progress, and bookmarks for ${book.title} on this device.") },
+        text = { Text("This removes phone downloads, book text, saved progress, and bookmarks for ${book.title} on this device.") },
         confirmButton = { TextButton({ vm.remove(book); remove = null }) { Text("Remove") } }, dismissButton = { TextButton({ remove = null }) { Text("Keep book") } }) }
 }
 

@@ -18,6 +18,8 @@ Android listeners who want to discover narrated books, stream cached sources, sa
 
 Search for an audiobook recording, identify its narrator and language when verified, select an already cached source, and stream it through TorBox without downloading the book to the phone. Offer explicit phone downloads for offline listening. Preserve progress, a personal shelf, bookmarks, playback speed, and a sleep timer on the device.
 
+Offer highlighted follow-along passages in the Listening room using local EPUB/text imports, companion files, or public ebook lookup. Supplied timestamps are specific to their audio part; other text uses explicitly estimated timing and saved manual matches. Full ebook reading and automatic exact alignment are later work, with edition identity and a shared content cursor planned in docs/FOLLOW_ALONG.md.
+
 ## Operating Context
 
 Direct connections to catalog and delivery providers; no custom backend. The user connects TorBox in the app. Physical-phone testing uses Android media controls without reading the credential or generated media links.

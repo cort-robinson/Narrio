@@ -1,5 +1,27 @@
 # Narrio validation
 
+## Follow-along increment: unreleased branch
+
+The new **Listening room → Follow along** increment was initially verified on the 1.1 source baseline, before integration with the newer metadata, appearance, and release automation. Those feature runs used version 1.1.0/code 2 and an unsigned release APK. The integrated branch retains automated versioning and the separate Narrio Dev preview identity. No feature update was installed on the user's physical phone.
+
+| Area | Current feature evidence |
+| --- | --- |
+| Build and JVM checks | Debug and instrumentation APKs and the R8-optimized release build succeed. All 28 JVM tests pass, including 11 new parsing, timing, source-binding, public-lookup, and companion-file cases. See `verification/follow-along-build.txt`. |
+| Android lint | Zero errors and the same 38 pre-existing warnings. |
+| Phone | Five native tests pass: Android URI import and actual Media3 playback/seek/speed, durable timing adjustments and recreation, part-specific VTT and removal, real public EPUB acquisition, whole-recording chapter navigation, and the 3 → 4 database migration. See `verification/follow-along-phone.txt`. |
+| Large text and expanded window | All three introduced UI cases pass at font scale 1.3 on the phone and at 1848 × 2448/density 360. See `verification/follow-along-large-text.txt` and `follow-along-expanded.txt`. |
+| Existing audio behavior | The real multipart Secret Garden regression passes: later-part seek, speed, bookmark, end-of-part sleep, background advancement, and restoration after activity recreation. See `verification/follow-along-playback-regression.txt`. |
+| Live public text | Android calls Gutendex and downloads a real Gutenberg Secret Garden EPUB, parses its chapter structure and text, and reloads the saved document. This is live acquisition evidence, separate from synthetic provider contracts. |
+| Migration and isolation | The native migration test opens an actual version-3 database containing a shelf entry, bookmark, independent source history, and pending M4B preparation. Version 4 preserves those records; removing text cascades only text bindings. |
+
+After integrating `dev` at `f7b5a31` on October 3, all **48 JVM tests**, **16 release-tooling tests**, debug/instrumentation builds, and the R8-optimized unsigned release build pass. Lint has zero errors and 39 warnings. All **four controlled native follow-along/migration cases** pass on the private phone emulator with the current typed appearance API. See [integration build](../verification/follow-along-integration-build.txt), [release tooling](../verification/follow-along-integration-release.txt), and [native checks](../verification/follow-along-integration-native.txt). CI now includes those four controlled cases alongside the five existing smoke tests; live public lookup stays separate. The original capture and live-provider matrix below remains its separately scoped baseline.
+
+The 24 original native screenshots in `.impeccable/review/follow-along/` cover acquisition, estimated text, matching, chapter choice, Day theme, management, supplied cues, and the wrong-part warning at phone, large-text phone, and expanded sizes. They use synthetic Garden Walk prose and real locally generated WAV playback. The `fold` filename suffix denotes a generic expanded emulator window, not physical Samsung geometry. The capture README records dimensions and provenance. Live authenticated TorBox ebook fetching was not exercised; companion references and separation from audio are covered by provider contracts.
+
+The fresh Impeccable finish reviewer returned **ship** for the introduced surface, with valid evidence and no material fixes. Its report is `.impeccable/review/follow-along/finish-review.md`. The existing Night/Day palette, semantic typography, native controls, and adaptive player remain the design authority. No HTML/CSS detector, image comp, or QUALITY BAR card applies to this native local extension.
+
+These checks establish a basic highlighted listening surface with persistent text and adjustments. Untimed ebooks use explicitly estimated timing. Supplied VTT cues are limited to their selected audio source/part. Arbitrary exact narration alignment, standalone ebook reading, and the full reader remain future work; their acquisition, identity, alignment, and shared-cursor logistics are in [FOLLOW_ALONG.md](FOLLOW_ALONG.md).
+
 ## Current branch Appearance evidence
 
 The Appearance update has a **ship** finish-review disposition. The initial checks below used the 1.1.0 source baseline before integration with the latest `dev` metadata and release workflow. Signed 1.1/1.2 installation, audio, and physical-phone results below remain historical release evidence.
