@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.KeyboardOptions
@@ -294,7 +295,7 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         swatches.forEach { swatch ->
             Box(Modifier.size(48.dp).background(Color(0xFF000000.toInt() or swatch), CircleShape)
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                .clickable(role = Role.Button) { change(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}" }, contentAlignment = Alignment.Center) {
+                .clickable(role = Role.Button) { change(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}"; selected = colour == swatch }, contentAlignment = Alignment.Center) {
                 if (colour == swatch) Icon(Icons.Rounded.Check, null, tint = Color(0xFF000000.toInt() or ThemeContrast.foreground(swatch)))
             }
         }
