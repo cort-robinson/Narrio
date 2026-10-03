@@ -103,5 +103,5 @@ fun colourSchemeFor(settings: AppearanceSettings, dark: Boolean): ColorScheme {
 fun NarrioTheme(settings: AppearanceSettings, dark: Boolean = settings.mode.isDark(isSystemInDarkTheme()), content: @Composable () -> Unit) {
     val colours = remember(settings.palette, settings.custom, dark) { colourSchemeFor(settings, dark) }
     val typography = remember(settings.font, settings.textSize) { typographyFor(settings.font, settings.textSize) }
-    MaterialTheme(colorScheme = colours, typography = typography, content = content)
+    MaterialTheme(colorScheme = animatedColorScheme(colours), typography = typography, content = content)
 }

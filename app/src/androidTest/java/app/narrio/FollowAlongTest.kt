@@ -75,7 +75,7 @@ Somewhere beyond the trees, a bell began to ring."""
         compose.waitUntil(15_000) { graph.playback.service?.initialized == true }
         runBlocking { withContext(Dispatchers.Main) { graph.playback.service!!.load(book, book.sources.single(), false, book.sources.single().parts.first().id, 0) } }
         compose.runOnIdle { graph.preferences.edit().putBoolean("notificationAsked", true).apply(); vm.updateAppearance(AppearanceSettings()); vm.playerOpen.value = true }
-        compose.onNodeWithText("Follow along").performScrollTo().performClick()
+        compose.onNodeWithText("Follow along").performClick()
     }
 
     private fun capture(name: String) {

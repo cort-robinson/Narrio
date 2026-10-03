@@ -276,13 +276,15 @@ Appearance provides Narrio (the original pairing), Manrope throughout, Newsreade
 
 The usual page inset is generous (24 dp). Discover uses a slightly tighter top inset (20 dp) and a lower inset (28 dp). Related metadata uses shorter gaps (4, 8, or 12 dp); book and shelf rows separate art and text (16 dp). Section and page groups commonly use 24 or 28 dp. Component-specific gaps also occur; the build is not a strict universal grid.
 
-[NarrioApp.kt](app/src/main/java/app/narrio/ui/NarrioApp.kt) chooses expanded composition at a current window width of at least 600 dp, except during open tabletop playback. Compact catalog destinations use a three-destination Material navigation bar; an active mini-player sits above it. Detail and full player replace the catalog view on compact windows.
+[NarrioApp.kt](app/src/main/java/app/narrio/ui/NarrioApp.kt) chooses expanded composition at a current window width of at least 600 dp, except during open tabletop playback. Compact catalog destinations use a three-destination Material navigation bar; an active mini-player sits above it. Detail and full player replace the catalog view on compact windows. Expanded windows shorter than 480 dp (a phone in landscape) give an open player the whole canvas beside the rail.
 
-Expanded composition uses an 80 dp navigation rail. Without a separating vertical hinge, the catalog begins at 53% of the width remaining after the rail; its width is bounded by the source's 250 dp pane minima. The secondary pane displays the selected book or recording, current player, or welcome state. With a separating vertical hinge, pane positioning uses the reported bounds and leaves a gap at least 1 dp wide. Both content panes scroll independently.
+Expanded composition uses an 80 dp navigation rail. Without a separating vertical hinge, the catalog begins at 53% of the width remaining after the rail; its width is bounded by the source's 250 dp pane minima. The secondary pane displays the selected book or recording, current player, or welcome state. The catalog column shows the mini-player only while details cover the listening room; when the secondary pane is the player, it would repeat it. With a separating vertical hinge, pane positioning uses the reported bounds and leaves a gap at least 1 dp wide. Both content panes scroll independently.
 
 Horizontal HALF_OPENED posture becomes tabletop only while the player is open. The upper pane is bounded by the hinge after subtracting the status inset. Its cover height is the smaller of available height or `upper width × 0.55 × 1.45`; cover width is `height ÷ 1.45`. The context column scrolls within that upper region. The hinge gap is the greater of the reported gap and 12 dp; the lower transport pane scrolls with 24 dp padding. These are current layout calculations, not physical device measurements.
 
-Safe drawing insets protect the top and horizontal edges; full/detail/expanded content also applies navigation-bar padding. Settings applies IME padding. System Back collapses the player, returns a recording chosen from source results to its catalog details, closes details, or returns another destination to Discover.
+Safe drawing insets protect the top and horizontal edges; full/detail/expanded content also applies navigation-bar padding. Settings applies IME padding. System Back collapses the player, returns a recording chosen from source results to its catalog details, closes details, or returns another destination to Discover. On compact windows the predictive Back gesture scrubs the real screen transition toward that destination before the listener commits.
+
+The listening room restructures for its window rather than scrolling the play control away. Short wide canvases put the cover beside the title and transport; short narrow panes reduce the cover to a byline thumbnail; otherwise the transport is measured first and the cover takes the remaining height (capped at 470 dp), falling back to a scrolling column with a 150–180 dp cover only when that cannot fit. Short windows fold the Audio/Follow along tabs into the heading row.
 
 Browse category chips scroll horizontally at compact and expanded widths and disappear while a search query is entered. SourcePicker keeps its content in a vertically scrollable native sheet, with weighted option text that can wrap around its radio controls. Long release names and larger system text expand the sheet content instead of clipping the source and preparation actions. App and sheet system-bar icons use foreground contrast against the actual scheme background, including custom palettes. These behaviors are implemented in CatalogScreens.kt, NarrioApp.kt, and DetailAndSettings.kt; they do not introduce new breakpoints or fixed modal geometry.
 
@@ -302,9 +304,19 @@ The metadata-first catalog and Find sources increment is documented from current
 
 Depth is primarily tonal. Catalog rows sit directly on the ground; dividers separate longer sections. The secondary pane uses surfaceContainerLow, the mini-player and functional status containers use surfaceContainer, and selected rows use secondaryContainer. The mini-player explicitly sets tonal elevation to zero (0 dp). Material sheets and dialogs retain their library elevation behavior; no custom shadow token or elevation scale has been authored.
 
-Atmospheric depth comes from the original garden cover image and its contrast scrim. These are static artwork treatments, not looping effects or a substitute for real media. No custom decorative animation duration or easing token exists.
+Atmospheric depth comes from the original garden cover image and its contrast scrim. These are static artwork treatments, not looping effects or a substitute for real media. Retrieved provider art keeps its aspect inside the book-shaped frame; on Android 12+ a blurred, lightly scrimmed crop of the same art fills the margins instead of flat color bars.
 
-**The Quiet Surface Rule.** Use tonal surfaces and outlineVariant dividers to distinguish functional regions. Preserve Material sheet and dialog elevation; the implementation has no custom shadow vocabulary.
+The one authored shadow belongs to the listening cover: it leans forward (full scale, 22 dp shadow) while narration plays and settles back (90%, 4 dp) when paused.
+
+**The Quiet Surface Rule.** Use tonal surfaces and outlineVariant dividers to distinguish functional regions. Preserve Material sheet and dialog elevation; apart from the listening cover, the implementation has no custom shadow vocabulary.
+
+## Motion
+
+[Motion.kt](app/src/main/java/app/narrio/ui/Motion.kt) owns the vocabulary: emphasized easing curves, 150/300/450 ms durations, Material fade-through between destinations, shared axis X for deeper content (book → recording → back), and a rise/fall pair for the listening room. Compact navigation runs in a SharedTransitionLayout: a cover travels from its catalog, shelf, or resume row into details, and from the mini-player into the listening room and back. Palette and mode changes dissolve the whole color scheme over 450 ms.
+
+Feedback stays small and physical: rows and controls press to 97%; the play control morphs from circle (paused) to a softened square (playing); skips turn 30° in their direction; bookmarking pops; Android haptics confirm toggles, skips, bookmarks, and the pull-down threshold. The player can be pulled down to collapse, and the mini-player flicked up to open. Narration bars move only while audio actually plays. Skeleton book rows stand in while metadata loads; follow-along highlights glide between passages.
+
+**The Still Room Rule.** Compose scales every duration by Android's animator setting. Looping motion (narration bars, skeleton light, follow-along autoscroll) additionally checks that setting and renders still when animations are removed.
 
 **The Artwork Contrast Rule.** Keep original artwork and its text scrim together. The gradient over the garden cover is a legibility treatment already present in the build.
 
@@ -314,15 +326,15 @@ Playback publication follows visibility: the service loop runs at one second whi
 
 Covers have quietly rounded corners (8 dp). Selection rows and the credential field use a compact curve (12 dp). Search, recovery, and preparation containers use a slightly softer curve (14 dp).
 
-The prominent play control is a true CircleShape (82 dp). Other buttons, chips, navigation indicators, sheets, and dialogs use Material defaults because the app does not override MaterialTheme.shapes. Preserve those native silhouettes rather than assigning all controls the container radius.
+The prominent play control is circular (82 dp) while paused and a 30%-cornered square while playing; its shape reports the state. Other buttons, chips, navigation indicators, sheets, and dialogs use Material defaults because the app does not override MaterialTheme.shapes. Preserve those native silhouettes rather than assigning all controls the container radius.
 
 ## Components
 
 ### Buttons and transport
 
-Filled primary buttons carry Find sources, Listen, Discover, and Connect actions. Filled tonal buttons support quieter actions. Outlined controls hold Save, speed, sleep, and parts; text buttons carry retry, read-more, and subordinate actions. Their default colors and interaction states come from Material 3. Source-level enabled conditions express loading, account, and saved state.
+Filled primary buttons carry Find sources, Listen, Discover, and Connect actions. Filled tonal buttons support quieter actions. Outlined controls hold Save; the player's speed, sleep, parts, and bookmarks share an even four-slot tool tray of icon-over-label targets that never wraps; text buttons carry retry, read-more, and subordinate actions. Their default colors and interaction states come from Material 3. Source-level enabled conditions express loading, account, and saved state.
 
-Player transport gives the circular play/pause control a larger target (82 dp) and skip controls medium targets (56 dp), with real buffering progress inside the primary control. The slider is disabled until duration is known, exposes the listening-position description, and seeks when dragging finishes. See [PlayerScreen.kt](app/src/main/java/app/narrio/ui/PlayerScreen.kt).
+Player transport gives the play/pause control a larger target (82 dp, 64 dp on short windows) and skip controls medium targets (56 dp), with real buffering progress inside the primary control. Speed and sleep choices use radio-selectable rows with the current choice highlighted. The slider is disabled until duration is known, exposes the listening-position description, and seeks when dragging finishes. See [PlayerScreen.kt](app/src/main/java/app/narrio/ui/PlayerScreen.kt).
 
 ### Inputs and chips
 
@@ -336,13 +348,13 @@ Discover, My shelf, and Settings use the same Material icon and label pair in na
 
 ### Book and recording rows and covers
 
-[BookRow](app/src/main/java/app/narrio/ui/CatalogScreens.kt) pairs a cover (76 × 112 dp) with grouped title and author. Catalog rows add a description excerpt of up to three lines and a quiet metadata-provider label; one row represents each normalized title/author identity. Saved recording rows retain narrator, available duration, source/cache context, and a trailing resume action when available. Titles use up to three lines. Discover uses these open rows beneath the page heading, search, and browse categories; the original featured hero and tall cover-tile shelf are historical compositions.
+[BookRow](app/src/main/java/app/narrio/ui/CatalogScreens.kt) pairs a cover (76 × 112 dp) with grouped title and author. Catalog rows add a description excerpt of up to three lines and a quiet metadata-provider label; one row represents each normalized title/author identity. Saved recording rows retain narrator, available duration, source/cache context, and a trailing resume action when available. Titles use up to three lines. Discover uses these open rows beneath the page heading, search, and browse categories; the original featured hero and tall cover-tile shelf are historical compositions. Pick up the thread is a tonal resume card with place, whole-book progress when every part reports its length, and a play action; it hides while that book is already in the mini-player. Shelf rows add the same progress line, show narration bars for the playing book, and keep Recording details and Remove from shelf in an overflow menu.
 
 [BookCover.kt](app/src/main/java/app/narrio/ui/BookCover.kt) displays available provider artwork using ContentScale.Fit. While an image loads or when it fails or is absent, it draws the original typographic covers or garden image. Fallback lettering adapts to available width and the large presentation flag, and is omitted below 60 dp width. Preserve [docs/ART.md](docs/ART.md), its generation prompt provenance, and the bundled Newsreader/Manrope SIL Open Font License references.
 
 ### Mini-player
 
-The mini-player uses a full-width functional surface, a small cover (38 × 52 dp), title and current-part context, skip, and play/pause. The whole surface opens the player. A thin progress line (2 dp) appears only when duration is known. Buffering replaces transport content with a progress indicator; the text remains tied to actual state.
+The mini-player uses a full-width functional surface, a small cover (38 × 52 dp), title and current-part context with narration bars while playing, skip, and play/pause. The whole surface opens the player. A thin progress line (2 dp) appears only when duration is known. Buffering replaces transport content with a progress indicator; the text remains tied to actual state.
 
 ### Functional containers and modals
 
