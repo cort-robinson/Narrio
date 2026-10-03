@@ -26,7 +26,7 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
         val url = "https://archive.org/advancedsearch.php".toHttpUrl().newBuilder()
             .addQueryParameter("q", q).addQueryParameter("output", "json")
             .addQueryParameter("rows", "50").addQueryParameter("sort[]", "downloads desc")
-        listOf("identifier", "title", "creator", "language", "runtime", "description", "subject").forEach { url.addQueryParameter("fl[]", it) }
+        listOf("identifier", "title", "creator", "narrator", "reader", "language", "runtime", "description", "subject").forEach { url.addQueryParameter("fl[]", it) }
         val json = get(url.build().toString())
         (json["response"] as? JsonObject)?.objects("docs").orEmpty().map { parseBook(it, false) }
     }
@@ -44,14 +44,13 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
     }
 
     companion object {
-        fun cleanHtml(value: String): String = value.replace(Regex("<(br|/p|/div)[^>]*>", RegexOption.IGNORE_CASE), "\n")
-            .replace(Regex("<[^>]+>"), "").replace("&amp;", "&").replace("&quot;", "\"")
-            .replace("&#39;", "'").replace("&nbsp;", " ").replace(Regex("\n[ \\t]*\n+"), "\n\n").trim()
+        fun cleanHtml(value: String): String = MetadataText.clean(value)
 
         fun parseBook(meta: JsonObject, loaded: Boolean): Audiobook {
             val description = cleanHtml(meta.text("description"))
-            val narrator = Regex("Read (?:in [A-Za-z]+ )?by\\s+([^\\n.]+)", RegexOption.IGNORE_CASE)
+            val narrator = meta.text("narrator").ifBlank { meta.text("reader") }.ifBlank { Regex("Read (?:in [A-Za-z]+ )?by\\s+([^\\n]+)", RegexOption.IGNORE_CASE)
                 .find(description)?.groupValues?.get(1)?.split(Regex("\\s+(?=For (?:further|more) information|For more free audio|Total running time|Summary by)", RegexOption.IGNORE_CASE))?.first()?.trim()?.take(150) ?: "Narrator not listed"
+            }.trim().trimEnd('.')
             val lang = meta.text("language").let { when (it.lowercase()) { "eng", "en", "english" -> "English"; "" -> "Language not listed"; else -> it } }
             return Audiobook(
                 id = meta.text("identifier"), title = meta.text("title").ifBlank { "Untitled recording" },
@@ -84,7 +83,15 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
                 if (multipart.isNotEmpty()) add(AudioSource("${book.id}:mp3", "Chapter files", "MP3", multipart))
                 if (m4b.isNotEmpty()) add(AudioSource("${book.id}:m4b", "Whole-book audio", "M4B", m4b))
             }
-            return book.copy(sources = sources, torrentUrl = torrent?.let { url(it.text("name")) }.orEmpty(), torrentHash = torrent?.text("btih").orEmpty())
+            val artwork = all.filter { file ->
+                file.text("name").endsWith(".jpg", true) || file.text("name").endsWith(".jpeg", true) || file.text("name").endsWith(".png", true)
+            }.sortedByDescending { file -> when {
+                Regex("cover|front", RegexOption.IGNORE_CASE).containsMatchIn(file.text("name")) -> 3
+                file.text("source") == "original" && !file.text("name").startsWith("__ia_") -> 2
+                else -> 0
+            } }.firstOrNull { !it.text("name").startsWith("__ia_") && !it.text("name").contains("thumb", true) }
+            return book.copy(sources = sources, coverUrl = artwork?.let { url(it.text("name")) } ?: book.coverUrl,
+                torrentUrl = torrent?.let { url(it.text("name")) }.orEmpty(), torrentHash = torrent?.text("btih").orEmpty())
         }
     }
 }

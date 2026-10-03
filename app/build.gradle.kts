@@ -11,16 +11,34 @@ plugins {
 val localSigning = Properties().apply {
     rootProject.file("signing.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
+val previewBuild = providers.gradleProperty("narrioPreview").map(String::toBoolean).getOrElse(false)
+val sourceVersion = runCatching {
+    providers.exec { commandLine("git", "describe", "--tags", "--match", "v[0-9]*", "--abbrev=0") }
+        .standardOutput.asText.get().trim().removePrefix("v")
+}.getOrDefault("1.1.0")
+val versionParts = sourceVersion.split('.').map(String::toInt)
+val sourceVersionCode = versionParts[0] * 1_000_000 + versionParts[1] * 1_000 + versionParts[2]
+val signingValues = if (System.getenv("NARRIO_KEYSTORE_PATH") != null) Properties().apply {
+    setProperty("storeFile", System.getenv("NARRIO_KEYSTORE_PATH"))
+    setProperty("storePassword", System.getenv("NARRIO_KEYSTORE_PASSWORD") ?: "")
+    setProperty("keyAlias", System.getenv("NARRIO_KEY_ALIAS") ?: "")
+    setProperty("keyPassword", System.getenv("NARRIO_KEY_PASSWORD") ?: "")
+} else localSigning
+if (providers.gradleProperty("requireSigning").getOrElse("false").toBoolean()) {
+    check(listOf("storeFile", "storePassword", "keyAlias", "keyPassword").all {
+        !signingValues.getProperty(it).isNullOrBlank()
+    }) { "All signing credentials are required for a distributable APK" }
+}
 
 android {
     namespace = "app.narrio"
     compileSdk = 36
     defaultConfig {
-        applicationId = "app.narrio"
+        applicationId = if (previewBuild) "app.narrio.dev" else "app.narrio"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = providers.gradleProperty("appVersionCode").map(String::toInt).getOrElse(sourceVersionCode)
+        versionName = providers.gradleProperty("appVersionName").getOrElse("$sourceVersion-dev")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildFeatures { compose = true; buildConfig = true }
@@ -34,12 +52,15 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
-    if (localSigning.isNotEmpty()) {
+    if (previewBuild) listOf("debug", "release").forEach {
+        sourceSets.getByName(it).res.srcDir("src/preview/res")
+    }
+    if (signingValues.isNotEmpty()) {
         signingConfigs.create("localRelease") {
-            storeFile = rootProject.file(localSigning.getProperty("storeFile"))
-            storePassword = localSigning.getProperty("storePassword")
-            keyAlias = localSigning.getProperty("keyAlias")
-            keyPassword = localSigning.getProperty("keyPassword")
+            storeFile = rootProject.file(signingValues.getProperty("storeFile"))
+            storePassword = signingValues.getProperty("storePassword")
+            keyAlias = signingValues.getProperty("keyAlias")
+            keyPassword = signingValues.getProperty("keyPassword")
         }
         buildTypes.getByName("release").signingConfig = signingConfigs.getByName("localRelease")
     }

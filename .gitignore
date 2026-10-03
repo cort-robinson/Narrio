@@ -14,6 +14,7 @@ verification/*emulator*.log
 scripts/__pycache__/
 .signing/
 signing.properties
+node_modules/
 # Retain early exploratory logs locally; final verification evidence is versioned.
 verification/instrumentation.txt
 verification/fold-posture.txt

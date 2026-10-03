@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.domain.*
+import app.narrio.BuildConfig
 import app.narrio.data.OfflineBook
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -35,6 +36,7 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val connected by vm.connected.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var sourcePicker by remember(selected.book?.id) { mutableStateOf(false) }
     var expandedDescription by remember(selected.book?.id) { mutableStateOf(false) }
     val book = selected.book ?: return
@@ -56,12 +58,14 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
             Text(book.title, style = MaterialTheme.typography.headlineLarge)
             Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
-            Text(if (book.provider == "knaben") "Narration and edition not verified" else "Read by ${book.narrator}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+            Text(narrationLabel(book), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
                 Text(book.language, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(providerLabel(book), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (book.provider != "archive") Text("Narration, language, and abridgment of this release remain unverified.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
         }
         if (selected.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         selected.error?.let { item { RecoveryState("Couldn't load this edition", it) { vm.open(book) } } }
@@ -108,6 +112,13 @@ fun DetailPane(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modif
             Text(book.description.ifBlank { "Open the recording to load its description and available sources." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (book.description.length > 500) TextButton({ expandedDescription = !expandedDescription }) { Text(if (expandedDescription) "Read less" else "Read more") }
+            if (book.metadataSource.isNotBlank()) TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(book.metadataUrl))) }) { Text("Details from ${book.metadataSource}") }
+            if (book.releaseTitle.isNotBlank() && book.releaseTitle != book.title) Text("Release: ${book.releaseTitle}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+            if (book.provider != "archive") TextButton({ vm.refreshMetadata(book) }, enabled = !selected.metadataLoading) {
+                if (selected.metadataLoading) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+                Text(if (selected.metadataLoading) "Fetching book details\u2026" else "Refresh book details")
+            }
         }
         if (book.sources.isNotEmpty()) item {
             Text("Available audio", style = MaterialTheme.typography.headlineSmall)
@@ -264,10 +275,12 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
             Text("A small, honest first edition", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
-            Text("Narrio 1.1 · Native Android\n\nSearch audiobook releases from Knaben, public-domain LibriVox recordings, and your TorBox library. Connected search defaults to cached audio ready to stream. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Narrio ${BuildConfig.VERSION_NAME} · Native Android\n\nSearch audiobook releases from Knaben, public-domain LibriVox recordings, and your TorBox library. Connected search defaults to cached audio ready to stream. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(12.dp))
+            Text("Matched book details and cover art come from Audible or Open Library. Catalog narrator information does not verify the release's recording. Book names go directly to these metadata providers; your TorBox key and listening history stay private.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://librivox.org/pages/about-librivox/"))) }) { Text("About the LibriVox recordings") }
-            Text("Original garden artwork created with ImageGen. Typography: Newsreader and Manrope, SIL Open Font License. Other covers are Narrio's original graphic designs.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Retrieved covers belong to their respective rights holders. Fallbacks use original garden artwork created with ImageGen and Narrio's graphic designs. Typography: Newsreader and Manrope, SIL Open Font License.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

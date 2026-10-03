@@ -4,7 +4,7 @@ A native Android listening room for audiobooks. Discover recordings, stream cach
 
 ## Install the update
 
-The signed package is `artifacts/Narrio-1.1.0.apk`. A copy is also delivered to the Windows Downloads folder. Android 8.0 or later is required. Install over 1.0 to retain your TorBox connection, shelf, bookmarks, and listening progress.
+Download the signed APK from the [latest GitHub release](https://github.com/cort-robinson/Narrio/releases/latest). Each release includes checksums, its source commit, and Android/signing details. Android 8.0 or later is required. Install over an earlier Narrio release to retain your TorBox connection, shelf, bookmarks, and listening progress.
 
 1. Transfer the APK to your Android phone and open it in Files.
 2. If Android requests it, allow that app to install unknown apps, then install Narrio.
@@ -12,7 +12,9 @@ The signed package is `artifacts/Narrio-1.1.0.apk`. A copy is also delivered to 
 4. Search for a title or author in **Ready to stream**, open the exact recording/release, tap **Listen**, choose a cached audio format, then **Stream now**. Narrio rechecks availability before adding a new source to TorBox. Streaming requires no phone download.
 5. To listen offline, choose **Download to phone**. Downloads use Wi-Fi by default. **My shelf** offers progress, pause/resume/retry, **Play offline**, and removal. Settings can permit mobile-data downloads.
 
-**All sources** includes uncached releases from Knaben's audiobook index and LibriVox. Indexed narration, language, and abridgment are explicitly unverified; inspect the release and filenames. **Public books** streams LibriVox recordings directly through Internet Archive without an account. **My TorBox** searches your existing account audio. Availability depends on search coverage and the TorBox cache. An uncached release can be prepared only through its explicit **Prepare in TorBox** action; this can take hours and does not save audio to the phone.
+**All sources** includes uncached releases from Knaben's audiobook index and LibriVox. Indexed and account releases gain matched descriptions, authors, narrator information, and artwork from Audible, with Open Library as a book-metadata fallback. Catalog narration is labeled separately because the release's exact recording, language, and abridgment remain unverified; inspect the original release name and filenames. **Public books** streams LibriVox recordings directly through Internet Archive without an account and retains that recording's own readers and artwork. **My TorBox** searches your existing account audio. Availability depends on search coverage and the TorBox cache. An uncached release can be prepared only through its explicit **Prepare in TorBox** action; this can take hours and does not save audio to the phone.
+
+Book details fill in progressively after playable search results appear. Open a recording to retrieve its details, or use **Refresh book details** below its description. Successful lookups are cached for a day and saved with shelf items. Metadata failures keep existing details and allow listening to continue. Ambiguous title/author matches stay unknown; multiple catalog narrators need a matching release hint before Narrio selects one.
 
 ## Included
 
@@ -22,7 +24,7 @@ The signed package is `artifacts/Narrio-1.1.0.apk`. A copy is also delivered to 
 - Whole-book M4B and naturally ordered multipart MP3 playback, 30-second skip controls, speed, a sleep timer, and bookmarks.
 - Room-backed library and independent saved positions for different recordings and source layouts.
 - Media3 background service and system media controls; pause on headphone disconnection and Android audio-focus handling.
-- Night, Day, and System appearance; original cover art and bundled Newsreader/Manrope typography.
+- Night, Day, and System appearance; retrieved cover art with original artwork fallbacks and bundled Newsreader/Manrope typography.
 
 ## Adaptive Android layouts
 
@@ -34,9 +36,11 @@ The service owns playback, so folding, rotation, or multi-window resizing does n
 
 ## Local privacy
 
-No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to the selected discovery providers; TorBox credentials are never sent to Knaben or Internet Archive. Room contains recording metadata, stable part IDs, positions, and bookmarks. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads and history, without deleting files from TorBox.
+No custom server, telemetry, or account synchronization. The TorBox key is encrypted with Android Keystore, excluded from backup, and deleted on disconnect. Temporary CDN URLs stay in memory. Search queries go directly to the selected discovery providers. Metadata lookup sends cleaned book/release names to Audible or Open Library; artwork loads from the returned provider image URLs. TorBox credentials, file lists, listening positions, and bookmarks are never sent to metadata providers. Room contains recording metadata, stable part IDs, positions, and bookmarks. Disconnect pauses unfinished TorBox phone downloads; completed phone audio remains playable offline. Removing a shelf item also removes its local audio downloads and history, without deleting files from TorBox.
 
 ## Build
+
+[Development and releases](docs/DEVELOPMENT.md) describes feature branches, `dev` preview APKs, Conventional Commits, and automatic signed releases from `master`. Versions are supplied by automation; local builds use the latest release tag plus `-dev`.
 
 Use JDK 17 or 21, Android SDK platform 36, and the included Gradle wrapper. Set `ANDROID_HOME` or add an ignored `local.properties` containing your SDK directory.
 

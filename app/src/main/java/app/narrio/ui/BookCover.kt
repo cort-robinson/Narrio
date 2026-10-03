@@ -4,7 +4,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,13 +34,11 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
     val curated = listOf("secret garden", "pride", "sherlock", "gatsby", "dracula", "alice").any { it in key }
     BoxWithConstraints(modifier.clip(RoundedCornerShape(8.dp)).background(palette.first)) {
         val tiny = maxWidth < 100.dp
-        if ("secret garden" in key) {
+        var coverLoaded by remember(book.coverUrl) { mutableStateOf(false) }
+        if (!coverLoaded && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))
-        } else if (!curated && book.coverUrl.isNotBlank()) {
-            AsyncImage(book.coverUrl, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xEC172C22)))))
-        } else {
+        } else if (!coverLoaded) {
             Canvas(Modifier.matchParentSize()) {
                 val w = size.width; val h = size.height
                 when {
@@ -75,13 +73,18 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                 }
             }
         }
-        if (maxWidth >= 60.dp) Column(Modifier.fillMaxSize().padding(if (large) 22.dp else if (tiny) 6.dp else 12.dp), verticalArrangement = Arrangement.SpaceBetween) {
+        if (!coverLoaded && maxWidth >= 60.dp) Column(Modifier.fillMaxSize().padding(if (large) 22.dp else if (tiny) 6.dp else 12.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Text(book.title.replace(Regex(" \\(.*?\\)$"), ""),
                 color = if ("secret garden" in key || !curated) Color(0xFFF4E4C9) else palette.second,
                 style = if (large) MaterialTheme.typography.headlineLarge else if (tiny) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleLarge,
                 maxLines = if (large) 5 else if (tiny) 3 else 4, overflow = TextOverflow.Ellipsis)
             Text(book.author.removePrefix("Sir "), color = if ("secret garden" in key || !curated) Color(0xFFF4E4C9) else palette.second,
                 style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        if (book.coverUrl.isNotBlank()) {
+            AsyncImage(book.coverUrl, "Cover of ${book.title}",
+                Modifier.matchParentSize(), contentScale = ContentScale.Fit,
+                onSuccess = { coverLoaded = true }, onError = { coverLoaded = false })
         }
     }
 }
