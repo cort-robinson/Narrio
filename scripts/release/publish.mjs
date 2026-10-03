@@ -27,8 +27,21 @@ async function request(path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
-async function finalize(tag) {
-  const release = await request(`/releases/tags/${tag}`);
+export async function findRelease(tag, apiRequest = request) {
+  const published = await apiRequest(`/releases/tags/${encodeURIComponent(tag)}`, { allowMissing: true });
+  if (published) return published;
+  // GitHub's tag endpoint does not return drafts. Retry lookup must include them.
+  for (let page = 1; ; page++) {
+    const releases = await apiRequest(`/releases?per_page=100&page=${page}`);
+    const draft = releases.find(release => release.tag_name === tag);
+    if (draft) return apiRequest(`/releases/${draft.id}`);
+    if (releases.length < 100) return null;
+  }
+}
+
+export async function finalize(tag, releaseId) {
+  const release = releaseId ? await request(`/releases/${releaseId}`) : await findRelease(tag);
+  if (!release || release.tag_name !== tag) throw new Error(`Cannot locate release for ${tag}`);
   if (!release.draft) { console.log(`${tag} is already published`); return; }
   const localManifest = JSON.parse(readFileSync('artifacts/release-manifest.json', 'utf8'));
   const sourceCommit = git(['rev-parse', `${tag}^{commit}`]);
@@ -59,7 +72,7 @@ async function publish() {
   const tags = stableTags();
   if (tags[0]) {
     const tag = tags[0];
-    const release = await request(`/releases/tags/${tag}`, { allowMissing: true });
+    const release = await findRelease(tag);
     const action = recoveryAction({
       version: tag.slice(1), baseline: baselineVersion,
       published: Boolean(release && !release.draft),
@@ -76,12 +89,12 @@ async function publish() {
       } else {
         execFileSync('gh', ['release', 'upload', tag, '--repo', repository, '--clobber', ...assets], { stdio: 'inherit' });
       }
-      await finalize(tag);
+      await finalize(tag, release?.id);
       return;
     }
   }
   const result = await semanticRelease();
-  if (result) await finalize(result.nextRelease.gitTag);
+  if (result) await finalize(result.nextRelease.gitTag, result.releases.find(release => release.pluginName === '@semantic-release/github')?.id);
   else console.log('No stable version increment is needed');
 }
 
