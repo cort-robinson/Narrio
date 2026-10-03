@@ -30,6 +30,7 @@ Direct connections to catalog and delivery providers; no custom backend. The use
 - Layouts must adapt to the current window size on Android phones, larger screens, and multi-window sessions, while honoring system insets and text scaling. Foldables, including the Galaxy Z Fold 8, receive hinge/posture support and retain playback across folding; this is a compatibility requirement within the broader Android experience.
 - Working installation package and honest validation evidence are required.
 - Discovery combines Knaben's audiobook release index, Internet Archive's LibriVox catalog, and the user's TorBox audio. Indexed release metadata remains visibly unverified; files and TorBox cache availability determine playability.
+- Matched book descriptions, authors, catalog narrators, and cover art enrich indexed/account releases through Audible with an Open Library fallback. Recording identity and source availability remain separate; catalog narration is labeled, original releases stay visible, and metadata failures preserve listening and saved details.
 - Connected search defaults to ready sources. Uncached cloud preparation and phone downloads require separate explicit actions. Phone downloads use Wi-Fi by default and can be paused, resumed, retried, or removed.
 
 ## Brand Commitments

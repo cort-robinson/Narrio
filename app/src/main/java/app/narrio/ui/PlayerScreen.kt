@@ -68,7 +68,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
                             Spacer(Modifier.height(12.dp))
                             Text(book.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Spacer(Modifier.height(8.dp))
-                            Text("Read by ${book.narrator}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                            Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                         }
                     }
                 }
@@ -84,7 +84,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
                 Spacer(Modifier.height(24.dp))
                 Text(book.title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.fillMaxWidth())
-                Text("Read by ${book.narrator}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
             }
             item { controls() }
         }
