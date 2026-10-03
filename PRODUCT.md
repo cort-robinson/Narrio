@@ -20,7 +20,7 @@ Search for an audiobook recording, identify its narrator and language when verif
 
 ## Operating Context
 
-Direct connections to catalog and delivery providers; no custom backend. The user will connect TorBox in the app. A TorBox API key is not available for development account testing.
+Direct connections to catalog and delivery providers; no custom backend. The user connects TorBox in the app. Physical-phone testing uses Android media controls without reading the credential or generated media links.
 
 ## Capabilities and Constraints
 
@@ -38,7 +38,7 @@ Narrio. The user asks for a special and impressive UI/UX and delegates aesthetic
 
 ## Evidence on Hand
 
-The supplied architecture brief is at C:/Users/cortr/.codex/attachments/75da23ca-e27c-428b-b83e-85a017da7589/pasted-text-1.txt. The implemented native app has emulator evidence for real public audio, offline downloads, playback persistence, and injected fold postures. The user installed 1.0, connected TorBox, selected M4B, and reported an uncached source preparing with a one-hour dashboard ETA. Successful live TorBox playback and physical Fold behavior remain unverified. The user's later cache-first and phone-download instructions supersede the brief's original offline-download deferral.
+The supplied architecture brief is at C:/Users/cortr/.codex/attachments/75da23ca-e27c-428b-b83e-85a017da7589/pasted-text-1.txt. The implemented native app has emulator evidence for real public audio, offline downloads, playback persistence, and injected fold postures. The user installed 1.0, connected TorBox, selected M4B, and reported an uncached source preparing with a one-hour dashboard ETA. The user subsequently confirmed that the requested 1.1 cached-M4B phone/folding flow works. Direct checks of the signed 1.1 release on the connected Android 17 phone verified live 30-part TorBox MP3 playback, later-part seeking, system headset-hook controls, background and screen-off playback, network recovery, and process restart at the saved part/position. The phone was returned paused at its original offset with both networks restored and the temporary test helper removed. See verification/physical-android-1.1.json for exact scope and limits. The user's later cache-first and phone-download instructions supersede the brief's original offline-download deferral.
 
 ## Product Principles
 

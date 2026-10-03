@@ -12,7 +12,7 @@ Validated on Windows on October 2, 2026. Narrio is a native Android application.
 | Live discovery | Native search finds a distinct Pride and Prejudice recording narrated by Karen Savage. A real Knaben audiobook search returns multiple distinct Secret Garden release hashes. Indexed narrator, author, language, and abridgment are not treated as verified metadata. |
 | Playback regression | Six existing listening/persistence cases pass across the baseline run and targeted corrections. The first run passed four cases; two test assumptions were updated to wait for the actual search result and explicitly select MP3 now that format selection is remembered. Both corrected cases then passed. See `verification/listening-1.1-baseline.txt` and `listening-1.1-corrections.txt`. |
 | Public multipart audio | Real Secret Garden MP3 playback supports later-part seeking, stable bookmarks, speed, background continuation, activity recreation, and the end-of-part timer. Whole-book M4B seeking to 90 minutes also passes. |
-| Persistence and credentials | Native tests preserve independent source/part histories, verify encryption and removal of a synthetic key, and renew an expired synthetic CDN URL while retaining byte offset 543,210. No live account key was available to the development environment. |
+| Persistence and credentials | Native tests preserve independent source/part histories, verify encryption and removal of a synthetic key, and renew an expired synthetic CDN URL while retaining byte offset 543,210. The real user credential remained on the phone and was not read during the subsequent media-session checks. |
 | Cache-first actions | Two native tests verify cached-format streaming/download actions, disabled streaming for an uncached alternative, explicit cloud preparation, pending M4B selection, and old playback updates preserving pending preparation. These use synthetic cache/progress fixtures. See `verification/source-experience-phone-final.txt`. |
 | Adaptive states | The source-state case passes at font scale 1.3 and unfolded dimensions. The supported WindowManager hinge test also passes at unfolded size. See `verification/source-experience-large-text-final.txt`, `source-experience-fold-final.txt`, and `source-experience-fold.txt`. |
 
@@ -46,14 +46,24 @@ The original optimized release accepted system pause/play commands and continued
 
 Injected vertical and horizontal half-open WindowManager features verified pane separation, tabletop controls below the hinge, and retained source/part position. Generic emulator sensors did not produce a platform FoldingFeature. Neither injected posture evidence nor screenshots establish Samsung hardware geometry, gestures, refresh rate, or runtime performance.
 
-## Acceptance requiring the user's account and phone
+## Completed user and physical-phone acceptance
 
-The user installed 1.0, connected TorBox, selected M4B, and reported an uncached source with a one-hour dashboard ETA. That establishes an observed preparation flow. Successful authenticated cache discovery, cached-source registration/reuse, resolved playback URLs, and TorBox audio playback remain unverified in this development environment.
+The user installed 1.0, connected TorBox, selected M4B, and initially reported an uncached source with a one-hour dashboard ETA. After receiving 1.1, the user replied **"It works!"** to the requested **Ready to stream → cached M4B → Stream now** and fold/unfold flow. That contextual user report is retained in `verification/user-device-1.1.json`.
 
-1. Install 1.1 over the existing app and confirm the account, shelf, bookmarks, and listening position remain present.
-2. Search **Ready to stream**, inspect the exact release/narration and selected format, then choose **Stream now**. Confirm playback starts without a phone download or uncached preparation wait. If there are no cached matches, **All sources** exposes alternatives and their availability; it does not promise that a particular title is cached.
-3. Choose **Download to phone** on a ready source, wait for **Available offline**, disable connectivity, close/reopen Narrio, and play/seek into the downloaded recording.
-4. Seek into a later part, bookmark a moment, lock the phone, fold/unfold, resize a multi-window session, and use headset/system controls. Confirm the recording and position remain consistent.
-5. Exercise a network interruption and the independent M4B/MP3 saved positions. Uncached cloud preparation should occur only after choosing **Prepare in TorBox**; its progress belongs to TorBox and does not download audio to the phone.
+The user then authorized testing the connected phone and asked that it be quick. The installed signed release was 1.1.0/code 2 on SM-F971U1, Android 17/SDK 37, at 1248×1972/density420. Narrio showed 41 ready sources. Direct Android media-session observations established the following results in `verification/physical-android-1.1.json`:
 
-Physical Fold 8 posture reporting, Samsung taskbar/multi-window behavior, Bluetooth routing, and sustained listening remain pending. The installable update is delivered with those limits visible. Search coverage and cache availability depend on the providers; Narrio does not promise contemporary commercial coverage or audiobook support from movie/TV addons.
+- Live TorBox streaming of the 30-part MP3 **Andy Weir – Project Hail Mary**, including playback of later parts and a two-minute seek in part 2.
+- Android headset-hook events toggled PLAYING → PAUSED. Playback advanced with Narrio hidden and with the screen observed asleep.
+- Disabling Wi-Fi and mobile data produced an actual unvalidated network and player error on a newly requested part 5. Restoring connectivity and playback recovered on that same part. The initial connectivity sample was taken before teardown propagated; the later error-state sample proves the interruption. A controller seek issued before this new part's timeline loaded did not establish an offset, so this check does not claim retention of that pre-load seek.
+- Force-stopping and reopening the signed app restored part 5 at the exact saved 1,228 ms, paused, and resumed playback on that part. This complements the native later-part and independent-source-history tests.
+- The original part 1 position **26,791 ms** was restored and left paused. Wi-Fi and mobile data returned to their original enabled settings. The self-targeted, test-only controller was removed. It did not access account storage, credentials, or media URLs.
+
+V1 acceptance is complete using the combined user, physical-phone, real-audio emulator, contract, and native visual evidence. The complete brief-to-evidence map is `verification/completion-audit-1.1.json`.
+
+## Validation limits
+
+The short phone borrow covered functional smoke checks, not battery endurance, Bluetooth route changes, exact Samsung hinge/taskbar geometry, thermal behavior, or refresh-rate performance. System headset-button events were exercised; physical Bluetooth routing was not separately measured. Basic folding is user-confirmed and separating/tabletop layouts are covered with WindowManager test features.
+
+Natural live CDN expiry was not awaited. Controlled native tests exercise an expired CDN response and renewed playback at byte offset 543,210. Phone downloads were tested with actual MP3/M4B files and a signed-release offline cold start on the emulator; a fresh large download was not queued on the user's phone during this short borrowing window.
+
+Individual live torrent creation/reuse branches were not separately observed; their provider contracts are tested. Search coverage and cache availability depend on the providers. Indexed narration, language, and abridgment remain visibly uncertain. Narrio does not promise contemporary commercial coverage or audiobook support from movie/TV addons.

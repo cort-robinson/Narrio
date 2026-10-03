@@ -1,0 +1,371 @@
+{
+  "release": "1.1.0",
+  "device": {
+    "model": "SM-F971U1",
+    "android": "17",
+    "sdk": 37,
+    "currentWindowPixels": "1248x1972",
+    "densityDpi": 420
+  },
+  "original": {
+    "partIndex": 0,
+    "positionMs": 26791,
+    "playing": false,
+    "wifi": 1,
+    "mobileData": 1
+  },
+  "checks": [
+    {
+      "name": "Live TorBox later-part playback and two-minute seek",
+      "states": [
+        {
+          "package": "app.narrio",
+          "action": "part",
+          "observedElapsedMs": 210470536,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 0,
+          "bufferedMs": -9223372036854775807,
+          "speed": 0,
+          "partIndex": 1,
+          "updatedElapsedMs": 210470061,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": -1,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "play",
+          "observedElapsedMs": 210473825,
+          "networkValidated": true,
+          "state": 3,
+          "positionMs": 2388,
+          "bufferedMs": 0,
+          "speed": 1,
+          "partIndex": 1,
+          "updatedElapsedMs": 210473821,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "seek",
+          "observedElapsedMs": 210476164,
+          "networkValidated": true,
+          "state": 3,
+          "positionMs": 121992,
+          "bufferedMs": 127242,
+          "speed": 1,
+          "partIndex": 1,
+          "updatedElapsedMs": 210476162,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "pause",
+          "observedElapsedMs": 210477018,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 122209,
+          "bufferedMs": 258324,
+          "speed": 0,
+          "partIndex": 1,
+          "updatedElapsedMs": 210476516,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "System headset-hook play/pause",
+      "states": [
+        {
+          "package": "app.narrio",
+          "action": "state",
+          "observedElapsedMs": 210478387,
+          "networkValidated": true,
+          "state": 3,
+          "positionMs": 123200,
+          "bufferedMs": 258324,
+          "speed": 1,
+          "partIndex": 1,
+          "updatedElapsedMs": 210478385,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "state",
+          "observedElapsedMs": 210479307,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 123618,
+          "bufferedMs": 258324,
+          "speed": 0,
+          "partIndex": 1,
+          "updatedElapsedMs": 210478771,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "Background playback with activity hidden",
+      "states": [
+        {
+          "package": "app.narrio",
+          "action": "state",
+          "observedElapsedMs": 210479307,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 123618,
+          "bufferedMs": 258324,
+          "speed": 0,
+          "partIndex": 1,
+          "updatedElapsedMs": 210478771,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "pause",
+          "observedElapsedMs": 210489281,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 132793,
+          "bufferedMs": 258324,
+          "speed": 0,
+          "partIndex": 1,
+          "updatedElapsedMs": 210488780,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "Live TorBox network interruption and recovery",
+      "passed": true,
+      "states": [
+        {
+          "package": "app.narrio",
+          "action": "state",
+          "observedElapsedMs": 210697988,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 132793,
+          "bufferedMs": 258324,
+          "speed": 0,
+          "partIndex": 1,
+          "updatedElapsedMs": 210488780,
+          "partTitle": "Andy Weir - Project Hail Mary - 02",
+          "durationMs": 1721521,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "play",
+          "observedElapsedMs": 210705780,
+          "networkValidated": false,
+          "state": 7,
+          "positionMs": 0,
+          "bufferedMs": 0,
+          "speed": 0,
+          "partIndex": 4,
+          "updatedElapsedMs": 210701892,
+          "error": "Source error",
+          "partTitle": "Andy Weir - Project Hail Mary - 05",
+          "durationMs": -1,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "play",
+          "observedElapsedMs": 210714812,
+          "networkValidated": true,
+          "state": 3,
+          "positionMs": 1125,
+          "bufferedMs": 3265,
+          "speed": 1,
+          "partIndex": 4,
+          "updatedElapsedMs": 210714810,
+          "partTitle": "Andy Weir - Project Hail Mary - 05",
+          "durationMs": 3189394,
+          "queueSize": 30
+        }
+      ],
+      "initialAssertionPassed": false,
+      "evaluationNote": "The initial connectivity sample preceded asynchronous Wi-Fi/data teardown. The error-state sample confirms the actual outage; restored connectivity and PLAYING confirm recovery on the same part.",
+      "offsetScope": "This was a new unbuffered part that had not loaded its timeline. A controller seek before that timeline was ready did not establish an offset. This check demonstrates recovery, not retention of that pre-load seek."
+    },
+    {
+      "name": "Process restart preserves later part and offset",
+      "passed": true,
+      "states": [
+        {
+          "package": "app.narrio",
+          "action": "pause",
+          "observedElapsedMs": 210716187,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 1228,
+          "bufferedMs": 72646,
+          "speed": 0,
+          "partIndex": 4,
+          "updatedElapsedMs": 210715186,
+          "partTitle": "Andy Weir - Project Hail Mary - 05",
+          "durationMs": 3189394,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "state",
+          "observedElapsedMs": 210719331,
+          "networkValidated": true,
+          "state": 0,
+          "positionMs": 1228,
+          "bufferedMs": 1228,
+          "speed": 0,
+          "partIndex": 4,
+          "updatedElapsedMs": 210716675,
+          "partTitle": "Andy Weir - Project Hail Mary - 05",
+          "durationMs": -1,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "play",
+          "observedElapsedMs": 210723251,
+          "networkValidated": true,
+          "state": 3,
+          "positionMs": 3173,
+          "bufferedMs": 4493,
+          "speed": 1,
+          "partIndex": 4,
+          "updatedElapsedMs": 210723249,
+          "partTitle": "Andy Weir - Project Hail Mary - 05",
+          "durationMs": 3189394,
+          "queueSize": 30
+        }
+      ]
+    },
+    {
+      "name": "Screen-off playback",
+      "passed": true,
+      "states": [
+        {
+          "package": "app.narrio",
+          "action": "pause",
+          "observedElapsedMs": 210723825,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 3370,
+          "bufferedMs": 132284,
+          "speed": 0,
+          "partIndex": 4,
+          "updatedElapsedMs": 210723574,
+          "partTitle": "Andy Weir - Project Hail Mary - 05",
+          "durationMs": 3189394,
+          "queueSize": 30
+        },
+        {
+          "package": "app.narrio",
+          "action": "pause",
+          "observedElapsedMs": 210733386,
+          "networkValidated": true,
+          "state": 2,
+          "positionMs": 12226,
+          "bufferedMs": 132284,
+          "speed": 0,
+          "partIndex": 4,
+          "updatedElapsedMs": 210732984,
+          "partTitle": "Andy Weir - Project Hail Mary - 05",
+          "durationMs": 3189394,
+          "queueSize": 30
+        }
+      ],
+      "screenAsleepObserved": true
+    }
+  ],
+  "restoration": {
+    "state": {
+      "package": "app.narrio",
+      "action": "pause",
+      "observedElapsedMs": 210776340,
+      "networkValidated": true,
+      "state": 2,
+      "positionMs": 26791,
+      "bufferedMs": 127242,
+      "speed": 0,
+      "partIndex": 0,
+      "updatedElapsedMs": 210774564,
+      "partTitle": "Andy Weir - Project Hail Mary - 01",
+      "durationMs": 2224979,
+      "queueSize": 30
+    },
+    "originalOffsetRestored": true,
+    "wifi": "1",
+    "mobileData": "1",
+    "helperRemoved": true,
+    "deferredSeekAfterTimelineReady": {
+      "before": {
+        "package": "app.narrio",
+        "action": "state",
+        "observedElapsedMs": 210774254,
+        "networkValidated": true,
+        "state": 2,
+        "positionMs": 0,
+        "bufferedMs": 2246,
+        "speed": 0,
+        "partIndex": 0,
+        "updatedElapsedMs": 210735383,
+        "partTitle": "Andy Weir - Project Hail Mary - 01",
+        "durationMs": 2224979,
+        "queueSize": 30
+      },
+      "seek": {
+        "package": "app.narrio",
+        "action": "seek",
+        "observedElapsedMs": 210775550,
+        "networkValidated": true,
+        "state": 2,
+        "positionMs": 26791,
+        "bufferedMs": 127242,
+        "speed": 0,
+        "partIndex": 0,
+        "updatedElapsedMs": 210774564,
+        "partTitle": "Andy Weir - Project Hail Mary - 01",
+        "durationMs": 2224979,
+        "queueSize": 30
+      }
+    }
+  },
+  "evidenceType": "Direct ADB observations of the installed signed release through Android framework media controls; no app credential or media URL access",
+  "reportedDate": "2026-10-02",
+  "liveSource": {
+    "provider": "TorBox",
+    "recording": "Andy Weir - Project Hail Mary",
+    "format": "Multipart MP3",
+    "parts": 30,
+    "startingReadyToStreamCount": 41
+  },
+  "limits": [
+    "Brief screen-off/background smoke checks, not battery endurance measurements.",
+    "Headset-hook media events were dispatched through Android; a Bluetooth headset route change was not measured.",
+    "Network recovery was observed for a newly requested part; pre-load controller seeking does not establish an offset.",
+    "Natural live CDN expiry was not awaited. Controlled expired-link renewal retains byte offsets in native tests.",
+    "Exact Samsung hinge/taskbar geometry and long-running thermal/refresh performance were not measured.",
+    "No new physical-phone offline download was requested during the short borrowing window; real MP3/M4B offline and signed-release cold-start evidence are recorded separately."
+  ],
+  "allPerformedChecksPassed": true
+}

@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.narrio.deviceqa">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36" />
+    <uses-permission android:name="android.permission.MEDIA_CONTENT_CONTROL" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <application android:label="Narrio device checks" android:debuggable="true" android:testOnly="true" android:allowBackup="false" />
+    <instrumentation android:name="app.narrio.deviceqa.DeviceChecks" android:targetPackage="app.narrio.deviceqa" android:label="Narrio media checks" />
+</manifest>

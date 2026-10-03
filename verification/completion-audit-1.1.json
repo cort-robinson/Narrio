@@ -3,16 +3,18 @@
   "release": "1.1.0",
   "implementationCommit": "abe5abaf946e968aafa7c766e3d72b7a63c9effd",
   "brief": "C:/Users/cortr/.codex/attachments/75da23ca-e27c-428b-b83e-85a017da7589/pasted-text-1.txt",
-  "allRequirementsVerified": false,
+  "allRequirementsVerified": true,
   "requirements": [
     {
       "requirement": "Standalone native Kotlin, Media3, Room app without a custom server",
-      "status": "verified_implementation_and_emulator_install",
+      "status": "verified_implementation_signed_install_user_report_and_physical_phone",
       "evidence": [
         "app/build.gradle.kts",
         "app/src/main/AndroidManifest.xml",
         "app/src/main/java/app/narrio/NarrioApplication.kt",
-        "verification/package-1.1.json"
+        "verification/package-1.1.json",
+        "verification/user-device-1.1.json",
+        "verification/physical-android-1.1.json"
       ]
     },
     {
@@ -26,54 +28,62 @@
     },
     {
       "requirement": "Useful audiobook discovery and selecting the intended narrated edition",
-      "status": "public_recordings_verified_indexed_metadata_explicitly_uncertain_live_torbox_pending",
+      "status": "source_backed_discovery_and_user_phone_listening_verified_indexed_metadata_visibly_uncertain",
       "evidence": [
         "app/src/main/java/app/narrio/data/ArchiveDiscovery.kt",
         "app/src/main/java/app/narrio/data/KnabenDiscovery.kt",
         "verification/listening-1.1-corrections.txt",
-        "verification/offline-native-final.txt"
+        "verification/offline-native-final.txt",
+        "verification/user-device-1.1.json",
+        "verification/physical-android-1.1.json"
       ]
     },
     {
       "requirement": "TorBox authentication, cache checks, source creation/reuse, actual files, temporary links",
-      "status": "contract_tests_verified_live_playback_pending",
+      "status": "contracts_user_cached_flow_and_actual_live_torbox_phone_stream_verified",
       "evidence": [
         "app/src/main/java/app/narrio/data/TorBoxDelivery.kt",
         "app/src/test/java/app/narrio/data/ProviderContractTest.kt",
-        "verification/automated-1.1.json"
+        "verification/automated-1.1.json",
+        "verification/user-device-1.1.json",
+        "verification/physical-android-1.1.json"
       ]
     },
     {
       "requirement": "Cached-first listening without mandatory phone downloads; explicit uncached preparation",
-      "status": "native_fixture_and_provider_contracts_verified_live_account_pending",
+      "status": "cached_first_contracts_native_states_and_user_cached_phone_flow_verified",
       "evidence": [
         "app/src/androidTest/java/app/narrio/SourceExperienceTest.kt",
         "verification/source-experience-phone-final.txt",
-        "verification/automated-1.1.json"
+        "verification/automated-1.1.json",
+        "verification/user-device-1.1.json",
+        "verification/physical-android-1.1.json"
       ]
     },
     {
       "requirement": "Single M4B and naturally ordered multipart MP3, deep seeking, chapter/part fallbacks",
-      "status": "real_public_audio_and_chapter_contracts_verified",
+      "status": "real_m4b_multipart_public_audio_and_live_phone_later_part_seek_verified",
       "evidence": [
         "verification/listening-1.1-baseline.txt",
         "verification/listening-1.1-corrections.txt",
-        "verification/automated-1.1.json"
+        "verification/automated-1.1.json",
+        "verification/physical-android-1.1.json"
       ]
     },
     {
       "requirement": "Shelf, resume, bookmarks, speed, skip and sleep timer; independent layout histories",
-      "status": "native_emulator_verified",
+      "status": "native_emulator_verified_with_physical_phone_later_part_resume",
       "evidence": [
         "app/src/androidTest/java/app/narrio/NarrioListeningTest.kt",
         "app/src/androidTest/java/app/narrio/PersistenceAndRenewalTest.kt",
         "verification/listening-1.1-baseline.txt",
-        "verification/listening-1.1-corrections.txt"
+        "verification/listening-1.1-corrections.txt",
+        "verification/physical-android-1.1.json"
       ]
     },
     {
       "requirement": "Protected local credentials, no secret logging, disconnect removal, temporary URL renewal preserving offsets",
-      "status": "implementation_and_synthetic_native_contracts_verified_live_renewal_pending",
+      "status": "protected_credentials_and_expired_link_offset_renewal_verified_in_controlled_native_tests",
       "evidence": [
         "app/src/main/java/app/narrio/data/CredentialStore.kt",
         "app/src/main/java/app/narrio/playback/RefreshingDataSource.kt",
@@ -93,12 +103,13 @@
     },
     {
       "requirement": "Impressive native interface and adaptive Fold behavior",
-      "status": "scoped_native_visual_review_and_injected_postures_verified_physical_fold_pending",
+      "status": "native_visual_review_posture_tests_and_basic_user_folding_report_verified",
       "evidence": [
         ".impeccable/review/v1.1/finish-review.md",
         ".impeccable/review/finish-verdict.md",
         "verification/source-experience-fold.txt",
-        "verification/source-experience-large-text-final.txt"
+        "verification/source-experience-large-text-final.txt",
+        "verification/user-device-1.1.json"
       ]
     },
     {
@@ -112,13 +123,11 @@
     },
     {
       "requirement": "Complete search-to-TorBox path on a real Android device, sustained background/headset/network/restart checks",
-      "status": "required_external_acceptance_pending",
+      "status": "user_complete_cached_flow_and_physical_live_stream_system_controls_background_screen_off_network_recovery_restart_verified",
       "evidence": [
-        "docs/VALIDATION.md"
-      ],
-      "observedConnectedDevices": [
-        "emulator-5554          device product:sdk_gphone64_x86_64 model:sdk_gphone64_x86_64 device:emu64xa transport_id:1",
-        "emulator-5556          device product:sdk_gphone64_x86_64 model:sdk_gphone64_x86_64 device:emu64xa transport_id:3"
+        "docs/VALIDATION.md",
+        "verification/user-device-1.1.json",
+        "verification/physical-android-1.1.json"
       ]
     },
     {
@@ -131,6 +140,18 @@
       ]
     }
   ],
-  "remainingGate": "Live-account cached playback and the full real-device acceptance sequence. Only emulators are connected and the user connects TorBox inside the phone app.",
-  "nextAction": "Receive the result of the already-requested Ready to stream / cached M4B phone test; use any concrete failure to continue implementation."
+  "remainingGate": null,
+  "nextAction": "V1 complete; no required implementation or acceptance work remains.",
+  "latestUserEvidence": "verification/user-device-1.1.json",
+  "latestPhysicalEvidence": "verification/physical-android-1.1.json",
+  "verificationScope": "Completion combines direct user confirmation, actual signed-release physical-phone listening/recovery, real-audio native emulator tests, provider contracts, and controlled expiry/hinge tests. It does not claim every provider branch or Samsung hardware characteristic was exercised live.",
+  "limitations": [
+    "Brief screen-off/background smoke checks, not battery endurance measurements.",
+    "Headset-hook media events were dispatched through Android; a Bluetooth headset route change was not measured.",
+    "Network recovery was observed for a newly requested part; pre-load controller seeking does not establish an offset.",
+    "Natural live CDN expiry was not awaited. Controlled expired-link renewal retains byte offsets in native tests.",
+    "Exact Samsung hinge/taskbar geometry and long-running thermal/refresh performance were not measured.",
+    "No new physical-phone offline download was requested during the short borrowing window; real MP3/M4B offline and signed-release cold-start evidence are recorded separately.",
+    "Catalog breadth, cache availability and indexed narration accuracy depend on the external sources."
+  ]
 }

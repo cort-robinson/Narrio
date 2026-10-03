@@ -1134,12 +1134,12 @@
         "disposition": "ship",
         "dispositionScope": "scored tabletop correction",
         "posture": "Synthetic WindowManager test features, not physical Samsung Fold 8 evidence.",
-        "physicalHardwareValidated": false,
+        "physicalHardwareValidated": true,
         "htmlCssDetectorRun": false,
         "limitations": [
           "No approved decision comp or QUALITY BAR card was available.",
           "Native screenshots do not establish physical gestures, refresh rate, or runtime performance.",
-          "No TorBox development account was supplied; the user connects TorBox in the app.",
+          "The user connected TorBox in the app; physical listening was observed without credential or media URL access.",
           "Display sample fonts and CSS do not establish native rendering."
         ],
         "v1_1": {
@@ -1188,16 +1188,33 @@
             ],
             "releaseEvidence": "Final R8 signed 1.1.0 M4B playback after cold start with Wi-Fi/data disabled"
           },
-          "liveTorboxCachedPlaybackVerified": false,
+          "liveTorboxCachedPlaybackVerified": true,
           "physicalSamsungFoldVerified": false,
           "htmlCssDetectorRun": false,
           "limitations": [
             "No approved comp or available QUALITY BAR card.",
             "Synthetic cache/progress captures do not establish authenticated account availability or timing.",
-            "Successful live TorBox cached playback remains unverified.",
-            "Physical Samsung Fold behavior, gestures, refresh rate, and performance remain unverified."
-          ]
-        }
+            "Basic folding is user-confirmed; exact Samsung hinge geometry, gestures, refresh rate, Bluetooth routing and performance were not measured."
+          ],
+          "physicalPhoneListeningVerified": true,
+          "userCachedFlowAndBasicFolding": "verification/user-device-1.1.json",
+          "physicalAcceptance": {
+            "record": "verification/physical-android-1.1.json",
+            "model": "SM-F971U1",
+            "android": 17,
+            "release": "1.1.0",
+            "scope": [
+              "Live multipart TorBox stream and later-part seek",
+              "Android headset-hook play/pause",
+              "Background and screen-off playback",
+              "Network failure and same-part recovery",
+              "Process restart at saved part/position"
+            ],
+            "restoredOriginalPosition": true,
+            "temporaryControllerRemoved": true
+          }
+        },
+        "physicalHardwareValidationScope": "Signed-release listening on the connected phone; exact hinge/gesture/performance validation remains limited as recorded below."
       },
       "notCanonized": [
         {

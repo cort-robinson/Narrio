@@ -1,0 +1,18 @@
+{
+  "release": "1.1.0",
+  "reportedDate": "2026-10-02",
+  "timezone": "America/Chicago",
+  "evidenceType": "direct_user_report",
+  "response": "It works!",
+  "requestedTest": "Install 1.1 over the current app, Ready to stream -> cached M4B -> Stream now, then fold/unfold while listening.",
+  "confirmedScope": [
+    "Requested live cached-M4B listening flow works on the user phone.",
+    "Requested fold/unfold listening check is user-confirmed in context."
+  ],
+  "limits": [
+    "No recording name, physical model identifier, raw provider response or device log was supplied.",
+    "Screen-off/headset, network recovery and restart/resume results have been asked about and were not specifically confirmed by this report; subsequent direct checks are recorded separately.",
+    "This user report does not establish every source-creation/reuse branch or natural CDN expiry."
+  ],
+  "subsequentPhysicalAcceptance": "verification/physical-android-1.1.json"
+}
