@@ -40,6 +40,8 @@ No custom server, telemetry, or account synchronization. The TorBox key is encry
 
 ## Build
 
+Coding agents should read [AGENTS.md](AGENTS.md) before making changes.
+
 [Development and releases](docs/DEVELOPMENT.md) describes feature branches, `dev` preview APKs, Conventional Commits, and automatic signed releases from `master`. Versions are supplied by automation; local builds use the latest release tag plus `-dev`.
 
 Use JDK 17 or 21, Android SDK platform 36, and the included Gradle wrapper. Set `ANDROID_HOME` or add an ignored `local.properties` containing your SDK directory.
