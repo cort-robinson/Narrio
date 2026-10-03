@@ -52,7 +52,7 @@ The largest required increment wins when several changes ship together. Notes gr
 
 Stable Git tags (`v<major>.<minor>.<patch>`) are the version history. CI injects `versionName` and `versionCode` into Gradle; do not edit app version numbers manually. Stable Android codes use `major * 1,000,000 + minor * 1,000 + patch`, keeping patch/minor releases increasing and continuing above the earlier codes 1–3. Minor and patch components must remain below 1,000, and Android codes must not exceed 2,100,000,000; automation rejects overflow. Local builds default to the latest tag plus `-dev`.
 
-The pre-automation `v1.1.0` tag records the previously shipped baseline. It intentionally has no automated GitHub release. The metadata feature is the next minor release, `v1.2.0`.
+The pre-automation `v1.1.0` tag records the previously shipped baseline. It intentionally has no automated GitHub release. The metadata improvements shipped in `v1.2.0`.
 
 To preview a release locally, use Node 22.14+ or supported Node 24.10+:
 
