@@ -17,6 +17,12 @@ export function requireSigning() {
   }
 }
 
+export function certificateDigest(signature) {
+  const digests = new Set([...signature.matchAll(/certificate SHA-256 digest:\s*([a-f0-9]{64})\b/gi)].map(match => match[1].toLowerCase()));
+  if (digests.size !== 1) throw new Error(`Expected one APK signing identity; apksigner returned:\n${signature}`);
+  return [...digests][0];
+}
+
 export function verifyManifest(manifest, { version, sourceCommit, preview = false }) {
   if (manifest.version !== version || manifest.sourceCommit !== sourceCommit || manifest.applicationId !== (preview ? 'app.narrio.dev' : 'app.narrio')) {
     throw new Error('Release manifest does not match the requested version, source, and application');
@@ -44,8 +50,9 @@ export function prepareApk(version, { preview = false, code = versionCode(versio
   const toolDirectory = join(sdk, 'build-tools', toolVersion);
   const built = join(cwd, 'app/build/outputs/apk/release/app-release.apk');
   const signature = run(join(toolDirectory, process.platform === 'win32' ? 'apksigner.bat' : 'apksigner'), ['verify', '--verbose', '--print-certs', built], { encoding: 'utf8' });
-  const certificate = signature.match(/Signer #1 certificate SHA-256 digest: ([a-f0-9]+)/i)?.[1].toLowerCase();
-  if (certificate !== process.env.NARRIO_EXPECTED_CERT_SHA256.toLowerCase()) throw new Error('APK signing certificate does not match the configured identity');
+  const certificate = certificateDigest(signature);
+  const expectedCertificate = process.env.NARRIO_EXPECTED_CERT_SHA256.trim().toLowerCase();
+  if (certificate !== expectedCertificate) throw new Error(`APK signing certificate mismatch: expected ${expectedCertificate}, built ${certificate}`);
   const badging = run(join(toolDirectory, process.platform === 'win32' ? 'aapt2.exe' : 'aapt2'), ['dump', 'badging', built], { encoding: 'utf8' });
   const applicationId = preview ? 'app.narrio.dev' : 'app.narrio';
   const expectedPackage = `package: name='${applicationId}' versionCode='${code}' versionName='${version}'`;

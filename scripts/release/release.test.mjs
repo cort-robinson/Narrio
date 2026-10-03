@@ -1,11 +1,33 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { git, increment, planRelease, versionCode } from './plan.mjs';
-import { verifyManifest } from './android.mjs';
+import { certificateDigest, verifyManifest } from './android.mjs';
 import { recoveryAction } from './publish.mjs';
+import releaseConfiguration from '../../.releaserc.mjs';
+import globAssets from '../../node_modules/@semantic-release/github/lib/glob-assets.js';
+
+test('certificate verification supports SDK signer labels while rejecting mixed identities', () => {
+  const digest = 'abcdef12'.repeat(8);
+  for (const label of ['Signer #1', 'Signer #1 (minSdkVersion=28, maxSdkVersion=2147483647)', 'Signer (minSdkVersion=28, maxSdkVersion=2147483647) #1']) {
+    assert.equal(certificateDigest(`${label} certificate SHA-256 digest: ${digest}\n${label} public key SHA-256 digest: ${'1'.repeat(64)}`), digest);
+  }
+  assert.throws(() => certificateDigest('No certificate was printed'));
+  assert.throws(() => certificateDigest(`certificate SHA-256 digest: ${digest}\ncertificate SHA-256 digest: ${'2'.repeat(64)}`));
+});
+
+test('GitHub plugin resolves the configured versioned APK asset', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'narrio-release-test-'));
+  try {
+    mkdirSync(join(directory, 'artifacts'));
+    writeFileSync(join(directory, 'artifacts/Narrio-1.2.0.apk'), 'APK fixture');
+    const github = releaseConfiguration.plugins.find(plugin => Array.isArray(plugin) && plugin[0] === '@semantic-release/github')[1];
+    const assets = await globAssets({ cwd: directory, nextRelease: { version: '1.2.0' } }, [github.assets[0]]);
+    assert.deepEqual(assets.map(asset => asset.path), ['artifacts/Narrio-1.2.0.apk']);
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
 
 test('Android version codes increase across patch, minor, and major releases', () => {
   assert.equal(versionCode('1.2.0'), 1_002_000);
