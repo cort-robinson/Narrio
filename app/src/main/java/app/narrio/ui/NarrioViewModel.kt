@@ -29,7 +29,9 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     val preferredFormat = MutableStateFlow("")
     val busy = MutableStateFlow(false)
     val connected = MutableStateFlow(graph.credentials.read() != null)
-    val theme = MutableStateFlow(graph.preferences.getString("theme", "Night") ?: "Night")
+    private val appearanceStore = AppearanceStore(graph.preferences)
+    private val appearanceState = MutableStateFlow(appearanceStore.read())
+    val appearance = appearanceState.asStateFlow()
     val sourceScope = MutableStateFlow(if (connected.value) "Cached" else "Public")
     val downloads = graph.offline.books
     val wifiOnly = MutableStateFlow(graph.preferences.getBoolean("downloadWifi", true))
@@ -294,7 +296,11 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         search(scope = "Public")
         messages.tryEmit("TorBox disconnected; its credential has been removed.")
     }
-    fun setTheme(value: String) { theme.value = value; graph.preferences.edit().putString("theme", value).apply() }
+    fun updateAppearance(value: AppearanceSettings) {
+        val normalized = value.normalized()
+        appearanceStore.save(normalized)
+        appearanceState.value = normalized
+    }
     fun bookmark() = viewModelScope.launch { graph.playback.service?.bookmark(); messages.emit("Moment bookmarked") }
     fun deleteBookmark(id: Long) = viewModelScope.launch { graph.library.deleteBookmark(id) }
     fun jumpBookmark(bookmark: BookmarkEntry) = viewModelScope.launch {

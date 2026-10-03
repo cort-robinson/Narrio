@@ -57,7 +57,7 @@ class MetadataExperienceTest {
         val enriched = runBlocking { graph.metadata.enrich(book()) }
         assertEquals("Audible", enriched.metadataSource)
         val appearance = InstrumentationRegistry.getArguments().getString("reviewTheme", "Night")
-        compose.runOnIdle { vm.connected.value = false; vm.theme.value = appearance; vm.open(enriched) }
+        compose.runOnIdle { vm.connected.value = false; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.entries.firstOrNull { it.label == appearance } ?: ThemeMode.NIGHT)); vm.open(enriched) }
         compose.waitUntil(20_000) { vm.selection.value.book?.metadataSource == "Audible" && !vm.selection.value.loading && !vm.selection.value.metadataLoading }
         compose.onNodeWithText("Catalog narrator: Ray Porter").assertIsDisplayed()
         compose.onNodeWithContentDescription("Cover of Project Hail Mary").assertExists()

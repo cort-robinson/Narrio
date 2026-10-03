@@ -36,6 +36,14 @@ Room has `shelf`, `positions`, and `bookmarks` tables. Position identity is `(re
 
 The database is schema 3. Migration 1→2 adds per-source histories; 2→3 adds the pending audio format. Old-player progress cannot overwrite an independently preparing source, and choosing M4B survives reopening the recording. Removing a shelf item clears its histories, bookmarks, and phone downloads; it does not delete provider files.
 
+## Appearance
+
+`AppearanceSettings` keeps mode, palette, font, text size, and one optional named custom palette independent. `AppearanceStore` saves normalized JSON under the local SharedPreferences key `appearance.v1`. Its codec ignores future optional fields, coerces unknown enum values to defaults, and falls back safely on damaged data. Reading can migrate the legacy `theme` mode; the next save removes that old key while preserving unrelated preferences. Appearance requires no provider, account, font download, or network request.
+
+The ViewModel publishes saved settings through a StateFlow. `NarrioApp` passes them to `NarrioTheme`, which resolves Night/Day/System mode, then supplies app-wide Material color and typography roles. Listening room retains the authored original schemes. Ocean, Forest, Rosewood, Graphite, and Custom use separate Night/Day accent, supporting, and background seeds; the generator derives tonal surfaces and readable foreground/action/container roles, with minimum ratios of 4.5 for content and 3.0 for the `outline` role. Tertiary follows secondary. System-bar icon choice uses foreground contrast against the actual scheme background. Font choices reuse bundled Newsreader/Manrope or Android's default family; app text-size multipliers remain in sp so system scaling is retained.
+
+Preset, mode, font, and text-size selections save immediately. The custom editor holds a `rememberSaveable` draft and renders it inside a contained `NarrioTheme` preview. Only **Save & use theme** publishes and persists that draft; cancellation leaves the applied settings intact. Preset switching and default reset retain the saved custom palette.
+
 ## Offline audio
 
 Media3 `DownloadService`, `DownloadManager`, a durable `DownloadIndex`, and `SimpleCache` handle explicit phone downloads. The cache lives in private app files with `NoOpCacheEvictor`; the user removes audio explicitly. Requests persist only stable audio URIs and recording/source metadata. Their resolving data source renews TorBox links near transfer time, including after process recreation. Downloads run with a data-sync foreground service and network-constrained scheduling, at most two transfers in parallel. Wi-Fi/unmetered is the default. Pause/resume uses persisted stop reasons; foreground timeouts pause downloads so they can be resumed explicitly.
