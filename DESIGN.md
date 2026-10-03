@@ -252,11 +252,11 @@ Newsreader is expressive at normal weight; Manrope gives metadata and actions an
 
 | Native role | Family | Size / line height (sp) | Weight | Typical use |
 | --- | --- | --- | --- | --- |
-| displaySmall | Newsreader | 36 / 40 | 400 | Repeated page headings in Discover, My shelf, and Settings. |
+| displaySmall | Newsreader | 36 / 40 | 400 | Page headings in My shelf and Settings. |
 | headlineLarge | Newsreader | 32 / 36 | 400 | Book and recording titles, large cover lettering, and tabletop book context. |
 | headlineMedium | Newsreader | 28 / 32 | 400 | Wordmark, player title, sheet/dialog headings, and empty-state titles. |
 | headlineSmall | Newsreader | 24 / 28 | 400 | Shelf, description, source, and settings section headings. |
-| titleLarge | Newsreader | 22 / 28 | 500 | Regular cover lettering and the quiet player closing line. |
+| titleLarge | Newsreader | 22 / 28 | 500 | Regular cover lettering. |
 | titleMedium | Manrope | 16 / 23 | 600 | Book and shelf rows, context bars, preparation state, and bookmark times. |
 | titleSmall | Manrope | 14 / 20 | 600 | Matching recording releases, source options, parts, and account status. |
 | bodyLarge | Manrope | 16 / 26 | 400 | Book and recording author and the Material text-field body role. |
@@ -304,7 +304,7 @@ The metadata-first catalog and Find sources increment is documented from current
 
 Depth is primarily tonal. Catalog rows sit directly on the ground; dividers separate longer sections. The secondary pane uses surfaceContainerLow, the mini-player and functional status containers use surfaceContainer, and selected rows use secondaryContainer. The mini-player explicitly sets tonal elevation to zero (0 dp). Material sheets and dialogs retain their library elevation behavior; no custom shadow token or elevation scale has been authored.
 
-Atmospheric depth comes from the original garden cover image and its contrast scrim. These are static artwork treatments, not looping effects or a substitute for real media. Retrieved provider art keeps its aspect inside the book-shaped frame; on Android 12+ a blurred, lightly scrimmed crop of the same art fills the margins instead of flat color bars.
+Atmospheric depth comes from the original garden cover image and its contrast scrim. These are static artwork treatments, not looping effects or a substitute for real media. Retrieved provider art keeps its aspect inside the book-shaped frame; a soft, lightly scrimmed crop of the same art fills the margins instead of flat color bars (a blur on large Android 12+ covers; a tiny upscaled decode for thumbnails and older releases). Thumbnails decode at 240 px; large covers decode at 720 px and show the cached thumbnail until then, so shared-element flights never draw blank. Only standalone covers carry a "Cover of" description; rows and the mini-player already read the title.
 
 The one authored shadow belongs to the listening cover: it leans forward (full scale, 22 dp shadow) while narration plays and settles back (90%, 4 dp) when paused.
 
@@ -314,7 +314,7 @@ The one authored shadow belongs to the listening cover: it leans forward (full s
 
 [Motion.kt](app/src/main/java/app/narrio/ui/Motion.kt) owns the vocabulary: emphasized easing curves, 150/300/450 ms durations, Material fade-through between destinations, shared axis X for deeper content (book → recording → back), and a rise/fall pair for the listening room. Compact navigation runs in a SharedTransitionLayout: a cover travels from its catalog, shelf, or resume row into details, and from the mini-player into the listening room and back. Palette and mode changes dissolve the whole color scheme over 450 ms.
 
-Feedback stays small and physical: rows and controls press to 97%; the play control morphs from circle (paused) to a softened square (playing); skips turn 30° in their direction; bookmarking pops; Android haptics confirm toggles, skips, bookmarks, and the pull-down threshold. The player can be pulled down to collapse, and the mini-player flicked up to open. Narration bars move only while audio actually plays. Skeleton book rows stand in while metadata loads; follow-along highlights glide between passages.
+Feedback stays small and physical: the resume card, palette tiles, tool slots, and play control press slightly inward (list rows keep the Material ripple only); the play control morphs from circle (paused) to a softened square (playing); skips turn 30° in their direction; bookmarking pops; Android haptics confirm toggles, skips, bookmarks, and the pull-down threshold. The player can be pulled down to collapse, and the mini-player flicked up to open. Narration bars move only while audio actually plays. Skeleton book rows stand in while metadata loads; follow-along highlights glide between passages.
 
 **The Still Room Rule.** Compose scales every duration by Android's animator setting. Looping motion (narration bars, skeleton light, follow-along autoscroll) additionally checks that setting and renders still when animations are removed.
 
@@ -344,11 +344,11 @@ FilterChip drives browse category and Appearance mode, text-size, and custom col
 
 ### Navigation and context
 
-Discover, My shelf, and Settings use the same Material icon and label pair in navigation bar and rail. In compact detail, an auto-mirrored back control precedes The book or The recording context. A recording chosen from matching results offers Choose another recording; it and System Back return to the catalog details with the source results retained. The player has a collapse control and bookmark action. Full-screen state and destination selection come from the view model, not decorative visual state.
+Discover, My shelf, and Settings use the same Material icon and label pair in navigation bar and rail. Book details use a pinned Material top app bar titled The book or The recording, with an auto-mirrored back control in compact windows; it tints to surfaceContainer once content scrolls beneath it. A recording chosen from matching results offers Choose another recording; it and System Back return to the catalog details with the source results retained. The player has a collapse control and bookmark action. Full-screen state and destination selection come from the view model, not decorative visual state.
 
 ### Book and recording rows and covers
 
-[BookRow](app/src/main/java/app/narrio/ui/CatalogScreens.kt) pairs a cover (76 × 112 dp) with grouped title and author. Catalog rows add a description excerpt of up to three lines and a quiet metadata-provider label; one row represents each normalized title/author identity. Saved recording rows retain narrator, available duration, source/cache context, and a trailing resume action when available. Titles use up to three lines. Discover uses these open rows beneath the page heading, search, and browse categories; the original featured hero and tall cover-tile shelf are historical compositions. Pick up the thread is a tonal resume card with place, whole-book progress when every part reports its length, and a play action; it hides while that book is already in the mini-player. Shelf rows add the same progress line, show narration bars for the playing book, and keep Recording details and Remove from shelf in an overflow menu.
+[BookRow](app/src/main/java/app/narrio/ui/CatalogScreens.kt) pairs a cover (76 × 112 dp) with grouped title and author. Catalog rows add a quiet metadata-provider label and leave the publisher description to the details page; one row represents each normalized title/author identity. Saved recording rows retain narrator, available duration, source/cache context, and a trailing resume action when available. Titles use up to three lines. Discover uses these open rows beneath the wordmark, search, and browse categories, with a result count only for a typed query; the original featured hero and tall cover-tile shelf are historical compositions. Continue listening is a tonal resume card with place, whole-book progress when every part reports its length, and a play action; it hides while that book is already in the mini-player. Shelf rows add the same progress line, show narration bars for the playing book, and keep Remove from shelf in an overflow menu; tapping the row opens its details.
 
 [BookCover.kt](app/src/main/java/app/narrio/ui/BookCover.kt) displays available provider artwork using ContentScale.Fit. While an image loads or when it fails or is absent, it draws the original typographic covers or garden image. Fallback lettering adapts to available width and the large presentation flag, and is omitted below 60 dp width. Preserve [docs/ART.md](docs/ART.md), its generation prompt provenance, and the bundled Newsreader/Manrope SIL Open Font License references.
 

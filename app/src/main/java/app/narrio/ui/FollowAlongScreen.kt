@@ -75,7 +75,7 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                 item {
                     Text("Read as you listen", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(12.dp))
-                    Text("Bring the words into your listening room. Add the matching book edition to follow the narration, one passage at a time.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Add the same edition of the book to follow the narration passage by passage.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 item { Button(lookup, enabled = !textState.working) { Icon(Icons.Rounded.Search, null); Spacer(Modifier.width(8.dp)); Text("Find book text") } }
                 item { OutlinedButton(import, enabled = !textState.working) { Icon(Icons.Rounded.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Choose a text file") } }

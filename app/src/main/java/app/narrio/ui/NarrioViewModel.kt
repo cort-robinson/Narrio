@@ -301,7 +301,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         appearanceStore.save(normalized)
         appearanceState.value = normalized
     }
-    fun bookmark() = viewModelScope.launch { graph.playback.service?.bookmark(); messages.emit("Moment bookmarked") }
+    fun bookmark() = viewModelScope.launch { graph.playback.service?.bookmark(); messages.emit("Bookmark added") }
     fun deleteBookmark(id: Long) = viewModelScope.launch { graph.library.deleteBookmark(id) }
     fun jumpBookmark(bookmark: BookmarkEntry) = viewModelScope.launch {
         val state = playback.value

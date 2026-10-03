@@ -2,10 +2,12 @@ package app.narrio
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.data.*
 import app.narrio.domain.*
+import app.narrio.ui.NarrioViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
@@ -17,12 +19,21 @@ import org.junit.runner.RunWith
 class NarrioListeningTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
     private val graph get() = (compose.activity.application as NarrioApplication).graph
+    private val vm get() = ViewModelProvider(compose.activity)[NarrioViewModel::class.java]
+
+    /** Opens the bundled LibriVox recording directly; book-first search is covered separately below. */
+    private fun openSecretGarden() {
+        // The one-time notification prompt would cover the player; this test exercises playback, not that prompt.
+        graph.preferences.edit().putBoolean("notificationAsked", true).commit()
+        compose.runOnIdle { vm.open(NarrioViewModel.curated.first()) }
+        compose.waitUntil(30_000) { vm.selection.value.book?.sources?.isNotEmpty() == true && !vm.selection.value.loading }
+        compose.onNodeWithText("Read by Ashleighjane").assertExists()
+    }
 
     @Test fun realRecordingSupportsLaterPartControlsAndBackgroundResume() {
-        compose.waitUntil(60_000) { compose.onAllNodesWithText("Explore recording").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Explore recording").performClick()
-        compose.waitUntil(30_000) { compose.onAllNodesWithText("Read by Ashleighjane").fetchSemanticsNodes().isNotEmpty() }
+        openSecretGarden()
         compose.onNodeWithText("Listen").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Chapter files") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNode(hasText("Chapter files") and hasClickAction()).performScrollTo().performClick()
         compose.onNodeWithText("Start listening").performScrollTo().performClick()
         compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.source?.format == "MP3" && graph.playback.state.value.positionMs > 1000 }
@@ -43,13 +54,16 @@ class NarrioListeningTest {
         assertFalse(graph.playback.state.value.sleepAtEnd)
         compose.runOnIdle { graph.playback.service!!.part(1, 120_000) }
         compose.waitUntil(30_000) { graph.playback.state.value.partIndex == 1 && graph.playback.state.value.positionMs >= 120_000 && graph.playback.state.value.playing }
-        compose.onNodeWithContentDescription("Bookmark this moment").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Bookmark this moment").performClick()
         val bookId = graph.playback.state.value.book!!.id
         compose.waitUntil(5000) { runBlocking { graph.library.bookmarks(bookId).first().isNotEmpty() } }
         val bookmark = runBlocking { graph.library.bookmarks(bookId).first().first() }
         assertEquals(graph.playback.state.value.part!!.id, bookmark.partId)
         assertTrue(bookmark.positionMs >= 120_000)
+        // The confirmation snackbar briefly covers the tool tray; wait for it like a listener would.
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("Bookmark added").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithText("Sleep").performScrollTo().performClick()
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("In 15 minutes").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("In 15 minutes").performScrollTo().performClick()
         assertTrue(graph.playback.state.value.sleepUntil > System.currentTimeMillis())
         val before = graph.playback.state.value.positionMs
@@ -63,7 +77,7 @@ class NarrioListeningTest {
         }
         assertEquals(bookmark.partId, saved.partId)
         assertTrue(saved.positionMs >= 120_000)
-        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("am start --activity-reorder-to-front --activity-single-top -n app.narrio/.MainActivity").use { fd ->
+        InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("am start --activity-reorder-to-front --activity-single-top -n ${compose.activity.packageName}/app.narrio.MainActivity").use { fd ->
             android.os.ParcelFileDescriptor.AutoCloseInputStream(fd).use { it.readBytes() }
         }
         compose.activityRule.scenario.recreate()
@@ -73,11 +87,10 @@ class NarrioListeningTest {
     }
 
     @Test fun wholeBookM4bSupportsLongDistanceSeeking() {
-        compose.waitUntil(60_000) { compose.onAllNodesWithText("Explore recording").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Explore recording").performClick()
-        compose.waitUntil(30_000) { compose.onAllNodesWithText("Read by Ashleighjane").fetchSemanticsNodes().isNotEmpty() }
+        openSecretGarden()
         compose.onNodeWithText("Listen").performScrollTo().performClick()
-        compose.onNodeWithText("Whole-book audio").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Whole-book audio") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText("Whole-book audio") and hasClickAction()).performScrollTo().performClick()
         compose.onNodeWithText("Start listening").performScrollTo().performClick()
         compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.source?.format == "M4B" && graph.playback.state.value.durationMs > 3_600_000 }
         compose.runOnIdle { graph.playback.service!!.seek(5_400_000) }
@@ -87,11 +100,18 @@ class NarrioListeningTest {
         compose.runOnIdle { graph.playback.service!!.toggle() }
     }
 
-    @Test fun searchFindsDistinctNarratedRecordings() {
+    @Test fun bookSearchFindsItsNarratedLibriVoxRecording() {
         compose.waitUntil(60_000) { compose.onAllNodesWithText("Search books or authors").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNode(hasSetTextAction()).performTextInput("pride prejudice")
-        compose.waitUntil(60_000) { compose.onAllNodesWithText("Pride and Prejudice (version 3)").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("Pride and Prejudice (version 3)").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Karen Savage").assertExists()
+        compose.onNode(hasSetTextAction()).performTextInput("pride and prejudice jane austen")
+        compose.waitUntil(60_000) { vm.catalog.value.books.any { it.title.startsWith("Pride and Prejudice") } }
+        val book = vm.catalog.value.books.first { it.title.startsWith("Pride and Prejudice") }
+        compose.runOnIdle { vm.open(book) }
+        compose.onNodeWithText("Find sources").performScrollTo().performClick()
+        compose.waitUntil(90_000) { !vm.sourceSearch.value.loading && vm.sourceSearch.value.recordings.any { it.provider == "archive" } }
+        val recording = vm.sourceSearch.value.recordings.first { it.provider == "archive" }
+        compose.runOnIdle { vm.chooseRecording(recording) }
+        compose.waitUntil(30_000) { vm.selection.value.book?.id == recording.id && !vm.selection.value.loading }
+        compose.onNodeWithText("The recording").assertIsDisplayed()
+        compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
     }
 }

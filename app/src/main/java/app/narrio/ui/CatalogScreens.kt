@@ -40,12 +40,6 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 NarrioMark(); Spacer(Modifier.width(10.dp))
                 Text("narrio", style = MaterialTheme.typography.headlineMedium)
             }
-            Spacer(Modifier.height(20.dp))
-            AnimatedContent(browse, transitionSpec = { (fadeIn() + slideInVertically { it / 3 }).togetherWith(fadeOut() + slideOutVertically { -it / 3 }) }, label = "greeting") { browsing ->
-                Text(if (browsing) "Your next chapter." else "Find your next story.", style = MaterialTheme.typography.displaySmall)
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("Find the book. Explore its listening sources from the details.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item(key = "search") {
             OutlinedTextField(query, onValueChange = { vm.search(it) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
@@ -69,12 +63,10 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             } }
         }
         if (catalog.loading && catalog.books.isEmpty()) {
-            item(key = "loading-title") { Text(if (browse) "A shelf of possibilities" else "Searching…", style = MaterialTheme.typography.headlineSmall) }
             items(4, key = { "skeleton$it" }) { SkeletonBookRow(Modifier.animateItem()) }
         } else if (catalog.books.isNotEmpty()) {
-            item(key = "results-title") {
-                Text(if (browse) "A shelf of possibilities" else "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}", style = MaterialTheme.typography.headlineSmall)
-                Text("One result per book · Listening availability checked in details", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (query.isNotBlank()) item(key = "results-title") {
+                Text("${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.open(book) }, Modifier.animateItem()) }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
@@ -85,17 +77,14 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 fun BookRow(book: Audiobook, open: () -> Unit, modifier: Modifier = Modifier, trailing: (@Composable () -> Unit)? = null) {
-    val interaction = remember { MutableInteractionSource() }
-    Row(modifier.fillMaxWidth().pressScale(interaction).clip(RoundedCornerShape(12.dp)).clickable(interaction, LocalIndication.current, onClick = open),
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = open),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         BookCover(book, Modifier.width(76.dp).height(112.dp), sharedKey = "cover-${book.id}")
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (book.provider == "catalog") {
-                if (book.description.isNotBlank()) Text(book.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text(providerLabel(book), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-            } else Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (book.provider == "catalog") Text(providerLabel(book), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            else Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (book.durationMs > 0) Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (book.provider != "catalog" && (book.provider != "archive" || book.cacheState != "unchecked")) Text(if (book.cacheState == "cached") "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}" else "${providerLabel(book)} · ${if (book.cacheState == "uncached") "Not cached" else "Cache not checked"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -110,7 +99,7 @@ private fun ResumeCard(entry: ShelfEntry, resume: () -> Unit, details: () -> Uni
     val source = remember(entry.sourceJson) { entry.source() }
     val interaction = remember { MutableInteractionSource() }
     Column(modifier) {
-        Text("Pick up the thread", style = MaterialTheme.typography.headlineSmall)
+        Text("Continue listening", style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(14.dp))
         Surface(modifier = Modifier.fillMaxWidth().pressScale(interaction, .98f), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, onClick = details, interactionSource = interaction) {
             Column {
@@ -152,13 +141,11 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     var remove by remember { mutableStateOf<Audiobook?>(null) }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item(key = "heading") {
-            Text("Your shelf.", style = MaterialTheme.typography.displaySmall)
-            Spacer(Modifier.height(8.dp))
-            Text("Stories you keep. Moments you come back to.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("My shelf", style = MaterialTheme.typography.displaySmall)
         }
         if (shelf.isEmpty()) item(key = "empty") {
             Spacer(Modifier.height(30.dp))
-            EmptyState("Make room for a good story.", "Save a recording or start listening. Your books, progress, and bookmarks will stay here on this device.", Icons.Rounded.AutoStories)
+            EmptyState("Nothing saved yet", "Save a book or start listening. Your books, progress, and bookmarks stay here on this device.", Icons.Rounded.AutoStories)
             Spacer(Modifier.height(20.dp))
             Button({ vm.navigate(0) }, Modifier.fillMaxWidth()) { Text("Discover books") }
         }
@@ -169,11 +156,9 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 ShelfRow(entry, book, playing.book?.id == entry.bookId && playing.playing, { vm.resume(entry) }, { vm.open(book) })
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    if (entry.state == "preparing" || entry.state == "ready") TextButton({ vm.open(book) }) { Text("Check source") }
                     Box {
                         IconButton({ menu = true }) { Icon(Icons.Rounded.MoreHoriz, "More for ${book.title}") }
                         DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem(text = { Text("Recording details") }, leadingIcon = { Icon(Icons.Rounded.Info, null) }, onClick = { menu = false; vm.open(book) })
                             DropdownMenuItem(text = { Text("Remove from shelf") }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) }, onClick = { menu = false; remove = book })
                         }
                     }

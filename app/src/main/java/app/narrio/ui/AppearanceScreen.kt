@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.foundation.text.KeyboardOptions
@@ -75,9 +76,7 @@ private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, chang
         })
         LazyColumn(Modifier.fillMaxSize().testTag("appearance-options"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             item {
-                Text("Your listening room.", style = MaterialTheme.typography.headlineMedium)
-                Spacer(Modifier.height(8.dp))
-                Text("Find a palette and typeface that feel like you. Changes apply throughout Narrio and stay on this device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Changes apply throughout Narrio and stay on this device.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(20.dp))
                 ThemePreview(settings, dark)
             }
@@ -90,7 +89,7 @@ private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, chang
                 }
                 if (settings.mode == ThemeMode.SYSTEM) Text("Follows your device's light and dark setting.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            item { SectionTitle("Palette", "Five ready-made rooms, or one of your own.") }
+            item { SectionTitle("Palette", "Five presets, or one of your own.") }
             ThemePalette.entries.chunked(2).forEach { pair -> item {
                 Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     pair.forEach { palette ->
@@ -191,8 +190,8 @@ private fun ThemePreview(settings: AppearanceSettings, dark: Boolean) {
         Surface(Modifier.fillMaxWidth().testTag("theme-preview"), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Preview · ${if (dark) "Night" else "Day"}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("The next chapter", style = MaterialTheme.typography.headlineMedium)
-                Text("A place for every story.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("The Secret Garden", style = MaterialTheme.typography.headlineMedium)
+                Text("Frances Hodgson Burnett", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
                         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -239,8 +238,6 @@ private fun CustomThemeEditor(settings: AppearanceSettings, save: (CustomTheme) 
         TopAppBar(title = { Text("Custom theme") }, navigationIcon = { IconButton(cancel) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Cancel custom theme") } })
         LazyColumn(Modifier.weight(1f).testTag("custom-options"), contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item {
-                Text("Make room for your colours.", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(8.dp))
                 Text("Edit Day and Night separately. Text and controls automatically keep their contrast. Your app changes only when you save.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
@@ -267,7 +264,7 @@ private fun CustomThemeEditor(settings: AppearanceSettings, save: (CustomTheme) 
                 ThemePreview(settings.copy(palette = ThemePalette.CUSTOM, custom = draft), dark)
             }
             item {
-                Text("${if (dark) "Night" else "Day"} colours", style = MaterialTheme.typography.headlineSmall)
+                Text("${if (dark) "Night" else "Day"} colors", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(12.dp))
                 FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     ColourRole.entries.forEach { target -> FilterChip(role == target, { role = target }, { Text(target.label) }, modifier = Modifier.testTag("colour-role-${target.name}")) }
@@ -298,13 +295,13 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         swatches.forEach { swatch ->
             Box(Modifier.size(48.dp).background(Color(0xFF000000.toInt() or swatch), CircleShape)
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                .clickable(role = Role.Button) { change(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}" }, contentAlignment = Alignment.Center) {
+                .clickable(role = Role.Button) { change(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}"; selected = colour == swatch }, contentAlignment = Alignment.Center) {
                 if (colour == swatch) Icon(Icons.Rounded.Check, null, tint = Color(0xFF000000.toInt() or ThemeContrast.foreground(swatch)))
             }
         }
     }
     Spacer(Modifier.height(20.dp))
-    listOf("Hue", "Colour strength", "Brightness").forEachIndexed { index, title ->
+    listOf("Hue", "Color strength", "Brightness").forEachIndexed { index, title ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(title, style = MaterialTheme.typography.labelLarge)
             Text(if (index == 0) "${hsv[index].roundToInt()}°" else "${(hsv[index] * 100).roundToInt()}%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -321,7 +318,7 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         val parsed = ThemeContrast.parseHex(hex)
         valid(parsed != null)
         if (parsed != null) change(parsed)
-    }, Modifier.fillMaxWidth().testTag("colour-hex"), label = { Text("$label hex colour") }, singleLine = true,
+    }, Modifier.fillMaxWidth().testTag("colour-hex"), label = { Text("$label hex color") }, singleLine = true,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), isError = invalid,
         supportingText = { Text(if (invalid) "Enter six hex digits, such as #8ACED8." else "The preview adjusts contrast where needed.") })
 }
