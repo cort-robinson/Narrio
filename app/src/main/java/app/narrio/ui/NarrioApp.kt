@@ -14,7 +14,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -23,11 +23,12 @@ import androidx.lifecycle.*
 import androidx.lifecycle.compose.*
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.window.layout.*
+import app.narrio.domain.ThemeContrast
 import kotlinx.coroutines.flow.map
 
 @Composable
 fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
-    val theme by vm.theme.collectAsStateWithLifecycle()
+    val appearance by vm.appearance.collectAsStateWithLifecycle()
     val selected by vm.selection.collectAsStateWithLifecycle()
     val playerOpen by vm.playerOpen.collectAsStateWithLifecycle()
     val state by vm.playback.collectAsStateWithLifecycle()
@@ -53,8 +54,8 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         }
     }
     BackHandler(enabled = selected.book != null || playerOpen || destination != 0) { if (playerOpen || selected.book != null) vm.back() else vm.navigate(0) }
-    NarrioTheme(theme) {
-        val dark = MaterialTheme.colorScheme.background == Color(0xFF101B1A)
+    NarrioTheme(appearance) {
+        val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
         SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } }
         val snackbar = remember { SnackbarHostState() }
         LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }

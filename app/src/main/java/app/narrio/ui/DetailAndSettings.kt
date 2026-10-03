@@ -11,12 +11,13 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -146,7 +147,7 @@ private fun SourcePicker(vm: NarrioViewModel, book: Audiobook, connected: Boolea
     fun choose(source: AudioSource) { chosen = source; vm.chooseFormat(book, source.format) }
     ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         val view = LocalView.current
-        val dark = MaterialTheme.colorScheme.background.luminance() < .5f
+        val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
         SideEffect { (view.parent as? DialogWindowProvider)?.window?.let { window ->
             WindowCompat.getInsetsController(window, window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }
         } }
@@ -222,13 +223,19 @@ fun OfflineStatus(vm: NarrioViewModel, download: OfflineBook) {
 fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val connected by vm.connected.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    val theme by vm.theme.collectAsStateWithLifecycle()
+    val appearance by vm.appearance.collectAsStateWithLifecycle()
     val wifiOnly by vm.wifiOnly.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var key by remember { mutableStateOf("") }
+    var appearanceOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(connected) { if (connected) key = "" }
+    if (appearanceOpen) {
+        AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false }, modifier)
+        return
+    }
     LazyColumn(modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Make it yours.", style = MaterialTheme.typography.displaySmall); Spacer(Modifier.height(8.dp)); Text("Your listening room, your rules.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { AppearanceEntry(appearance) { appearanceOpen = true } }
         item {
             Text("TorBox", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(12.dp))
@@ -257,14 +264,6 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 Switch(wifiOnly, vm::setWifiOnly)
             }
             Text(if (wifiOnly) "Downloads wait for an unmetered connection." else "Downloads can use mobile data, including large whole-book files.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        item {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
-            Text("The light in the room", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("Night", "Day", "System").forEach { FilterChip(theme == it, { vm.setTheme(it) }, { Text(it) }) }
-            }
         }
         item {
             Text("Built to unfold", style = MaterialTheme.typography.headlineSmall)

@@ -121,7 +121,7 @@ private fun FeaturedBook(book: Audiobook, open: () -> Unit) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, color = Color(0xFFF8EACC))
             Text(book.author, style = MaterialTheme.typography.bodySmall, color = Color(0xFFD2DEC7))
             Spacer(Modifier.height(14.dp))
-            FilledTonalButton(open, colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFFE8AF79), contentColor = Color(0xFF342312))) {
+            FilledTonalButton(open, colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary)) {
                 Icon(Icons.Rounded.Headphones, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Explore recording")
             }
         }
@@ -173,7 +173,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
     }
     remove?.let { book -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove from your shelf?") },
-        text = { Text("This removes phone downloads, saved progress, and bookmarks for ${book.title} on this device.") },
+        text = { Text("This removes phone downloads, book text, saved progress, and bookmarks for ${book.title} on this device.") },
         confirmButton = { TextButton({ vm.remove(book); remove = null }) { Text("Remove") } }, dismissButton = { TextButton({ remove = null }) { Text("Keep book") } }) }
 }
 

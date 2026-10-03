@@ -168,6 +168,12 @@ class TorBoxDelivery(
         }
         fun mapSources(item: JsonObject, book: Audiobook): List<AudioSource> {
             val torrentId = item.number("id")
+            val textFiles = item.objects("files").mapNotNull { file ->
+                val name = file.text("name")
+                val format = textFileFormat(name) ?: return@mapNotNull null
+                if (Regex("(?i)(^|[/ _-])(readme|license|info|credits)([. _-]|$)").containsMatchIn(name)) return@mapNotNull null
+                BookTextSource("torbox:$torrentId:${file.number("id")}", name.substringAfterLast('/'), format = format, provider = "torbox", torrentId = torrentId, fileId = file.number("id"), attribution = "Companion file from your TorBox audio source")
+            }
             val files = item.objects("files").filter { isAudioFile(it.text("name")) && !Regex("(^|[/ _-])(sample|trailer)([/ _.-]|$)", RegexOption.IGNORE_CASE).containsMatchIn(it.text("name")) }
             fun toPart(f: JsonObject): AudioPart {
                 val original = book.sources.flatMap { it.parts }.firstOrNull { it.name == f.text("name") || f.text("name").endsWith("/${it.name}") }
@@ -184,7 +190,7 @@ class TorBoxDelivery(
                 }
                 if (format == "mp3") group = group.filter { !it.text("name").contains("64kb", true) }.ifEmpty { group }
                 if (group.isEmpty()) null else AudioSource("torbox:$torrentId:$format", if (format == "m4b") "Whole-book audio" else "Ordered audio parts",
-                    format.uppercase(), group.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::toPart), "torbox", torrentId)
+                    format.uppercase(), group.sortedWith { a, b -> AudioOrdering.compare(a.text("name"), b.text("name")) }.map(::toPart), "torbox", torrentId, textFiles)
             }
         }
     }

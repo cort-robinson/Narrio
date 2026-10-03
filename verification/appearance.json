@@ -1,0 +1,256 @@
+{
+  "date": "2026-10-02",
+  "scope": "Local native Android appearance feature; emulator validation. No signed release or physical-device validation of this update.",
+  "features": {
+    "presets": [
+      "Listening room",
+      "Ocean",
+      "Forest",
+      "Rosewood",
+      "Graphite"
+    ],
+    "custom": "One named local theme with separate Day/Night accent, supporting colour and background, live preview and explicit save/cancel.",
+    "fonts": [
+      "Narrio (Newsreader titles, Manrope controls)",
+      "Manrope",
+      "Newsreader",
+      "Android"
+    ],
+    "textScales": [
+      1.0,
+      1.1,
+      1.2
+    ],
+    "systemModes": [
+      "Night",
+      "Day",
+      "System"
+    ],
+    "reset": "Restores original appearance while retaining the saved custom theme."
+  },
+  "build": {
+    "passed": true,
+    "tasks": [
+      "assembleDebug",
+      "assembleDebugAndroidTest",
+      "testDebugUnitTest",
+      "lintDebug"
+    ],
+    "logs": [
+      "verification/appearance-build.txt",
+      "verification/appearance-build-final.txt"
+    ]
+  },
+  "unit": {
+    "passed": 22,
+    "failures": 0,
+    "errors": 0,
+    "suites": [
+      {
+        "suite": "app.narrio.data.ProviderContractTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0
+      },
+      {
+        "suite": "app.narrio.domain.AppearanceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0
+      },
+      {
+        "suite": "app.narrio.domain.AudioIdentityTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0
+      }
+    ]
+  },
+  "native": {
+    "passed": 10,
+    "runs": [
+      {
+        "configuration": "phone",
+        "passed": 4,
+        "seconds": 87.817,
+        "sizePx": [
+          1080,
+          2400
+        ],
+        "densityDpi": 420,
+        "systemFontScale": 1.0,
+        "log": "verification/appearance-phone.txt"
+      },
+      {
+        "configuration": "expanded",
+        "passed": 4,
+        "seconds": 39.888,
+        "sizePx": [
+          1848,
+          2448
+        ],
+        "densityDpi": 360,
+        "systemFontScale": 1.0,
+        "log": "verification/appearance-expanded.txt"
+      },
+      {
+        "configuration": "large-text",
+        "passed": 2,
+        "seconds": 42.337,
+        "sizePx": [
+          1080,
+          2400
+        ],
+        "densityDpi": 420,
+        "systemFontScale": 1.3,
+        "log": "verification/appearance-large-text.txt"
+      }
+    ],
+    "suite": "app.narrio.AppearanceExperienceTest",
+    "largeTextScope": "The two complete appearance/custom-editor workflows, including Android font and app Large (1.2), at system scale 1.3."
+  },
+  "coverage": [
+    "Legacy mode migration and preservation of unrelated preferences.",
+    "Independent palette/font/text-size changes, store persistence and activity recreation.",
+    "Custom starting-preset colours survive subsequent edits; swatches, HSV controls, strict hex validation, separate Day/Night save and cancel.",
+    "Saved custom theme survives preset switches and default reset; draft survives activity recreation.",
+    "Five presets and eight extreme custom seed sets, both modes: Material foreground/action/container pairs and outline contrast.",
+    "Contrast generation across 256 grey and 500 random backgrounds in JVM tests."
+  ],
+  "visual": {
+    "captures": [
+      {
+        "path": ".impeccable/review/appearance/appearance-day-expanded.png",
+        "sizePx": [
+          1848,
+          2448
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/appearance-day-large-text.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/appearance-day-phone.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/appearance-night-expanded.png",
+        "sizePx": [
+          1848,
+          2448
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/appearance-night-large-text.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/appearance-night-phone.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/custom-colours-expanded.png",
+        "sizePx": [
+          1848,
+          2448
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/custom-colours-large-text.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/custom-colours-phone.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/custom-preview-expanded.png",
+        "sizePx": [
+          1848,
+          2448
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/custom-preview-large-text.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/custom-preview-phone.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/palettes-night-expanded.png",
+        "sizePx": [
+          1848,
+          2448
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/palettes-night-large-text.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/palettes-night-phone.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/typography-expanded.png",
+        "sizePx": [
+          1848,
+          2448
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/typography-large-text.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      },
+      {
+        "path": ".impeccable/review/appearance/typography-phone.png",
+        "sizePx": [
+          1080,
+          2400
+        ]
+      }
+    ],
+    "count": 18,
+    "captureScope": "Scrolled window captures of named native regions using a synthetic Aurora theme and story preview; existing app artwork retained.",
+    "review": ".impeccable/review/appearance/finish-review.md",
+    "disposition": "ship"
+  },
+  "isolation": "Test-only side-by-side application ID app.narrio.appearanceqa avoids replacing installed app.narrio. Enlarged-text run used a private AVD and ADB server on port 5039 (emulator-6000) because an unrelated runner targeted all default-server emulators. The override and AVD are ignored local test helpers; production application ID is unchanged.",
+  "cleanup": "Removed only the side-by-side QA app/test from the shared emulators, restored the expanded device window overrides to 1248x1972 at density 420, and stopped the private QA emulator/ADB server. Existing app.narrio installations were retained."
+}

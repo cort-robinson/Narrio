@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T03:21:40.720018Z",
+  "title": "Narrio follow-along native extension",
+  "extensions": {
+    "scope": {
+      "kind": "introduced-native-component",
+      "component": "Follow-along passages",
+      "mode": "Read with Operate controls",
+      "visualAuthority": [
+        "DESIGN.md",
+        "app/src/main/java/app/narrio/ui/Theme.kt"
+      ],
+      "surfaceContract": ".impeccable/follow-along-contract.md",
+      "globalSidecarPolicy": "Separate fragment; no global design-system refresh."
+    },
+    "nativeAndroid": {
+      "implementation": [
+        "app/src/main/java/app/narrio/ui/FollowAlongScreen.kt",
+        "app/src/main/java/app/narrio/ui/PlayerScreen.kt",
+        "app/src/main/java/app/narrio/ui/NarrioViewModel.kt"
+      ],
+      "passageTreatment": {
+        "typographyRole": "MaterialTheme.typography.headlineSmall / Newsreader",
+        "current": "primary copper; FontWeight.SemiBold",
+        "surrounding": "onSurfaceVariant; FontWeight.Normal",
+        "adjustmentSelection": "secondary sage; FontWeight.SemiBold",
+        "metadataAndControls": "Existing Manrope Material roles",
+        "minimumTouchHeightDp": 48,
+        "rowGapDp": 20,
+        "insetsDp": {
+          "start": 24,
+          "end": 24,
+          "top": 20,
+          "bottom": 96
+        }
+      },
+      "following": {
+        "clock": "ListeningState.positionMs",
+        "viewportAnchor": "Upper quarter of the passage viewport",
+        "suspension": "Manual drag or timing adjustment",
+        "resumeAction": "Back to current line",
+        "passageTap": "Seek within the current source/part using the shown timing mode",
+        "motion": "animateScrollToItem when ANIMATOR_DURATION_SCALE > 0; scrollToItem otherwise"
+      },
+      "timing": {
+        "ordinaryText": "Estimated timing with visible drift guidance",
+        "manualMatch": "Select the narrated line, then Match at the current media time; intermediate timing remains estimated",
+        "suppliedVtt": "Supplied timestamps only for the source/part attached at import; narration pairing is unverified",
+        "otherPart": "No highlighting; explain the mismatch and offer another text track",
+        "singleFileChapters": "Estimated chapter jumps through the whole-recording timeline",
+        "ambiguousMultipart": "Choose the text chapter belonging to the current audio part",
+        "reset": "Clear manual anchors while retaining the chapter choice"
+      },
+      "acquisitionAndManagement": {
+        "localFormats": [
+          "EPUB",
+          "UTF-8 TXT",
+          "WebVTT"
+        ],
+        "picker": "ActivityResultContracts.OpenDocument",
+        "lookup": "Companion source files and public Project Gutenberg results via Gutendex",
+        "editionGuidance": "Matching title alone does not establish matching narration",
+        "storage": "Saved on this device",
+        "removal": "Native confirmation removes text and timing matches; audio, bookmarks, and listening progress remain"
+      },
+      "adaptiveTransport": {
+        "frames": "Existing compact, expanded, and hinge-aware Listening room",
+        "ordinaryLayout": "Weighted passage viewport above surfaceContainerLow transport",
+        "tabletopLayout": "Text above the hinge gap; scrollable transport below",
+        "controls": "Native listening-position slider, 30-second skips, play/pause, buffering progress",
+        "playPauseTargetDp": 56,
+        "controlGapDp": 8,
+        "textScaling": "Existing Material sp typography and native scrolling"
+      },
+      "semantics": [
+        "Book passages list description",
+        "Current passage or Current passage, estimated timing state description",
+        "Selected-line semantics during timing adjustment",
+        "Click labels distinguish line selection, supplied-timestamp seek, and estimated seek",
+        "Material tabs, buttons, sheets, dialogs, and slider own native interaction states"
+      ],
+      "deferred": [
+        "Full ebook reader",
+        "Automatic exact alignment"
+      ]
+    },
+    "evidence": {
+      "finishDisposition": "ship",
+      "finishReview": ".impeccable/review/follow-along/finish-review.md",
+      "captureReadme": ".impeccable/review/follow-along/README.md",
+      "captureMatrix": "24 original native PNGs: eight states across phone, phone-large-text, and expanded fold-labelled emulator configurations",
+      "captureStates": [
+        "empty",
+        "estimated",
+        "adjust",
+        "chapters",
+        "day",
+        "sources",
+        "timed",
+        "other-part"
+      ],
+      "limits": "Isolated API 36 emulator with synthetic Garden Walk prose and real Media3 WAV transport; does not establish physical Samsung folding, gesture performance, or authenticated TorBox ebook delivery."
+    }
+  }
+}

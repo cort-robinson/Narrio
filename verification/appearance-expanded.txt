@@ -1,0 +1,6 @@
+
+app.narrio.AppearanceExperienceTest:....
+
+Time: 39.888
+
+OK (4 tests)

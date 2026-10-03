@@ -1,0 +1,120 @@
+
+added 305 packages in 13s
+
+> test
+> node --test scripts/release/*.test.mjs
+
+TAP version 13
+# Subtest: certificate verification supports SDK signer labels while rejecting mixed identities
+ok 1 - certificate verification supports SDK signer labels while rejecting mixed identities
+  ---
+  duration_ms: 1.8153
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: GitHub plugin resolves the configured versioned APK asset
+ok 2 - GitHub plugin resolves the configured versioned APK asset
+  ---
+  duration_ms: 23.8495
+  type: 'test'
+  ...
+# Subtest: Android version codes increase across patch, minor, and major releases
+ok 3 - Android version codes increase across patch, minor, and major releases
+  ---
+  duration_ms: 0.6493
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: release planning: fix(player): retain the listening position
+ok 4 - release planning: fix(player): retain the listening position
+  ---
+  duration_ms: 2163.389
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: release planning: perf(search): show cached books faster
+ok 5 - release planning: perf(search): show cached books faster
+  ---
+  duration_ms: 1721.5423
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: release planning: feat(metadata): show audiobook descriptions
+ok 6 - release planning: feat(metadata): show audiobook descriptions
+  ---
+  duration_ms: 1657.5806
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: release planning: refactor!: change the library storage format
+ok 7 - release planning: refactor!: change the library storage format
+  ---
+  duration_ms: 1905.1473
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: release planning: feat!: remove the old settings format
+ok 8 - release planning: feat!: remove the old settings format
+  ---
+  duration_ms: 1960.6548
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: release planning: docs: clarify installation
+ok 9 - release planning: docs: clarify installation
+  ---
+  duration_ms: 2020.4198
+  type: 'test'
+  ...
+# warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+# Subtest: release planning: test: add source coverage
+ok 10 - release planning: test: add source coverage
+  ---
+  duration_ms: 1716.7341
+  type: 'test'
+  ...
+# Subtest: release planning: chore(ci): configure releases
+ok 11 - release planning: chore(ci): configure releases
+  ---
+  duration_ms: 1754.225
+  type: 'test'
+  ...
+# Subtest: release recovery never substitutes a newer source for an unpublished tag
+ok 12 - release recovery never substitutes a newer source for an unpublished tag
+  ---
+  duration_ms: 2.445
+  type: 'test'
+  ...
+# Subtest: release lookup finds an unpublished draft when the tag endpoint returns 404
+ok 13 - release lookup finds an unpublished draft when the tag endpoint returns 404
+  ---
+  duration_ms: 0.7613
+  type: 'test'
+  ...
+# Subtest: release lookup returns published releases directly and stops at an empty listing
+ok 14 - release lookup returns published releases directly and stops at an empty listing
+  ---
+  duration_ms: 0.433
+  type: 'test'
+  ...
+# Subtest: release manifest rejects mismatched package, version, source, and Android code
+ok 15 - release manifest rejects mismatched package, version, source, and Android code
+  ---
+  duration_ms: 0.6371
+  type: 'test'
+  ...
+# Subtest: version bounds cannot silently wrap when calculating the next release
+ok 16 - version bounds cannot silently wrap when calculating the next release
+  ---
+  duration_ms: 0.1494
+  type: 'test'
+  ...
+1..16
+# tests 16
+# suites 0
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41546.7292

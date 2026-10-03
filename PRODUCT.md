@@ -18,6 +18,8 @@ Android listeners who want to discover narrated books, stream cached sources, sa
 
 Search for an audiobook recording, identify its narrator and language when verified, select an already cached source, and stream it through TorBox without downloading the book to the phone. Offer explicit phone downloads for offline listening. Preserve progress, a personal shelf, bookmarks, playback speed, and a sleep timer on the device.
 
+Offer highlighted follow-along passages in the Listening room using local EPUB/text imports, companion files, or public ebook lookup. Supplied timestamps are specific to their audio part; other text uses explicitly estimated timing and saved manual matches. Full ebook reading and automatic exact alignment are later work, with edition identity and a shared content cursor planned in docs/FOLLOW_ALONG.md.
+
 ## Operating Context
 
 Direct connections to catalog and delivery providers; no custom backend. The user connects TorBox in the app. Physical-phone testing uses Android media controls without reading the credential or generated media links.
@@ -32,6 +34,7 @@ Direct connections to catalog and delivery providers; no custom backend. The use
 - Discovery combines Knaben's audiobook release index, Internet Archive's LibriVox catalog, and the user's TorBox audio. Indexed release metadata remains visibly unverified; files and TorBox cache availability determine playability.
 - Matched book descriptions, authors, catalog narrators, and cover art enrich indexed/account releases through Audible with an Open Library fallback. Recording identity and source availability remain separate; catalog narration is labeled, original releases stay visible, and metadata failures preserve listening and saved details.
 - Connected search defaults to ready sources. Uncached cloud preparation and phone downloads require separate explicit actions. Phone downloads use Wi-Fi by default and can be paused, resumed, retried, or removed.
+- Local Appearance settings offer five paired palettes, one named custom palette with separate Night/Day colors, four bundled or system font choices, and three app text sizes. Mode, palette, font, and size remain independent; custom edits require an explicit save, and restoring defaults retains the saved custom palette. These settings preserve the Listening room defaults, system text scaling, artwork, and listening behavior without requiring network access.
 
 ## Brand Commitments
 

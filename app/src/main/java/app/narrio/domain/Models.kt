@@ -23,6 +23,7 @@ data class AudioSource(
     val parts: List<AudioPart>,
     val delivery: String = "archive",
     val torrentId: Long? = null,
+    val textFiles: List<BookTextSource> = emptyList(),
 )
 
 @Serializable

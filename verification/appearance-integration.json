@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-03",
+  "scope": "Appearance integrated with the latest dev metadata and release workflow; local controlled emulator verification, not a stable release or physical-phone acceptance.",
+  "baseDevCommit": "94154c34291350762b347be186b940930f6a76cc",
+  "integration": "Production feature patch merged cleanly. Retained latest release instructions and historical metadata validation. Adapted MetadataExperienceTest to the typed appearance mode API.",
+  "build": {
+    "passed": true,
+    "tasks": [
+      "testDebugUnitTest",
+      "lintDebug",
+      "assembleDebug",
+      "assembleDebugAndroidTest"
+    ],
+    "log": "verification/appearance-integration-build.txt"
+  },
+  "unit": {
+    "passed": 37,
+    "failures": 0,
+    "errors": 0,
+    "suites": [
+      {
+        "suite": "app.narrio.data.BookMetadataTest",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0
+      },
+      {
+        "suite": "app.narrio.data.ProviderContractTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0
+      },
+      {
+        "suite": "app.narrio.domain.AppearanceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0
+      },
+      {
+        "suite": "app.narrio.domain.AudioIdentityTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0
+      }
+    ]
+  },
+  "releaseTooling": {
+    "passed": 16,
+    "failures": 0,
+    "log": "verification/appearance-integration-release.txt"
+  },
+  "native": {
+    "suite": "app.narrio.AppearanceExperienceTest",
+    "passed": 4,
+    "seconds": 33.207,
+    "sizePx": [
+      1080,
+      2400
+    ],
+    "densityDpi": 420,
+    "systemFontScale": 1.0,
+    "api": 36,
+    "log": "verification/appearance-integration-native.txt"
+  },
+  "isolation": "Private QA emulator and ADB server; side-by-side app.narrio.appearanceqa. Original installed Narrio apps and shared devices were retained.",
+  "priorVisualMatrix": "verification/appearance.json",
+  "limits": "The prior 18-capture/three-configuration appearance review is retained as its original baseline. No new physical-phone, live-provider, signed-release, or performance claims."
+}

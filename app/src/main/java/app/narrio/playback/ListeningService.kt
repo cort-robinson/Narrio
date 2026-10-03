@@ -134,7 +134,7 @@ class ListeningService : MediaSessionService() {
         publish()
     }
     fun retry() { error = null; links.clear(); player.prepare(); player.play(); publish() }
-    fun seek(position: Long) { player.seekTo(position.coerceAtLeast(0)); scope.launch { save() } }
+    fun seek(position: Long) { player.seekTo(position.coerceAtLeast(0)); publish(); scope.launch { save() } }
     fun skip(delta: Long) { seek((player.currentPosition + delta).coerceAtLeast(0).let { if (player.duration > 0) it.coerceAtMost(player.duration) else it }) }
     fun part(index: Int, position: Long = 0) {
         if (index !in 0 until player.mediaItemCount) return

@@ -31,7 +31,7 @@ colors:
   day-surface-low: "#F3EBDC"
   day-surface: "#EEE5D5"
   day-surface-high: "#E7DCCA"
-  day-muted-text: "#56665C"
+  day-muted-text: "#536359"
   day-outline: "#727C71"
   day-outline-muted: "#D0D1C3"
   night-error: "#FFB4AB"
@@ -185,26 +185,29 @@ components:
 
 **Creative North Star: "Listening room"**
 
-Narrio is a quiet, personal listening room. Warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. Serif titles carry the story; the sans serif carries the task.
+Narrio is a quiet, personal listening room. In the default palette, warm ink and warm paper grounds give the artwork space, copper makes listening actions easy to find, and sage supports narration and selection. The original type pairing gives story titles a serif voice and tasks a clear sans serif.
 
 The implemented world uses Material 3 navigation and controls inside an authored type and color theme. Lists remain open on the page; containers identify artwork, recovery, preparation, or selection. Compact windows keep one task in view, while wider windows put discovery and the selected recording or listening session beside each other.
+
+Listening room remains the default. Local Appearance settings offer paired palettes, one custom palette, and font and text-size choices within the same layouts and semantic roles.
 
 This guide records the current Compose implementation. The surface concept and first-viewport strategy remain in [.impeccable/direction-contract.md](.impeccable/direction-contract.md). FORM provenance is direction seed `73f8a99b`, grounded index 4, catalog revision `c3b204a1eed6`; the contract records the Operate surface and the code-led path. The exact seed output is [.impeccable/concept-seed-evidence.txt](.impeccable/concept-seed-evidence.txt). There is no approved decision comp or available QUALITY BAR card.
 
 **Key Characteristics:**
 
-- Warm ink at night; warm paper by day.
-- Newsreader for story titles; Manrope for metadata and controls.
+- Default warm ink at night; warm paper by day.
+- Default Newsreader story titles and Manrope metadata and controls.
+- Paired local palettes and independent font and text-size choices.
 - Artwork is the centerpiece; functional content stays legible around it.
 - Material navigation adapts to available window width and reported hinge posture.
 - Explicit loading, preparation, empty, selected, and recovery states.
 - Cache-aware source selection with separate cloud preparation and phone storage state.
 
-The color, family, and weight tokens above come from [Theme.kt](app/src/main/java/app/narrio/ui/Theme.kt). The [DESIGN.md format](https://raw.githubusercontent.com/google-labs-code/design.md/main/docs/spec.md) supports CSS dimensions, so frontmatter lengths are a baseline display translation: the same numeric scalar expressed in px. Android implementation uses dp for geometry and sp for typography. Exact native values, role mappings, and sample limitations live in [.impeccable/design.json](.impeccable/design.json), under `extensions.android`; never paste the px adapter into Compose.
+The color, family, and weight tokens above record Listening room with the Narrio font pairing and Default text size from [Theme.kt](app/src/main/java/app/narrio/ui/Theme.kt). The [DESIGN.md format](https://raw.githubusercontent.com/google-labs-code/design.md/main/docs/spec.md) supports CSS dimensions, so frontmatter lengths are a baseline display translation: the same numeric scalar expressed in px. Android implementation uses dp for geometry and sp for typography. Exact native values, role mappings, selectable settings, and sample limitations live in [.impeccable/design.json](.impeccable/design.json), under `extensions.android`; never paste the px adapter into Compose.
 
 ## Colors
 
-Copper and sage sit against warm neutral grounds. The two themes retain their own contrast pairings rather than deriving one by inversion.
+The Listening room default pairs copper and sage against warm neutral grounds. Its Night and Day schemes retain their own contrast pairings rather than deriving one by inversion.
 
 ### Primary
 
@@ -216,25 +219,36 @@ Copper and sage sit against warm neutral grounds. The two themes retain their ow
 - **Sage:** the `sage` pair identifies narrator and secondary context.
 - **Selected sage:** `selected` / `on-selected` support Material tonal controls and navigation, with explicit selected-row backgrounds in the source picker and audio-parts sheet.
 
+### Tertiary
+
+Material tertiary and its container/content partners reuse the secondary roles in both the original schemes and generated palettes. They do not introduce another independent accent.
+
 ### Neutral
 
 - **Room ground:** `ground` maps to both background and surface; `text` maps to both onBackground and onSurface.
 - **Tonal surfaces:** `surface-low`, `surface`, and `surface-high` separate the rail-adjacent listening pane, navigation, mini-player, sheets, and recovery or preparation containers.
+- **Complete surface roles:** the original schemes map lowest/highest containers, dim/bright surfaces, and tint to existing ground, tonal-surface, and primary tokens. Inverse surface/content roles reuse the light/dark text tokens; inverse primary uses the opposite mode's copper. Exact mappings are in the Android sidecar.
 - **Muted ink:** `muted-text` carries explanatory text and metadata.
 - **Outlines:** `outline` serves Material outlined controls; `outline-muted` serves dividers and the mini-player progress track.
 - **Error:** the explicit Night error pair remains part of the theme. Day inherits the Material light scheme's default error roles; no custom Day error palette was extracted.
 
-Featured artwork is a component-specific exception: its cream text, dark green scrim, and Night copper action remain fixed over the garden in both themes. Per-book cover palettes belong to artwork, not global interface tokens.
+Featured artwork is a component-specific exception: its cream text and dark green scrim remain fixed over the garden. Its listening action uses the selected scheme's primary/onPrimary pair. Per-book cover palettes belong to artwork, not global interface tokens.
 
-**The Paired Scheme Rule.** Resolve interface colors through MaterialTheme.colorScheme. Night and Day are complete authored schemes, selected explicitly or through System; the current app does not use wallpaper-derived dynamic color.
+**The Paired Scheme Rule.** Resolve interface colors through the selected palette's MaterialTheme.colorScheme. Night, Day, and System are independent of palette choice. Listening room retains its authored schemes; optional presets and custom palettes derive contrast-aware roles from separate Night and Day seeds. The app does not use wallpaper-derived dynamic color.
+
+### Palette choices and custom colors
+
+Settings → Appearance offers five paired presets: Listening room (copper and sage), Ocean (sea glass and blue ink), Forest (fern and golden light), Rosewood (rose and plum), and Graphite (quiet neutral tones). Their exact seeds and generation behavior are recorded under `extensions.android.appearance`; the default frontmatter remains the Listening room baseline.
+
+One named custom slot stores separate Night and Day accent, supporting, and background seeds in opaque sRGB. The generator derives readable content, actions, containers, outlines, error, and inverse roles; accent and supporting seeds can move toward readable ink where contrast requires it. The custom preview shows those derived roles rather than promising that a seed becomes an unchanged text color.
 
 ## Typography
 
-**Display Font:** bundled Newsreader variable font.
+**Default Display Font:** bundled Newsreader variable font.
 
-**Body and Control Font:** bundled Manrope variable font.
+**Default Body and Control Font:** bundled Manrope variable font.
 
-Newsreader is expressive at normal weight; Manrope gives metadata and actions an even, clear rhythm. Theme.kt supplies a complete Material role table. The frontmatter captures roles used by current screens or their Material controls; displayLarge and displayMedium are declared in the native theme but have no current screen application.
+Newsreader is expressive at normal weight; Manrope gives metadata and actions an even, clear rhythm. Theme.kt supplies a complete Material role table. The table and frontmatter record the original Narrio pairing at Default size. The frontmatter captures roles used by current screens or their Material controls; displayLarge and displayMedium are declared in the native theme but have no current screen application.
 
 | Native role | Family | Size / line height (sp) | Weight | Typical use |
 | --- | --- | --- | --- | --- |
@@ -252,9 +266,11 @@ Newsreader is expressive at normal weight; Manrope gives metadata and actions an
 | labelMedium | Manrope | 12 / 18 | 600 | Elapsed/remaining times, metadata, preparation labels, and chips. |
 | labelSmall | Manrope | 11 / 16 | 500 | Cover authors, saved progress, and duration captions. |
 
-All Newsreader roles use slightly tight tracking (-0.4 sp); Manrope roles use neutral tracking (0 sp). The bundled variable font weight axis is set per declared weight. There is no uppercase eyebrow or monospace label system.
+At Default size, Newsreader roles use slightly tight tracking (-0.4 sp); Manrope and Android roles use neutral tracking (0 sp). The bundled variable font weight axis is set per declared weight. There is no uppercase eyebrow or monospace label system.
 
-**The Two Voices Rule.** Use semantic Material typography roles. Newsreader owns display, headline, and titleLarge; Manrope owns the remaining titles, body, labels, and controls. Keep system font scaling in sp.
+Appearance provides Narrio (the original pairing), Manrope throughout, Newsreader throughout, and Android's default family. These choices use the existing bundled fonts or the device family, with no font downloads. Default, Comfort, and Large multiply font size and line height by 1.0, 1.1, and 1.2; Newsreader tracking scales with them. Native sp values retain the device's system font scaling on top.
+
+**The Two Voices Rule.** In the default Narrio pairing, Newsreader owns display, headline, and titleLarge; Manrope owns remaining titles, body, labels, and controls. Selected fonts still use those semantic Material roles and their hierarchy. Keep system font scaling in sp.
 
 ## Layout
 
@@ -268,7 +284,7 @@ Horizontal HALF_OPENED posture becomes tabletop only while the player is open. T
 
 Safe drawing insets protect the top and horizontal edges; full/detail/expanded content also applies navigation-bar padding. Settings applies IME padding. System Back is handled in the app to return from player/detail or to Discover.
 
-The source-scope chips now scroll horizontally at compact and expanded widths. SourcePicker keeps its content in a vertically scrollable native sheet, with weighted option text that can wrap around its radio controls. Long release names and larger system text expand the content instead of clipping the source and preparation actions. The sheet also sets its own system-bar icon appearance from the active theme. These behaviors are implemented in DetailAndSettings.kt; they do not introduce new breakpoints or fixed modal geometry.
+The source-scope chips now scroll horizontally at compact and expanded widths. SourcePicker keeps its content in a vertically scrollable native sheet, with weighted option text that can wrap around its radio controls. Long release names and larger system text expand the content instead of clipping the source and preparation actions. App and sheet system-bar icons use foreground contrast against the actual scheme background, including custom palettes. These behaviors are implemented in NarrioApp.kt and DetailAndSettings.kt; they do not introduce new breakpoints or fixed modal geometry.
 
 **The Window First Rule.** Choose the composition from current window width and WindowManager features. Do not select a layout from the device name or assume physical Fold dimensions.
 
@@ -277,6 +293,8 @@ The source-scope chips now scroll horizontally at compact and expanded widths. S
 The 15 reviewed native captures under [.impeccable/review](.impeccable/review/) include compact and expanded windows, Night and Day, enlarged type, a separating hinge, and tabletop. [finish-verdict.md](.impeccable/review/finish-verdict.md) reports the tabletop correction resolved with ship disposition at that correction's scope. Hinge postures were injected through WindowManager testing; physical Fold 8 geometry, gestures, refresh rate, and performance are not established by these images.
 
 The [1.1 finish review](.impeccable/review/v1.1/finish-review.md) returns ship with no material fixes for the introduced source, cache, preparation, and phone-download regions. Its 12 cached-source, uncached-source, preparation, and offline-settings captures cover phone, phone with enlarged type, and expanded layouts. Availability and cloud progress in those images are synthetic SourceExperienceTest fixtures. Preparation and settings captures intentionally show scrolled regions. The additional [offline release shelf](.impeccable/review/v1.1/offline-shelf-release-phone.png) shows a real downloaded M4B in the final signed release. Offline MP3/M4B playback, seeking, later-part behavior, pause/resume, and cold restart passed native validation. The final signed release additionally passed an offline M4B cold restart; see [offline-native-final.txt](verification/offline-native-final.txt), [release-offline.json](verification/release-offline.json), and [offline-restart.json](verification/offline-restart.json). The user subsequently confirmed the requested live cached-M4B and basic fold/unfold phone flow; see [user-device-1.1.json](verification/user-device-1.1.json). Subsequent direct signed-release checks on the connected Android 17 phone verified live multipart TorBox listening, later-part seeking, background/screen-off continuation, system headset-button events, network recovery, and saved-position reopening; see [physical-android-1.1.json](verification/physical-android-1.1.json). These functional checks do not extend the historical screenshot review into a measured Samsung hinge, Bluetooth-routing, or performance claim. The original review report remains a historical snapshot; exact Samsung hardware geometry and performance are outside these functional checks.
+
+The separate [Appearance finish review](.impeccable/review/appearance/finish-review.md) returns ship with no material fixes for this branch's customization feature. Its 18 named native region captures cover phone, expanded, and enlarged-text windows, including system scaling 1.3 with app Large 1.2. The previews use synthetic story content and a custom Aurora palette. This review and [appearance.json](verification/appearance.json) establish the scoped emulator appearance behavior; they add no signed-release, physical-phone, or audio certification to the historical evidence above.
 
 ## Elevation & Depth
 
@@ -308,7 +326,7 @@ Player transport gives the circular play/pause control a larger target (82 dp) a
 
 Search is a single-line OutlinedTextField with a search icon, clear action, and the container corner. The credential field is a password-transformed OutlinedTextField with the selection corner. Native field focus, outlines, keyboard interaction, and disabled state remain Material-owned.
 
-FilterChip drives category, source scope when connected, and Night/Day/System selection. Chip groups use short gaps (8 dp); categories scroll horizontally. Their selected states remain native Material states.
+FilterChip drives category, source scope when connected, and Appearance mode, text-size, and custom color-role selection. Chip groups use short gaps (8 dp); categories scroll horizontally and Appearance groups wrap. Their selected states remain native Material states.
 
 ### Navigation and context
 
@@ -356,6 +374,25 @@ Remove download opens a native confirmation explaining that audio is removed whi
 
 Settings introduces the existing headlineSmall/bodyMedium/titleSmall hierarchy around a native Switch labeled Download only on Wi-Fi. It is on by default; enabled copy says downloads wait for an unmetered connection, while disabled copy explains that downloads can use mobile data, including large whole-book files. This is a phone-download preference, separate from streaming and cloud preparation. The value is saved on the device and the status remains visible in the same scrollable settings page.
 
+### Appearance
+
+Settings uses a quiet surfaceContainer entry showing the selected palette and mode. The Appearance page puts a live story/control preview before independent mode, two-column palette, font, and text-size choices. Palette selection has a native selectable state, outline, and checkmark; font rows use radio semantics. Changes to these options apply and persist immediately.
+
+The custom editor is a separate scrollable settings page with a preset starter, a name of up to 28 characters, independent Night/Day previews, twelve 48 dp swatches, HSV sliders, and strict six-digit hex input with an optional `#`. Save & use theme remains outside the scrolling controls, and invalid input disables saving. The saveable draft survives activity recreation and reaches the app only through that action; Back cancels it. Preset switching retains the saved custom slot. Restore default appearance returns to Listening room, Night, Narrio fonts, and Default size while retaining that saved slot. See [AppearanceScreen.kt](app/src/main/java/app/narrio/ui/AppearanceScreen.kt).
+
+### Follow-along passages
+
+Follow along is a reading extension of the Listening room, exposed beside Audio through native Material tabs. It keeps the existing Night/Day materials and player frame. [FollowAlongScreen.kt](app/src/main/java/app/narrio/ui/FollowAlongScreen.kt) owns the passage surface; [PlayerScreen.kt](app/src/main/java/app/narrio/ui/PlayerScreen.kt) supplies its heading and compact transport.
+
+Passages use Newsreader through headlineSmall. The current passage gains stronger type (SemiBold) and copper primary color; surrounding passages stay regular and muted through onSurfaceVariant. A line selected for timing adjustment uses sage secondary color and the same stronger weight. Manrope metadata and controls remain subordinate. Open passage rows use generous separation (20 dp), side insets (24 dp), and a minimum touch height (48 dp), rather than individual cards. Current/estimated state descriptions, selection semantics, and native click labels explain what tapping will do.
+
+ListeningState.positionMs drives highlighting and keeps the active passage near the upper quarter of the text viewport. A manual drag suspends following; Back to current line resumes it. Tapping a passage seeks using its displayed timing mode. Adjust timing suspends following while the listener selects the narrated line, then Match at [audio time] saves that line's media-time anchor. Timing between matches remains estimated. Automatic scroll uses an animated transition only when Android animations are enabled; otherwise it moves directly.
+
+Keep timing status visible. Ordinary EPUB/text uses Estimated timing and drift guidance. Supplied timestamps describes a VTT track attached to one source/audio part; it does not verify edition or narration alignment. A track on another part suppresses highlighting and shows a recovery warning. In a single-file recording, the chapter menu makes estimated jumps across the whole recording; an ambiguous multipart layout asks which text chapter belongs to the current part. Do not present these mappings as exact synchronization.
+
+The empty state offers Find book text and Choose a text file. The native document chooser accepts EPUB, UTF-8 TXT, and VTT; the Book text sheet also lists companion files and public Gutenberg results, with title/author/language/format and edition guidance. Saved text stays on the device. Removal uses a Material confirmation explaining that text and timing matches are removed while audio, bookmarks, and listening progress remain.
+
+Reuse the existing compact/expanded and hinge-aware Listening room layout. Text gets the remaining height above the transport; in tabletop posture, text and transport occupy separate panes around the hinge gap. The transport retains a native slider, 30-second skips, buffering state, and a primary play/pause target (56 dp), with standard control gaps (8 dp). Font scaling and Night/Day colors come from the existing Material theme. Full reader navigation and automatic exact alignment remain deferred; see [docs/FOLLOW_ALONG.md](docs/FOLLOW_ALONG.md). The [scoped native extension record](.impeccable/follow-along.design.json) carries this pattern's behavior and evidence without refreshing the global design sidecar.
 
 **The Native State Rule.** Let Material components render pressed, focused, selected, disabled, loading, and modal states. Web panel hover/focus samples do not define Android interaction.
 
@@ -367,6 +404,8 @@ The sidecar's HTML/CSS entries are labeled display samples for the Impeccable pa
 
 - **Do** use the matching Night or Day Material role for interface text, actions, surfaces, and dividers.
 - **Do** reuse semantic typography roles and keep native text sizes in sp.
+- **Do** keep palette, mode, font, and text-size choices independent, and apply custom drafts only when saved.
+- **Do** derive custom content and control colors from the seeds with the existing contrast generator.
 - **Do** keep recording title, author, narrator, language, and source visibly grouped.
 - **Do** use 24 dp page padding and the existing compact spacing steps for related metadata.
 - **Do** preserve independently scrollable panes and real hinge clearance when the window changes.
@@ -382,6 +421,7 @@ The sidecar's HTML/CSS entries are labeled display samples for the Impeccable pa
 
 - **Don't** replace the warm paper scheme with an automatic inversion of the night palette.
 - **Don't** apply per-book artwork colors to interface-wide controls or surfaces.
+- **Don't** recolor the garden artwork or its fixed cream text and scrim when applying a palette.
 - **Don't** wrap every catalog row or text section in another decorative container.
 - **Don't** shrink the tabletop cover to a fixed thumbnail when the upper pane has room for the artwork.
 - **Don't** place content through a reported separating hinge.
