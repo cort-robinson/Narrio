@@ -263,7 +263,7 @@ private fun CustomThemeEditor(settings: AppearanceSettings, save: (CustomTheme) 
                 ThemePreview(settings.copy(palette = ThemePalette.CUSTOM, custom = draft), dark)
             }
             item {
-                Text("${if (dark) "Night" else "Day"} colours", style = MaterialTheme.typography.headlineSmall)
+                Text("${if (dark) "Night" else "Day"} colors", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(12.dp))
                 FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     ColourRole.entries.forEach { target -> FilterChip(role == target, { role = target }, { Text(target.label) }, modifier = Modifier.testTag("colour-role-${target.name}")) }
@@ -300,7 +300,7 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         }
     }
     Spacer(Modifier.height(20.dp))
-    listOf("Hue", "Colour strength", "Brightness").forEachIndexed { index, title ->
+    listOf("Hue", "Color strength", "Brightness").forEachIndexed { index, title ->
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(title, style = MaterialTheme.typography.labelLarge)
             Text(if (index == 0) "${hsv[index].roundToInt()}°" else "${(hsv[index] * 100).roundToInt()}%", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -317,7 +317,7 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         val parsed = ThemeContrast.parseHex(hex)
         valid(parsed != null)
         if (parsed != null) change(parsed)
-    }, Modifier.fillMaxWidth().testTag("colour-hex"), label = { Text("$label hex colour") }, singleLine = true,
+    }, Modifier.fillMaxWidth().testTag("colour-hex"), label = { Text("$label hex color") }, singleLine = true,
         keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters), isError = invalid,
         supportingText = { Text(if (invalid) "Enter six hex digits, such as #8ACED8." else "The preview adjusts contrast where needed.") })
 }

@@ -304,7 +304,7 @@ The metadata-first catalog and Find sources increment is documented from current
 
 Depth is primarily tonal. Catalog rows sit directly on the ground; dividers separate longer sections. The secondary pane uses surfaceContainerLow, the mini-player and functional status containers use surfaceContainer, and selected rows use secondaryContainer. The mini-player explicitly sets tonal elevation to zero (0 dp). Material sheets and dialogs retain their library elevation behavior; no custom shadow token or elevation scale has been authored.
 
-Atmospheric depth comes from the original garden cover image and its contrast scrim. These are static artwork treatments, not looping effects or a substitute for real media. Retrieved provider art keeps its aspect inside the book-shaped frame; on Android 12+ a blurred, lightly scrimmed crop of the same art fills the margins instead of flat color bars.
+Atmospheric depth comes from the original garden cover image and its contrast scrim. These are static artwork treatments, not looping effects or a substitute for real media. Retrieved provider art keeps its aspect inside the book-shaped frame; a soft, lightly scrimmed crop of the same art fills the margins instead of flat color bars (a blur on large Android 12+ covers; a tiny upscaled decode for thumbnails and older releases). Thumbnails decode at 240 px; large covers decode at 720 px and show the cached thumbnail until then, so shared-element flights never draw blank. Only standalone covers carry a "Cover of" description; rows and the mini-player already read the title.
 
 The one authored shadow belongs to the listening cover: it leans forward (full scale, 22 dp shadow) while narration plays and settles back (90%, 4 dp) when paused.
 
@@ -344,7 +344,7 @@ FilterChip drives browse category and Appearance mode, text-size, and custom col
 
 ### Navigation and context
 
-Discover, My shelf, and Settings use the same Material icon and label pair in navigation bar and rail. In compact detail, an auto-mirrored back control precedes The book or The recording context. A recording chosen from matching results offers Choose another recording; it and System Back return to the catalog details with the source results retained. The player has a collapse control and bookmark action. Full-screen state and destination selection come from the view model, not decorative visual state.
+Discover, My shelf, and Settings use the same Material icon and label pair in navigation bar and rail. Book details use a pinned Material top app bar titled The book or The recording, with an auto-mirrored back control in compact windows; it tints to surfaceContainer once content scrolls beneath it. A recording chosen from matching results offers Choose another recording; it and System Back return to the catalog details with the source results retained. The player has a collapse control and bookmark action. Full-screen state and destination selection come from the view model, not decorative visual state.
 
 ### Book and recording rows and covers
 

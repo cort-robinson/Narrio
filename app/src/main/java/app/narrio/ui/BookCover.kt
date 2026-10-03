@@ -93,21 +93,32 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                 style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         if (book.coverUrl.isNotBlank()) {
-            // One fixed decode size gives every row, detail, and player instance the same memory-cache key,
-            // so a cover that is already decoded draws on its first frame (no blank shared-element flight).
+            // Thumbnails decode small; large covers show the cached thumbnail while their sharper decode
+            // arrives, so a shared-element flight from a row never draws a blank frame.
             val context = LocalContext.current
-            val request = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(720).build() }
+            val request = remember(book.coverUrl, large) {
+                ImageRequest.Builder(context).data(book.coverUrl).size(if (large) 720 else 240).memoryCacheKey(coverKey(book.coverUrl, large))
+                    .apply { if (large) placeholderMemoryCacheKey(coverKey(book.coverUrl, false)) }.build()
+            }
             val painter = rememberAsyncImagePainter(request,
                 onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true }, onError = { coverLoaded = false })
-            // Square audiobook art in a book-shaped frame: its own softened light fills the margins.
-            if (Build.VERSION.SDK_INT >= 31 && coverLoaded) {
-                Image(painter, null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }.blur(18.dp), contentScale = ContentScale.Crop)
+            // Square audiobook art in a book-shaped frame: its own softened light fills the margins. Large covers
+            // blur the art on Android 12+; elsewhere a tiny upscaled decode gives the same soft light cheaply.
+            if (coverLoaded) {
+                if (large && Build.VERSION.SDK_INT >= 31) Image(painter, null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }.blur(18.dp), contentScale = ContentScale.Crop)
+                else {
+                    val glow = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(16).memoryCacheKey("${book.coverUrl}#glow").build() }
+                    Image(rememberAsyncImagePainter(glow), null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Crop)
+                }
                 Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
             }
-            Image(painter, "Cover of ${book.title}", Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Fit)
+            // Rows and the mini-player already read the title beside the art; only standalone covers describe it.
+            Image(painter, if (large) "Cover of ${book.title}" else null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Fit)
         }
     }
 }
+
+private fun coverKey(url: String, large: Boolean) = "$url#${if (large) 720 else 240}"
 
 @Composable
 fun NarrioMark(modifier: Modifier = Modifier) {

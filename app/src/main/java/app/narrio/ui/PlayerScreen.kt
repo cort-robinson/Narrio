@@ -34,6 +34,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.domain.*
 import app.narrio.playback.ListeningState
@@ -378,12 +381,12 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         Spacer(Modifier.height(if (dense) 4.dp else 20.dp))
         // A quiet tool tray: four equal slots that never wrap into an orphaned row.
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent(speedLabel(state.speed), transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { Text(it, maxLines = 1) } }
+            ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent(speedLabel(state.speed), transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { FitLabel(it) } }
             ToolSlot(Icons.Rounded.Bedtime, sleep, active = state.sleepAtEnd || state.sleepUntil > 0) {
-                Text(if (state.sleepAtEnd) "End of part" else if (state.sleepUntil > 0) "${((state.sleepUntil - System.currentTimeMillis()).coerceAtLeast(0) / 60_000) + 1}m" else "Sleep", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                FitLabel(if (state.sleepAtEnd) "End of part" else if (state.sleepUntil > 0) "${((state.sleepUntil - System.currentTimeMillis()).coerceAtLeast(0) / 60_000) + 1}m" else "Sleep")
             }
-            ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { Text("Parts", maxLines = 1) }
-            ToolSlot(Icons.Rounded.Bookmarks, bookmarks) { Text("Bookmarks", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel("Parts") }
+            ToolSlot(Icons.Rounded.Bookmarks, bookmarks) { FitLabel("Bookmarks") }
         }
         AnimatedVisibility(state.error != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column { Spacer(Modifier.height(16.dp)); RecoveryState("Playback stopped", state.error.orEmpty()) { vm.graph.playback.service?.retry() } }
@@ -442,6 +445,14 @@ private fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVec
         Icon(icon, null, Modifier.size(22.dp), tint = tint)
         CompositionLocalProvider(LocalContentColor provides tint, LocalTextStyle provides MaterialTheme.typography.labelMedium) { label() }
     }
+}
+
+/** Tool labels shrink a step or two at large text sizes rather than truncating mid-word. */
+@Composable
+private fun FitLabel(text: String) {
+    val style = LocalTextStyle.current
+    BasicText(text, style = style.copy(color = LocalContentColor.current), maxLines = 1,
+        autoSize = TextAutoSize.StepBased(minFontSize = (style.fontSize.value * .7f).sp, maxFontSize = style.fontSize, stepSize = .5.sp))
 }
 
 @Composable

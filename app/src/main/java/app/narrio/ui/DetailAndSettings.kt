@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -57,13 +59,14 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, connected) {
         if (preparation != null && preparation?.ready != true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
     }
-    LazyColumn(modifier.fillMaxSize(), listState, contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    val scroll = TopAppBarDefaults.pinnedScrollBehavior()
+    Column(modifier.fillMaxSize()) {
+    TopAppBar(title = { Text(if (catalogBook) "The book" else "The recording", style = MaterialTheme.typography.titleMedium) },
+        navigationIcon = { if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") } },
+        windowInsets = WindowInsets(0), scrollBehavior = scroll,
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer))
+    LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection), listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") }
-                Text(if (catalogBook) "The book" else "The recording", style = MaterialTheme.typography.titleMedium)
-            }
-            Spacer(Modifier.height(20.dp))
             val identity: @Composable ColumnScope.() -> Unit = {
                 Text(book.title, style = MaterialTheme.typography.headlineLarge)
                 Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -198,6 +201,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             }
         }
     }
+    }
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
 }
 
@@ -259,7 +263,7 @@ private fun SourcePicker(vm: NarrioViewModel, book: Audiobook, connected: Boolea
 
 @Composable
 private fun Modifier.selectableRow(selected: Boolean, action: () -> Unit): Modifier = this
-    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(12.dp))
+    .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent, RoundedCornerShape(12.dp))
     .clickable(onClick = action).padding(end = 12.dp, top = 4.dp, bottom = 4.dp)
 
 @OptIn(ExperimentalLayoutApi::class)
