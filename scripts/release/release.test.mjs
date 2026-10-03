@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { git, increment, planRelease, versionCode } from './plan.mjs';
 import { certificateDigest, verifyManifest } from './android.mjs';
-import { recoveryAction } from './publish.mjs';
+import { findRelease, recoveryAction } from './publish.mjs';
 import releaseConfiguration from '../../.releaserc.mjs';
 import globAssets from '../../node_modules/@semantic-release/github/lib/glob-assets.js';
 
@@ -73,6 +73,33 @@ test('release recovery never substitutes a newer source for an unpublished tag',
   assert.throws(() => recoveryAction({ ...state, head: 'newer' }), /Re-run that release workflow/);
   assert.equal(recoveryAction({ ...state, published: true, head: 'newer' }), 'continue');
   assert.equal(recoveryAction({ ...state, version: '1.1.0', head: 'newer' }), 'continue');
+});
+
+test('release lookup finds an unpublished draft when the tag endpoint returns 404', async () => {
+  const calls = [];
+  const draft = { id: 42, tag_name: 'v1.2.0', draft: true, assets: [] };
+  const found = await findRelease('v1.2.0', async (path, options) => {
+    calls.push(path);
+    if (path === '/releases/tags/v1.2.0') {
+      assert.equal(options.allowMissing, true);
+      return null;
+    }
+    if (path === '/releases?per_page=100&page=1') return Array.from({ length: 100 }, (_, id) => ({ id, tag_name: `older-${id}` }));
+    if (path === '/releases?per_page=100&page=2') return [draft];
+    if (path === '/releases/42') return draft;
+    assert.fail(`Unexpected request: ${path}`);
+  });
+  assert.equal(found, draft);
+  assert.deepEqual(calls, ['/releases/tags/v1.2.0', '/releases?per_page=100&page=1', '/releases?per_page=100&page=2', '/releases/42']);
+});
+
+test('release lookup returns published releases directly and stops at an empty listing', async () => {
+  const published = { id: 42, tag_name: 'v1.2.0', draft: false };
+  assert.equal(await findRelease('v1.2.0', async path => {
+    assert.equal(path, '/releases/tags/v1.2.0');
+    return published;
+  }), published);
+  assert.equal(await findRelease('v1.2.0', async path => path.startsWith('/releases/tags/') ? null : []), null);
 });
 
 test('release manifest rejects mismatched package, version, source, and Android code', () => {
