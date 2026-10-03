@@ -6,7 +6,7 @@ import { git, versionCode } from './plan.mjs';
 
 function run(command, args, options = {}) {
   if (process.platform === 'win32' && command.endsWith('.bat')) {
-    return execFileSync('cmd.exe', ['/d', '/c', basename(command), ...args], { ...options, cwd: dirname(command) });
+    return execFileSync('cmd.exe', ['/d', '/c', `.\\${basename(command)}`, ...args], { ...options, cwd: dirname(command) });
   }
   return execFileSync(command, args, options);
 }
