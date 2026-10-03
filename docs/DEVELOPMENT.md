@@ -22,9 +22,11 @@ PR policy checks Conventional Commit titles and meaningful release-note summarie
 
 ### CI runtime
 
-The build/lint/unit-test and Android smoke jobs run in parallel. The smoke job restores a clean API 35 Pixel 6 emulator snapshot when available. Only trusted branch pushes save snapshots, before installing the app or test APK; test runs do not save their device state. The cache key includes the runner platform and workflow configuration. A cache miss generates a fresh snapshot and can take longer; after SDK/emulator compatibility changes, increment the cache-key generation to invalidate old snapshots.
+The build/lint/unit-test and Android smoke jobs run in parallel. The smoke job restores a clean API 35 Pixel 6 emulator snapshot when available. Only trusted branch pushes save snapshots, before installing the app or test APK; test runs do not save their device state. The cache key includes the runner platform and workflow configuration. On a cache miss, a trusted branch push boots a clean device, saves its snapshot, then runs the tests; that first run can take longer. PRs and manual runs with no matching cache boot a fresh device directly for testing. After SDK/emulator compatibility changes, increment the cache-key generation to invalidate old snapshots.
 
 PRs targeting `dev` that change only `README.md`, `AGENTS.md`, or Markdown files under `docs/` skip Android setup, compilation, lint, and emulator tests. Release-tooling and CI path-selection tests still run, and the required **CI** check explicitly verifies the intentional skip. Unknown files, empty/failed comparisons, workflow/build/tooling changes, PRs to `master`, branch pushes, and manual runs execute the full Android suite. The workflow itself always runs, so documentation PRs do not leave required checks pending. No smoke tests are removed.
+
+To inspect runtime, open the linked Actions run and expand **Android smoke tests**. **Restore clean emulator snapshot** shows whether the cache was found; **Run Android smoke tests** contains emulator boot, build/install, and test timings. Compare cache-hit runs separately from cold runs, and use the overall **CI** completion time when judging PR wait time.
 
 ## Test a development build
 
