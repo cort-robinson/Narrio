@@ -112,6 +112,14 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** The book open in the full reader, if any. */
+    val reading = MutableStateFlow<String?>(null)
+    fun read(bookId: String) { reading.value = bookId }
+    fun closeReader() { reading.value = null }
+    /** True when the book has an attached EPUB or text edition the reader can open (timing tracks aren't readable). */
+    fun canRead(bookId: String): Flow<Boolean> = graph.library.observeBookText(bookId)
+        .map { entry -> entry != null && graph.editionFiles.original(bookId, entry.documentId) != null }
+
     fun search(value: String = query.value, cat: String = category.value) {
         val browseCategory = if (value.isBlank()) cat else "All"
         query.value = value; category.value = browseCategory

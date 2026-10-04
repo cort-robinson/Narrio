@@ -18,6 +18,12 @@ enum class EditionKind { EPUB, TXT }
 object ReaderDocuments {
     class Prepared(val bytes: ByteArray, val index: ResourceTextIndex?)
 
+    /** The font family name of the Narrio pairing: Manrope text with Newsreader headings. */
+    const val NARRIO_PAIRING = "NarrioPairing"
+    private const val PAIRING_CSS = ":root[style*=\"readium-font-on\"][style*=\"$NARRIO_PAIRING\"] h1, :root[style*=\"readium-font-on\"][style*=\"$NARRIO_PAIRING\"] h2, " +
+        ":root[style*=\"readium-font-on\"][style*=\"$NARRIO_PAIRING\"] h3, :root[style*=\"readium-font-on\"][style*=\"$NARRIO_PAIRING\"] h4, " +
+        ":root[style*=\"readium-font-on\"][style*=\"$NARRIO_PAIRING\"] h5, :root[style*=\"readium-font-on\"][style*=\"$NARRIO_PAIRING\"] h6 " +
+        "{ font-family: Newsreader, serif !important; letter-spacing: -0.01em; }"
     private const val EPUB_NAMESPACE = "http://www.idpf.org/2007/ops"
     private const val XHTML_NAMESPACE = "http://www.w3.org/1999/xhtml"
 
@@ -32,6 +38,10 @@ object ReaderDocuments {
             root.removeAttr("style")
             if (xhtml && !root.hasAttr("xmlns")) root.attr("xmlns", XHTML_NAMESPACE)
             markFootnotes(display)
+            // Readium adds its default stylesheet only to unstyled chapters; don't change which chapters those are.
+            val head = display.getElementsByTag("head").firstOrNull()
+            if (head != null && !head.html().contains(NARRIO_PAIRING) && (display.select("link[rel~=(?i)stylesheet], style").isNotEmpty() || display.select("[style]").any { it !== root }))
+                head.appendElement("style").attr("type", "text/css").appendText(PAIRING_CSS)
             if (display.getAllElements().any { element -> element.attributes().any { it.key.startsWith("epub:") } } && !root.hasAttr("xmlns:epub"))
                 root.attr("xmlns:epub", EPUB_NAMESPACE)
             when (kind) {

@@ -145,6 +145,11 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).then(
                 if (!expanded && !tabletop && current == Home) Modifier.padding(bottom = barHeight) else Modifier.navigationBarsPadding()))
         }
+        // The reader takes the whole window, above every layout, and falls back into the book it came from.
+        val reading by vm.reading.collectAsStateWithLifecycle()
+        AnimatedContent(reading, Modifier.fillMaxSize(), transitionSpec = { if (targetState != null) Motion.rise() else Motion.fall() }, label = "reader") { bookId ->
+            if (bookId != null) ReaderScreen(vm, bookId, vm::closeReader)
+        }
         }
     }
 }

@@ -84,18 +84,30 @@ android {
     // Reader fixtures (hostile and sample EPUBs) are shared by JVM and emulator tests.
     listOf("test", "androidTest").forEach { sourceSets.getByName(it).kotlin.directories += "src/sharedTest/java" }
 }
+/** Exposes the bundled Manrope and Newsreader fonts to the reader's WebView, which loads fonts from assets. */
+abstract class ReaderFontAssets : DefaultTask() {
+    @get:InputFiles abstract val fonts: ConfigurableFileCollection
+    @get:OutputDirectory abstract val output: DirectoryProperty
+    @TaskAction fun copy() {
+        val target = output.get().dir("fonts").asFile.apply { deleteRecursively(); mkdirs() }
+        fonts.files.forEach { it.copyTo(target.resolve(it.name), overwrite = true) }
+    }
+}
+val readerFontAssets = tasks.register<ReaderFontAssets>("readerFontAssets") { fonts.from(fileTree("src/main/res/font") { include("*.ttf") }) }
+androidComponents { onVariants { it.sources.assets?.addGeneratedSourceDirectory(readerFontAssets, ReaderFontAssets::output) } }
+
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
-    implementation(platform("androidx.compose:compose-bom:2025.04.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.1")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("androidx.window:window:1.4.0")
     implementation("androidx.room:room-runtime:2.7.2")
@@ -125,7 +137,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2025.04.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

@@ -74,6 +74,14 @@ class EditionLayout(val resources: List<String>, private val lengths: Map<String
     fun progression(resource: String, offset: Int): Double =
         if (total <= 0) 0.0 else ((position(resource, offset) ?: 0L).toDouble() / total).coerceIn(0.0, 1.0)
 
+    /** The resource and offset at [fraction] (0..1) of the edition, for the position scrubber. */
+    fun place(fraction: Double): Pair<String, Int>? {
+        val target = (fraction.coerceIn(0.0, 1.0) * total).toLong()
+        val unique = resources.distinct()
+        val resource = unique.lastOrNull { (starts[it] ?: 0) <= target && length(it) > 0 } ?: unique.firstOrNull() ?: return null
+        return resource to (target - (starts[resource] ?: 0)).toInt().coerceIn(0, (length(resource) - 1).coerceAtLeast(0))
+    }
+
     /** Characters between two places; negative when [to] is earlier. */
     fun distance(fromResource: String, fromOffset: Int, toResource: String, toOffset: Int): Long? {
         val from = position(fromResource, fromOffset) ?: return null

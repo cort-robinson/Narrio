@@ -123,6 +123,8 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                         }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
+                    if (document.format == "EPUB" || document.format == "TXT")
+                        IconButton({ vm.read(book.id) }) { Icon(Icons.AutoMirrored.Rounded.MenuBook, "Open in the reader") }
                     IconButton({ sourcesOpen = true; vm.clearTextError() }) { Icon(Icons.Rounded.MoreHoriz, "Manage book text") }
                 }
                 if (document.timedSourceId.isBlank()) {
