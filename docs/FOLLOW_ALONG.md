@@ -43,7 +43,23 @@ The status line reads **Synced with narration** when recognized anchors are clos
 
 Without anchors, **Estimated timing** distributes passages by word count over the selected chapter/audio-part duration. A single-file recording uses the whole book, and its chapter menu seeks to an estimated text position. Matching chapter/part counts use ordered chapters; otherwise an ambiguous multipart layout asks for a chapter until narration sync places the part. Use **Adjust timing**, tap the line being narrated, and **Match at [audio time]** to anchor it manually.
 
-Highlighting reads `ListeningState.positionMs`, rather than wall time. Pause, resume, speed changes, slider seeks, bookmarks, and part transitions therefore use the same media clock as playback. Existing Room source positions remain the authority for listening progress. There is no second reading percentage that could disagree with them.
+Highlighting reads `ListeningState.positionMs`, rather than wall time. Pause, resume, speed changes, slider seeks, bookmarks, and part transitions therefore use the same media clock as playback. Per-recording Room source positions retain listening history; the ebook effort adds one shared reading/listening position per book, committed after about ten seconds of playback. Audio owns that shared position while playing.
+
+### Ebook sync engine
+
+The sync engine maps the active edition and a chosen recording in both directions. Text starts use
+anchors first, then unambiguous chapter/part estimates. An estimated start tries one 20-second
+recognition window using an already installed English model; a locally confirmed target corrects
+the seek and becomes exact. Unavailable models/audio and unsupported languages keep the estimate.
+Pairing status derives from attempted narration windows and recognized anchor coverage; mismatched
+pairs keep independent positions. Mode/recording jumps above one page or thirty seconds expose Undo
+state for the reader/library workstreams.
+
+**Settings → Reading & listening → Sync narration in the background** is on by default. Phone
+downloads align using cache-only reads; streamed alignment waits for an unmetered connection while
+charging. WorkManager saves progress after each window and resumes in bounded batches. The English
+model downloads once on an unmetered connection. See [sync integration](EREADER_SYNC.md) for the
+temporary persistence adapters, UI state, bounds, and workstream A/B/D/E integration requirements.
 
 ## Storage and identity
 

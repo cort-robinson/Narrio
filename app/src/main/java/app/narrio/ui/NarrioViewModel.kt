@@ -73,6 +73,14 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     val playback = graph.playback.state
     val bookText = MutableStateFlow(BookTextState())
     val narrationSync = graph.narrationSync.status
+    val readingSync = graph.readingSync.state
+    val backgroundAlignment = MutableStateFlow(graph.bookAlignment.enabled())
+    fun setBackgroundAlignment(value: Boolean) { graph.bookAlignment.setEnabled(value); backgroundAlignment.value = value }
+    fun undoSyncJump() = graph.playback.service?.undoSyncJump()
+    fun clearSyncJump() = graph.readingSync.clearJump()
+    suspend fun resolveReadingStart(bookId: String, editionId: String, previous: ContentCursor?, pagesMoved: Int? = null) =
+        graph.readingSync.readingStart(bookId, editionId, previous, pagesMoved)
+    fun seekFromText(cursor: ContentCursor) = viewModelScope.launch { graph.playback.service?.seekFromText(cursor) }
     /** Finds ebooks and syncs them with narration without being asked. */
     val followAlongAuto = MutableStateFlow(graph.preferences.getBoolean("followAlongAuto", true))
     private val autoFindText get() = followAlongAuto.value
@@ -454,7 +462,10 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     fun followAlongVisible(visible: Boolean) {
         syncJob?.cancel()
         syncJob = if (!visible) null else viewModelScope.launch {
-            graph.narrationSync.run({ syncTarget() }) { bookId, binding -> graph.followAlong.bind(bookId, binding) }
+            graph.narrationSync.run({ syncTarget() }) { bookId, binding ->
+                graph.followAlong.mergeNarration(bookId, binding, binding.anchors.filter { it.auto }, playback.value.durationMs)
+                graph.mappingRepository.snapshot(bookId, binding.sourceId)?.let { graph.readingSync.refreshPairing(bookId, it) }
+            }
         }
     }
 
@@ -528,6 +539,12 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         val part = state.part ?: return@launch
         val binding = bookText.value.bindings.firstOrNull { it.sourceId == source.id && it.partId == part.id }
         if (binding != null) graph.followAlong.bind(state.book!!.id, binding.copy(anchors = emptyList()))
+        val snapshot = state.book?.let { graph.mappingRepository.snapshot(it.id, source.id) }
+        if (snapshot != null) {
+            val key = alignmentKey(state.book!!.id, snapshot, part.id)
+            graph.alignmentJobs.save(AlignmentProgress(key))
+            graph.bookAlignment.enqueue(key, graph.offline.complete(part))
+        }
         graph.narrationSync.retry(part.id)
         bookText.value = bookText.value.copy(error = null)
     }

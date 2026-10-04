@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 class NarrioApplication : Application() {
     lateinit var graph: AppGraph
         private set
-    override fun onCreate() { super.onCreate(); graph = AppGraph(this) }
+    override fun onCreate() { super.onCreate(); graph = AppGraph(this); graph.bookAlignment.start() }
 }
 
 class AppGraph(application: Application) {
@@ -45,5 +45,12 @@ class AppGraph(application: Application) {
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks)
     val speechModels = SpeechModelStore(application, http)
     val narrationSync = app.narrio.playback.NarrationSync(application, http, offline, torbox, speechModels)
+    // TEMPORARY adapters: replace with workstream A's repositories when rebasing; retain ownership gate.
+    val sharedPositions = app.narrio.domain.AudioOwnedPositionStore(TemporaryFileSharedPositions(application))
+    val mappingRepository = TemporaryLegacyMappingRepository(library, followAlong)
+    val positionMapper: app.narrio.domain.PositionMapper = app.narrio.domain.NarrationPositionMapper(mappingRepository)
+    val alignmentJobs: app.narrio.domain.AlignmentJobRepository = TemporaryFileAlignmentJobs(application)
+    val readingSync = app.narrio.playback.ReadingSync(sharedPositions, positionMapper, mappingRepository, alignmentJobs)
+    val bookAlignment = app.narrio.playback.BookAlignmentScheduler(application)
     val updates = app.narrio.updates.AppUpdates(application, playback)
 }

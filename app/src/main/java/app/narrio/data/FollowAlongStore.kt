@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.encodeToString
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -94,6 +95,21 @@ class FollowAlongStore(private val context: Context, private val library: Librar
     suspend fun bind(bookId: String, binding: TextBinding) = mutations.withLock {
         if (library.bookText(bookId)?.documentId != binding.documentId) throw ProviderException("The book text changed. Choose the chapter again.")
         library.putTextBinding(TextBindingEntry(bookId, binding.sourceId, binding.partId, NarrioJson.encodeToString(binding)))
+    }
+
+    /** Serial read/merge/write preserves a manual match made during recognition. No schema changes. */
+    suspend fun mergeNarration(bookId: String, fallback: TextBinding, anchors: List<TextAnchor>, durationMs: Long): TextBinding = mutations.withLock {
+        val entry = library.bookText(bookId)?.takeIf { it.documentId == fallback.documentId }
+            ?: throw ProviderException("The active ebook changed during narration sync.")
+        val document = load(entry)
+        val latest = library.observeTextBindings(bookId).first().map { it.binding() }
+            .firstOrNull { it.documentId == document.id && it.sourceId == fallback.sourceId && it.partId == fallback.partId } ?: fallback
+        val merged = FollowAlongTiming.mergeAuto(document, latest, anchors, durationMs)
+        val auto = merged.anchors.filter { it.auto }
+        val bounded = if (auto.size <= 2048) merged else merged.copy(anchors = (merged.anchors.filterNot { it.auto } +
+            (0 until 2048).map { auto[it * auto.lastIndex / 2047] }).sortedBy { it.positionMs })
+        library.putTextBinding(TextBindingEntry(bookId, bounded.sourceId, bounded.partId, NarrioJson.encodeToString(bounded)))
+        bounded
     }
 
     suspend fun remove(bookId: String) = withContext(Dispatchers.IO) { mutations.withLock {

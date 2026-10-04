@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.MediaExtractorCompat
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -16,6 +17,8 @@ import app.narrio.data.*
 import app.narrio.domain.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
 import org.vosk.Model
@@ -50,14 +53,16 @@ class NarrationSync(
     private val offline: OfflineStore,
     torbox: TorBoxDelivery,
     private val models: SpeechModelStore,
-) {
+) : NarrationWindowRecognizer {
     val status = MutableStateFlow(SyncStatus())
     private val parts = ConcurrentHashMap<String, AudioPart>()
     private val links = ConcurrentHashMap<String, String>()
-    private val upstream = DefaultDataSource.Factory(context, OkHttpDataSource.Factory(http.newBuilder().callTimeout(0, TimeUnit.MILLISECONDS).build()))
+    private val upstream = DefaultDataSource.Factory(context, OkHttpDataSource.Factory(http.newBuilder().callTimeout(30, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()))
     // Reads phone downloads when present; streaming reads are never written to the offline cache.
     private val audio: DataSource.Factory = offline.playbackFactory { RefreshingDataSource(upstream.createDataSource(), torbox, parts, links) }
-    private val attempted = mutableSetOf<String>()
+    private val attempted = ConcurrentHashMap.newKeySet<String>()
+    // Foreground, correction, and workers share one decoder/model; never run Vosk concurrently.
+    private val recognition = Mutex()
     private var meteredAllowed = false
     private var loaded: Pair<String, Model>? = null
     private val alignments = mutableMapOf<String, NarrationAlignment>()
@@ -72,11 +77,11 @@ class NarrationSync(
         try {
             while (true) {
                 currentCoroutineContext().ensureActive()
-                val delayMs = step(target, save)
+                val delayMs = recognition.withLock { step(target, save) }
                 delay(delayMs)
             }
         } finally {
-            withContext(NonCancellable) { release() }
+            withContext(NonCancellable) { recognition.withLock { release() } }
             if (status.value.phase == SyncPhase.LISTENING) status.value = SyncStatus()
         }
     }
@@ -105,9 +110,11 @@ class NarrationSync(
         status.value = SyncStatus(SyncPhase.LISTENING)
         val key = attemptKey(current, binding, window)
         attempted += key
+        if (attempted.size > 4096) attempted.clear()
         val anchors = try {
             val samples = withContext(Dispatchers.IO) { decode(current.part, window, WINDOW_MS) }
             val words = withContext(Dispatchers.Default) { recognize(folder, samples.first, samples.second) }
+            if (alignments.size > 1) alignments.clear()
             val alignment = alignments.getOrPut("${current.document.id}|${binding.chapterId}") { NarrationAlignment(lines) }
             withContext(Dispatchers.Default) { place(alignment, current, binding, words, window) }
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -120,12 +127,51 @@ class NarrationSync(
             val latest = target()?.takeIf { it.part.id == current.part.id && it.document.id == current.document.id } ?: return 0
             val base = latest.binding?.takeIf { it.chapterId == binding.chapterId } ?: binding
             val merged = FollowAlongTiming.mergeAuto(current.document, base, anchors, current.durationMs)
-            if (merged != base) runCatching { save(current.book.id, merged) }
+            if (merged != base) save(current.book.id, merged)
         }
         return 0
     }
 
     private fun idle(): Long { if (status.value.phase != SyncPhase.IDLE) status.value = SyncStatus(); return 2000 }
+
+    /** Correction/background work never downloads a model implicitly. Decode failure isn't a mismatch. */
+    override suspend fun window(target: SyncTarget, startMs: Long): RecognizedWindow = recognizeWindow(target, startMs, false)
+
+    suspend fun offlineWindow(target: SyncTarget, startMs: Long): RecognizedWindow = recognizeWindow(target, startMs, true)
+
+    private suspend fun recognizeWindow(target: SyncTarget, startMs: Long, localOnly: Boolean): RecognizedWindow = recognition.withLock {
+        val model = models.modelFor(target.document.language.ifBlank { target.book.language })
+            ?: return@withLock RecognizedWindow(WindowOutcome.UNSUPPORTED)
+        val folder = models.installed(model) ?: return@withLock RecognizedWindow(WindowOutcome.UNAVAILABLE)
+        if (target.durationMs <= 0 || target.document.timedSourceId.isNotBlank()) return@withLock RecognizedWindow(WindowOutcome.UNAVAILABLE)
+        try {
+            val binding = target.binding?.takeIf { it.documentId == target.document.id && it.sourceId == target.source.id && it.partId == target.part.id }
+                ?: TextBinding(target.document.id, target.source.id, target.part.id, WHOLE_BOOK)
+            val lines = FollowAlongTiming.passages(target.document, binding.chapterId)
+            if (lines.isEmpty()) return@withLock RecognizedWindow(WindowOutcome.UNAVAILABLE)
+            val samples = withContext(Dispatchers.IO) { decode(target.part, startMs.coerceAtLeast(0), WINDOW_MS, localOnly) }
+            val words = withContext(Dispatchers.Default) { recognize(folder, samples.first, samples.second) }
+            val anchors = withContext(Dispatchers.Default) { NarrationAlignment(lines).match(words) }
+            RecognizedWindow(if (anchors.isEmpty()) WindowOutcome.NO_MATCH else WindowOutcome.MATCHED, anchors)
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { RecognizedWindow(WindowOutcome.UNAVAILABLE) }
+        finally { release() }
+    }
+
+    suspend fun duration(part: AudioPart, localOnly: Boolean = false): Long = recognition.withLock { withContext(Dispatchers.IO) {
+        val uri = stableAudioUri(part)
+        parts[uri] = part
+        val extractor = MediaExtractorCompat(DefaultExtractorsFactory(), if (localOnly) localAudio() else audio)
+        try {
+            extractor.setDataSource(Uri.parse(uri), 0)
+            (0 until extractor.trackCount).map { extractor.getTrackFormat(it) }.firstOrNull {
+                it.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true && it.containsKey(MediaFormat.KEY_DURATION)
+            }?.getLong(MediaFormat.KEY_DURATION)?.div(1000) ?: 0
+        } finally { extractor.release() }
+    } }
+
+    private fun localAudio(): DataSource.Factory = CacheDataSource.Factory().setCache(offline.cache)
+        .setUpstreamDataSourceFactory(null).setCacheWriteDataSinkFactory(null)
 
     private fun attemptKey(target: SyncTarget, binding: TextBinding, startMs: Long) =
         "${target.document.id}|${target.source.id}|${target.part.id}|${binding.chapterId}|${startMs / SPACING_MS}"
@@ -156,10 +202,10 @@ class NarrationSync(
     }
 
     /** Decodes [lengthMs] from [startMs] to 16 kHz mono, using the same extractors and seek map as the player. */
-    private fun decode(part: AudioPart, startMs: Long, lengthMs: Long): Pair<ShortArray, Long> {
+    private suspend fun decode(part: AudioPart, startMs: Long, lengthMs: Long, localOnly: Boolean = false): Pair<ShortArray, Long> {
         val uri = stableAudioUri(part)
         parts[uri] = part
-        val extractor = MediaExtractorCompat(DefaultExtractorsFactory(), audio)
+        val extractor = MediaExtractorCompat(DefaultExtractorsFactory(), if (localOnly) localAudio() else audio)
         var codec: MediaCodec? = null
         try {
             extractor.setDataSource(Uri.parse(uri), 0)
@@ -177,8 +223,9 @@ class NarrationSync(
             var inputDone = false
             var firstUs = -1L
             val info = MediaCodec.BufferInfo()
-            val deadline = System.currentTimeMillis() + 120_000
-            while (System.currentTimeMillis() < deadline) {
+            val deadline = android.os.SystemClock.elapsedRealtime() + 45_000
+            while (android.os.SystemClock.elapsedRealtime() < deadline) {
+                currentCoroutineContext().ensureActive()
                 if (!inputDone) {
                     val index = codec.dequeueInputBuffer(10_000)
                     if (index >= 0) {
@@ -209,6 +256,7 @@ class NarrationSync(
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
                 }
             }
+            currentCoroutineContext().ensureActive()
             if (firstUs < 0) throw ProviderException("No audio was decoded for this window.")
             return resample(mono.toArray(), rate) to firstUs / 1000
         } finally {
@@ -230,7 +278,7 @@ class NarrationSync(
         return output
     }
 
-    private fun recognize(folder: File, samples: ShortArray, offsetMs: Long): List<SpokenWord> {
+    private suspend fun recognize(folder: File, samples: ShortArray, offsetMs: Long): List<SpokenWord> {
         val model = loaded?.takeIf { it.first == folder.path }?.second ?: Model(folder.path).also { model ->
             loaded?.second?.close(); loaded = folder.path to model
         }
@@ -246,6 +294,7 @@ class NarrationSync(
             recognizer.setWords(true)
             var at = 0
             while (at < samples.size) {
+                currentCoroutineContext().ensureActive()
                 val count = minOf(CHUNK, samples.size - at)
                 if (recognizer.acceptWaveForm(samples.copyOfRange(at, at + count), count)) collect(recognizer.result)
                 at += count
@@ -260,7 +309,11 @@ class NarrationSync(
     private class FloatCollector {
         private var data = FloatArray(1 shl 16)
         private var size = 0
-        fun add(value: Float) { if (size == data.size) data = data.copyOf(size * 2); data[size++] = value }
+        fun add(value: Float) {
+            check(size < 4_000_000) { "Decoded window is too large" }
+            if (size == data.size) data = data.copyOf(size * 2)
+            data[size++] = value
+        }
         fun toArray(): FloatArray = data.copyOf(size)
     }
 
