@@ -39,8 +39,12 @@ class BookSourceDiscovery(
         val indexedBooks = cloud.filter { it.provider == "knaben" }
         if (indexedBooks.isNotEmpty()) {
             val checked = read { checkCached(indexedBooks) }
-            errors += listOfNotNull(checked.second)
-            cloud = cloud.filter { it.provider != "knaben" } + checked.first
+            val available = if (checked.second == null) checked.first else {
+                errors += "TorBox availability could not be checked. Retry to check which releases have audio."
+                // A delivery outage must not erase discovery or make stale availability playable.
+                indexedBooks.map { it.copy(cacheState = "unchecked", cachedFormats = emptyList(), sources = emptyList(), filesVerified = false) }
+            }
+            cloud = cloud.filter { it.provider != "knaben" } + available
         }
         var usable = SourceQuality.filter(book, cloud + hydrated)
         // Inspecting uncached torrent metadata is slow; skip it when a ready recording already exists.
@@ -180,7 +184,8 @@ object SourceQuality {
         val subtitle = clean(BookIdentity.title(book.title).substringAfter(':', ""), emptySet())
         fun named(words: String) = titles.any { title -> words == title || Regex("^${Regex.escape(title)} (?:by|read by|narrated by)\\b").containsMatchIn(words) }
         // Bracketed and parenthesized tags describe a release, not its title; a truncated tag runs to the end.
-        val body = trimmed.replace(Regex("\\[[^]]*]?|\\([^)]*\\)?|\\{[^}]*}?"), " ")
+        // Android's ICU regex engine requires literal closing braces to be escaped.
+        val body = trimmed.replace(Regex("\\[[^\\]]*\\]?|\\([^)]*\\)?|\\{[^}]*\\}?"), " ")
         var evidence = TitleEvidence.NONE
         for (segment in body.split(Regex("\\s+[-–—/|]\\s+|_|(?<=\\p{L}{2})\\.(?=\\p{L})|\\s+-(?=\\S)"))) {
             if (named(clean(segment, authorTokens))) return TitleEvidence.EXACT

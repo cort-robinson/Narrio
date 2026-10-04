@@ -139,11 +139,31 @@ class BookSourceDiscoveryTest {
         assertEquals(listOf(valid.id, public.id), filtered.map { it.id })
     }
 
-    @Test fun providerFailuresKeepMatchingPublicAudioAndNeverShowUncheckedIndexedSources() = runBlocking {
+    @Test fun cacheFailureKeepsMatchingReleasesForReviewWithoutClaimingPlayableAudio() = runBlocking {
+        val candidate = release().copy(cacheState = "unchecked", cachedFormats = emptyList(), sources = emptyList(), seeders = 3)
+        val wrong = candidate.copy(id = "wrong", title = "Andy Weir - Project Hail Mary 2", torrentHash = "b".repeat(40))
+        var inspected = false
+        val discovery = BookSourceDiscovery(provider(emptyList()), listOf(provider(listOf(candidate, wrong))), { emptyList() },
+            { throw ProviderException("Unavailable") }, { inspected = true; error("Availability was not checked") })
+        val results = discovery.search(book, true)
+        assertTrue(results.recordings.isEmpty())
+        assertEquals(listOf(candidate), results.possible)
+        assertEquals("TorBox availability could not be checked. Retry to check which releases have audio.", results.error)
+        assertFalse(inspected)
+    }
+
+    @Test fun providerFailuresKeepMatchingPublicAudioAndNeverMakeUncheckedIndexedSourcesPlayable() = runBlocking {
         val public = release("Project Hail Mary", "Andy Weir", "archive")
-        val discovery = BookSourceDiscovery(provider(listOf(public)), listOf(provider(listOf(release()))), { emptyList() }, { throw ProviderException("Unavailable") })
+        val stale = release().copy(torrentHash = "b".repeat(40), seeders = 2, filesVerified = true)
+        val discovery = BookSourceDiscovery(provider(listOf(public)), listOf(provider(listOf(stale))), { emptyList() }, { throw ProviderException("Unavailable") })
         val results = discovery.search(book, true)
         assertEquals(listOf(public.id), results.recordings.map { it.id }); assertNotNull(results.error)
+        val unchecked = results.possible.single()
+        assertEquals(stale.id, unchecked.id)
+        assertEquals("unchecked", unchecked.cacheState)
+        assertTrue(unchecked.sources.isEmpty())
+        assertTrue(unchecked.cachedFormats.isEmpty())
+        assertFalse(unchecked.filesVerified)
     }
 
     @Test fun disconnectedDiscoveryUsesOnlyPublicRecordingsAndRechecksHydratedIdentity() = runBlocking {
