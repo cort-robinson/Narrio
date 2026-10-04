@@ -34,7 +34,7 @@ class FollowAlongMigrationTest {
             old.execSQL("INSERT INTO positions VALUES (?, ?, ?, ?, ?, ?)", arrayOf<Any>(book.id, source.id, NarrioJson.encodeToString(source), "legacy-part", 123456, 1))
             old.version = 3
         }
-        val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration3To4).build()
+        val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration3To4, LibraryMigration4To5).build()
         try {
             val dao = database.library()
             assertEquals(123456L, dao.find(book.id)!!.positionMs)
@@ -43,7 +43,7 @@ class FollowAlongMigrationTest {
             assertEquals(123456L, dao.position(book.id, source.id)!!.positionMs)
             dao.attachText(book, "document")
             dao.putTextBinding(TextBindingEntry(book.id, source.id, "legacy-part", NarrioJson.encodeToString(TextBinding("document", source.id, "legacy-part", "chapter"))))
-            dao.deleteBookText(book.id)
+            dao.removeText(book.id)
             assertTrue(dao.observeTextBindings(book.id).first().isEmpty())
             assertEquals(123456L, dao.find(book.id)!!.positionMs)
             assertEquals(1, dao.bookmarks(book.id).first().size)

@@ -70,6 +70,14 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     /** Emitted after Now playing is dismissed, so the shell can offer Undo. */
     val dismissedPlayback = MutableSharedFlow<ListeningState>(extraBufferCapacity = 1)
     val shelf = graph.library.observeShelf().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val shelfState = graph.library.observeShelfState().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun editions(bookId: String): Flow<List<EbookEdition>> = combine(graph.library.observeEditions(bookId), graph.library.observeBookText(bookId)) { editions, active ->
+        editions.map { it.edition(it.editionId == active?.documentId) }
+    }
+    fun sharedPosition(bookId: String) = graph.sharedPositions.observe(bookId)
+    suspend fun importEbook(uri: Uri): Audiobook = graph.ebookImporter.import(uri)
+    suspend fun activateEdition(bookId: String, editionId: String) = graph.followAlong.activateEdition(bookId, editionId)
+    suspend fun removeEdition(bookId: String, editionId: String) = graph.followAlong.removeEdition(bookId, editionId)
     val playback = graph.playback.state
     val bookText = MutableStateFlow(BookTextState())
     val narrationSync = graph.narrationSync.status

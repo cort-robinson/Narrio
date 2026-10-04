@@ -21,7 +21,7 @@ Summaries, study guides, collections, box sets, sequels, and releases naming ano
 
 Files are limited to 20 MB. DRM, Kindle formats, PDFs, pagination, annotations, text search, images, layout styling, and standalone reader navigation are outside this increment. EPUB parsing follows the declared spine order. Scripts and remote resources never execute. Original file bytes, provenance, resource names, normalized text offsets, and a normalization version are retained for a later reader.
 
-**Manage book text** replaces or removes text. Replacing a document clears its timing matches. Removing text keeps audio, bookmarks, and listening progress. Removing a shelf recording removes its attached text too. Saved text and adjustments work without connectivity; lookup and downloads need a connection.
+**Manage book text** attaches or removes text. Attaching a different document makes it active and retains earlier editions and their timing matches. Data APIs support activating or removing an individual edition; edition-picker UI is a separate reader workstream. Removing text keeps audio, bookmarks, and listening progress. Removing a shelf recording removes its attached text too. Saved text and adjustments work without connectivity; lookup and downloads need a connection.
 
 ## Timing
 
@@ -43,14 +43,14 @@ The status line reads **Synced with narration** when recognized anchors are clos
 
 Without anchors, **Estimated timing** distributes passages by word count over the selected chapter/audio-part duration. A single-file recording uses the whole book, and its chapter menu seeks to an estimated text position. Matching chapter/part counts use ordered chapters; otherwise an ambiguous multipart layout asks for a chapter until narration sync places the part. Use **Adjust timing**, tap the line being narrated, and **Match at [audio time]** to anchor it manually.
 
-Highlighting reads `ListeningState.positionMs`, rather than wall time. Pause, resume, speed changes, slider seeks, bookmarks, and part transitions therefore use the same media clock as playback. Existing Room source positions remain the authority for listening progress. There is no second reading percentage that could disagree with them.
+Highlighting reads `ListeningState.positionMs`, rather than wall time. Pause, resume, speed changes, slider seeks, bookmarks, and part transitions therefore use the same media clock as playback. Room source positions retain listening history. Schema 5 also stores one shared reading/listening position per book; reader and listening activity commits use its sequence guard. The sync workstream owns activity thresholds and mapping.
 
 ## Storage and identity
 
 - `AudioSource.textFiles` holds stable provider references. TorBox ebook links resolve immediately before fetching; generated URLs and credentials are never serialized with text.
 - `BookText` contains ordered chapters and passage locators `(resource, normalized offset)`. Its content fingerprint identifies imported bytes. Standalone timing-track identity additionally includes its audio layout/part. Later normalization changes must version locators explicitly.
-- `book_text` attaches one chosen document to a shelf recording. `text_bindings` stores chapter choices and anchors by `(bookId, sourceId, partId)` and checks document identity. Private `files/follow-along/<hashed recording id>/` stores the original and normalized copy. Writes are atomic and attachment/anchor mutations are serialized.
-- Migration 3 → 4 adds the text tables while retaining shelf entries, bookmarks, source histories, and pending preparation. Removing an attachment cascades only its text bindings.
+- `ebook_editions` retains every attached document, while `book_text` identifies the active edition. `text_bindings` stores chapter choices and anchors by `(bookId, editionId, sourceId, partId)` and checks document identity. Private `files/follow-along/<hashed recording id>/` stores the original and normalized copy. Writes are atomic and attachment/anchor mutations are serialized.
+- Migration 3 → 4 adds the text tables while retaining shelf entries, bookmarks, source histories, and pending preparation. Migration 4 to 5 preserves those attachments, original files, anchors, bookmarks, listening history, and preparation state. Removing an edition clears its bindings, annotations, and alignment jobs; other editions keep theirs. Removing all book text preserves audio bookmarks and listening history.
 
 - `TextAnchor` carries a word offset within its passage and whether it was recognized (`auto`). Both default for anchors saved before narration sync, so existing bindings load unchanged.
 
