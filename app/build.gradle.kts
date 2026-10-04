@@ -81,6 +81,8 @@ android {
     }
     testOptions { unitTests.isReturnDefaultValues = true }
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+    // Reader fixtures (hostile and sample EPUBs) are shared by JVM and emulator tests.
+    listOf("test", "androidTest").forEach { sourceSets.getByName(it).kotlin.directories += "src/sharedTest/java" }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
@@ -106,7 +108,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jsoup:jsoup:1.21.2")
+    // BookTextParser offsets (follow-along anchors, reader cursors) depend on Element.text(); jsoup 1.23 changed its
+    // separators, so keep 1.21.2 even though Readium requests 1.23. Readium only uses APIs present in 1.21.
+    implementation("org.jsoup:jsoup") { version { strictly("1.21.2") } }
     implementation("io.coil-kt:coil-compose:2.7.0")
     // On-device speech recognition for narration sync; models download on first use.
     implementation("com.alphacephei:vosk-android:0.3.75")
