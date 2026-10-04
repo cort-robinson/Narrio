@@ -93,7 +93,7 @@ class ListeningService : MediaSessionService() {
             }
         })
         scope.launch {
-            try { graph.library.lastPlayed()?.let { entry -> entry.source()?.let { load(entry.book(), it, false) } } }
+            try { restorable()?.let { entry -> entry.source()?.let { load(entry.book(), it, false) } } }
             finally { initialized = true }
             while (isActive) {
                 if (sleepUntil > 0 && System.currentTimeMillis() >= sleepUntil) { sleepUntil = 0; player.pause(); save() }
@@ -150,8 +150,17 @@ class ListeningService : MediaSessionService() {
         links.clear(); publish()
     }
     suspend fun forget() {
-        save(); player.stop(); player.clearMediaItems(); currentBook = null; currentSource = null; parts.clear(); links.clear(); chapters = emptyList(); publish()
+        // Detach first: clearing the player fires listeners that would otherwise save position 0 over the listener's place.
+        save(); currentBook = null; currentSource = null; player.stop(); player.clearMediaItems(); parts.clear(); links.clear(); chapters = emptyList()
+        sleepUntil = 0; sleepAtEnd = false; error = null; publish()
     }
+    /** Clear Now playing but keep the shelf entry and position; the next launch stays empty until something plays again. */
+    suspend fun dismiss() {
+        forget()
+        graph.preferences.edit().putLong(DISMISSED_AT, System.currentTimeMillis()).apply()
+    }
+    /** The last played book, unless the listener dismissed it after that. */
+    suspend fun restorable(): ShelfEntry? = graph.library.lastPlayed()?.takeIf { it.playedAt > graph.preferences.getLong(DISMISSED_AT, 0) }
     suspend fun bookmark(label: String = "") {
         val book = currentBook ?: return; val source = currentSource ?: return
         val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return
@@ -210,4 +219,6 @@ class ListeningService : MediaSessionService() {
         graph.playback.service = null
         chapterJob?.cancel(); scope.cancel(); session?.release(); player.release(); super.onDestroy()
     }
+
+    private companion object { const val DISMISSED_AT = "playbackDismissedAt" }
 }

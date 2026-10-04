@@ -18,7 +18,7 @@ git push -u origin feature/my-feature
 gh pr create --base dev
 ```
 
-PR policy checks Conventional Commit titles and meaningful release-note summaries. CI runs JVM tests, Android lint/build checks, release-tooling tests, and emulator smoke tests for persistence, encrypted credential removal, link renewal, metadata-only book details and source selection, source choices, offline settings, follow-along interaction/source binding, and the text-schema migration. These required tests use controlled fixtures; live provider and listening checks remain separate because provider availability should not decide whether a release can build.
+PR policy checks Conventional Commit titles and meaningful release-note summaries. CI runs JVM tests, Android lint/build checks, release-tooling tests, and emulator smoke tests for persistence, encrypted credential removal, link renewal, metadata-only book details and source selection, source choices, closing Now playing, offline settings, follow-along interaction/source binding, and the text-schema migration. These required tests use controlled fixtures; live provider and listening checks remain separate because provider availability should not decide whether a release can build.
 
 ### CI runtime
 
