@@ -2,6 +2,8 @@
 
 Before changing this repository, read and follow [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). It is the canonical development, testing, versioning, and release workflow.
 
+These instructions apply only to work on Narrio. Keep Narrio workflow rules in this repository rather than user-wide agent instructions, skills, settings, or memory.
+
 ## Branches and pull requests
 
 - Inspect the working tree and current branch first. Preserve unrelated changes and other worktrees; use an isolated branch/worktree when needed.
@@ -13,6 +15,17 @@ Before changing this repository, read and follow [docs/DEVELOPMENT.md](docs/DEVE
 - Urgent stable hotfixes start from `master` on `hotfix/*`, use Conventional Commits, and target `master`; sync them back to `dev` afterward.
 - Before merging, re-check the actual PR head and required checks. Use that verified head as the merge guard; new commits require renewed verification.
 - Preserve persistent branches and release tags. Do not bypass or weaken branch/tag rules or required checks to get a change merged.
+
+## Local development verification
+
+Follow the [local verification policy](docs/DEVELOPMENT.md#local-development-verification) when choosing checks.
+
+- Batch a coherent set of edits, then run the smallest checks that cover the changed behavior. Prefer focused JVM tests and compilation during iteration; documentation-only changes need no Android setup.
+- Use an emulator when Android runtime behavior or visual interaction needs verification. Select the affected test class/method or user flow; reserve full local suites for broad changes or unresolved failures.
+- Reuse an explicitly selected, already running project test emulator. Reset only the fixture/app state needed for isolation; use a fresh boot when startup, installation, or isolation is the behavior under test. Preserve devices and sessions used by other agents.
+- Use incremental Gradle builds and its default local daemon. Reserve clean builds and optimized release builds for a demonstrated need or relevant release verification.
+- Before the PR is ready, confirm that checks appropriate to the completed diff have passed, including screen inspection for UI changes. Reuse passing results while their relevant inputs are unchanged. Re-run affected checks when source, dependencies, fixtures, or build settings change; broaden checks when failures or shared behavior justify it. Report the actual commands, scope, and results.
+- Complete all required CI against the current PR candidate. Focused local verification does not remove Android CI coverage or the documented release, physical-device, and live-provider checks. Scripted and AI-driven UI testing follow the same local test-selection policy.
 
 ## Versioning, signing, and verification
 
