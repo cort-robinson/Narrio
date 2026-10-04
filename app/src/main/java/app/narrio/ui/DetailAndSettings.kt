@@ -15,6 +15,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,8 +53,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val connected by vm.connected.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val sourceSearch by vm.sourceSearch.collectAsStateWithLifecycle()
+    val ebookSearch by vm.ebookSearch.collectAsStateWithLifecycle()
+    val loadedFormats by vm.detailFormats.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var sourcePicker by remember(book.id) { mutableStateOf(false) }
+    var ebookSheet by remember(book.id) { mutableStateOf(false) }
+    val ebookFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     var expandedDescription by remember(book.id) { mutableStateOf(false) }
     var showVersions by remember(book.id) { mutableStateOf(false) }
     var showResults by remember(book.id) { mutableStateOf(false) }
@@ -60,6 +66,11 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     LaunchedEffect(currentSelection.book?.id) { if (currentSelection.book?.id != book.id) sourcePicker = false }
     val catalogBook = book.provider == "catalog"
     val saved = shelf.any { it.bookId == book.id }
+    val formats = loadedFormats?.takeIf { it.bookId == book.id } ?: BookFormats(book.id, audio = !catalogBook && book.sources.isNotEmpty())
+    val search = sourceSearch.takeIf { it.book?.id == book.id }
+    // An ebook-only book asks before looking for a recording.
+    val awaitingAudioSearch = catalogBook && formats.ebook && !formats.audio && search?.searched != true && search?.loading != true
+    val openEbooks = { ebookSheet = true; vm.openEbookSearch(book) }
     LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, connected) {
         if (preparation != null && preparation?.ready != true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
     }
@@ -67,6 +78,15 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     Column(modifier.fillMaxSize()) {
     TopAppBar(title = { Text(if (catalogBook) "The book" else "The recording", style = MaterialTheme.typography.titleMedium) },
         navigationIcon = { if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") } },
+        actions = {
+            TextButton({ vm.save(book) }, Modifier.padding(end = 8.dp), enabled = !saved) {
+                AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(if (done) Icons.Rounded.LibraryAddCheck else Icons.Rounded.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
+                    }
+                }
+            }
+        },
         windowInsets = WindowInsets(0), scrollBehavior = scroll,
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer))
     LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection).testTag("book-details"), listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -81,7 +101,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                         Text(book.language, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Text(providerLabel(book), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // A book added from a file names a catalog only when one actually supplied its details.
+                    if (!catalogBook || book.metadataSource.isNotBlank()) Text(providerLabel(book), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (!catalogBook && book.provider != "archive") Text("Narration, language, and abridgment of this release remain unverified.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
@@ -101,20 +122,20 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         if (selected.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
         selected.error?.let { item { RecoveryState("Couldn't load this edition", it) { vm.open(book) } } }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                if (catalogBook) CatalogListenButton(vm, book, sourceSearch, busy, Modifier.weight(1f)) { showResults = true }
-                else Button({ sourcePicker = true }, Modifier.weight(1f), enabled = !selected.loading && book.sources.isNotEmpty() && !busy) {
-                    Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Listen")
+            FormatActions(formats, audioSlot = { slot, leading ->
+                when {
+                    awaitingAudioSearch -> OutlinedButton({ vm.findSources(book, force = true) }, slot.testTag("find-audiobook-action")) { SlotLabel(Icons.Rounded.Search, "Find audiobook") }
+                    catalogBook -> CatalogListenButton(vm, book, sourceSearch, busy, slot, leading) { showResults = true }
+                    else -> ModeButton({ sourcePicker = true }, slot.testTag("listen-action"), leading, enabled = !selected.loading && book.sources.isNotEmpty() && !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
                 }
-                OutlinedButton({ vm.save(book) }, enabled = !saved) {
-                    AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(if (done) Icons.Rounded.LibraryAddCheck else Icons.Rounded.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
-                        }
-                    }
-                }
-            }
-            if (catalogBook) {
+            }, read = { vm.read(book) }, findEbook = openEbooks)
+            SharedPlaceCaption(formats, Modifier.padding(top = 14.dp))
+            if (awaitingAudioSearch) {
+                Spacer(Modifier.height(12.dp))
+                Text(if (connected) "Find audiobook checks LibriVox, your TorBox library, and indexed releases for a recording of this title and author."
+                     else "Find audiobook checks LibriVox for a free public recording of this title and author. Connect TorBox for more sources.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (catalogBook) {
                 Spacer(Modifier.height(12.dp))
                 SourceStatus(vm, book, sourceSearch.takeIf { it.book?.id == book.id } ?: SourceSearchState(book), connected,
                     showVersions = { showVersions = !showVersions; showResults = false }, showResults = { showResults = !showResults; showVersions = false })
@@ -128,6 +149,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             }
             if (!catalogBook && sourceSearch.book?.provider == "catalog") TextButton({ vm.back() }) { Text("Choose another recording") }
         }
+        if (formats.ebook) item { EditionSummary(book, formats, openEbooks) }
         if (catalogBook && sourceSearch.book?.id == book.id && !sourceSearch.loading) {
             val choice = sourceSearch.choice
             if (showVersions && sourceSearch.versions.size > 1) {
@@ -175,7 +197,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             Text(book.description.ifBlank { if (catalogBook) "This catalog hasn't provided a description for the book." else "Open the recording to load its description and available sources." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
             if (book.description.length > 500) TextButton({ expandedDescription = !expandedDescription }) { Text(if (expandedDescription) "Read less" else "Read more") }
-            if (book.metadataSource.isNotBlank()) TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(book.metadataUrl))) }) { Text("Details from ${book.metadataSource}") }
+            if (book.metadataSource.isNotBlank() && book.metadataUrl.isNotBlank()) TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(book.metadataUrl))) }) { Text("Details from ${book.metadataSource}") }
             if (book.releaseTitle.isNotBlank() && book.releaseTitle != book.title) Text("Release: ${book.releaseTitle}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
             if (book.provider != "archive" && !catalogBook) TextButton({ vm.refreshMetadata(book) }, enabled = !selected.metadataLoading) {
@@ -196,27 +218,32 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     }
     }
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
+    if (ebookSheet) EbookSheet(book, formats, ebookSearch, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
+        chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
+        activate = { vm.chooseEdition(book, it.id) }, dismiss = { ebookSheet = false })
+}
+
+/** The leading format is the filled action; the other available format is tonal. */
+@Composable
+fun ModeButton(onClick: () -> Unit, modifier: Modifier, leading: Boolean, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
+    if (leading) Button(onClick, modifier, enabled = enabled, content = content)
+    else FilledTonalButton(onClick, modifier, enabled = enabled, content = content)
 }
 
 @Composable
-private fun CatalogListenButton(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, busy: Boolean, modifier: Modifier, review: () -> Unit) {
+private fun CatalogListenButton(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, busy: Boolean, modifier: Modifier, leading: Boolean, review: () -> Unit) {
     val current = search.takeIf { it.book?.id == book.id }
     val choice = current?.choice
     when {
-        current == null || current.loading -> Button({}, modifier, enabled = false) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text("Finding audio…")
+        current == null || current.loading || !current.searched -> ModeButton({}, modifier, leading, enabled = false) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text("Finding audio…", maxLines = 1)
         }
-        choice != null -> Button({ vm.listenToChoice() }, modifier, enabled = !busy) {
+        choice != null -> ModeButton({ vm.listenToChoice() }, modifier.testTag("listen-action"), leading, enabled = !busy) {
             val ready = SourceQuality.ready(choice)
-            Icon(if (ready) Icons.Rounded.PlayArrow else Icons.Rounded.CloudDownload, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
-            Text(if (ready) "Listen" else "Review and prepare")
+            SlotLabel(if (ready) Icons.Rounded.PlayArrow else Icons.Rounded.CloudDownload, if (ready) "Listen" else "Review and prepare")
         }
-        current.results.isNotEmpty() -> Button(review, modifier) {
-            Icon(Icons.Rounded.Search, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Choose a recording")
-        }
-        else -> Button({ vm.findSources(book, force = true) }, modifier) {
-            Icon(Icons.Rounded.Refresh, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Search again")
-        }
+        current.results.isNotEmpty() -> ModeButton(review, modifier, leading) { SlotLabel(Icons.Rounded.Search, "Choose a recording") }
+        else -> ModeButton({ vm.findSources(book, force = true) }, modifier, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
     }
 }
 
