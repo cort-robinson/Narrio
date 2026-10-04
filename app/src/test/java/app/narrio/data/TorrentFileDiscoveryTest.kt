@@ -51,7 +51,7 @@ class TorrentFileDiscoveryTest {
                 override suspend fun recording(id: String): Audiobook = error("No public recordings")
             }
             val catalogBook = Audiobook("catalog:eragon", "Eragon", "Christopher Paolini", provider = "catalog")
-            val result = BookSourceDiscovery(public, KnabenDiscovery(http, server.url("/v2/").toString()), torbox::library, torbox::checkCached, files::recording).search(catalogBook, true)
+            val result = BookSourceDiscovery(public, listOf(KnabenDiscovery(http, server.url("/v2/").toString())), torbox::library, torbox::checkCached, files::recording).search(catalogBook, true)
             assertNull(result.error)
             val recording = result.recordings.single()
             assertEquals(hash, recording.torrentHash)

@@ -35,7 +35,7 @@ class AppGraph(application: Application) {
     val books = BookCatalog(metadata)
     val torbox = TorBoxDelivery(http, credentials::read)
     val torrentFiles = TorrentFileDiscovery(http)
-    val bookSources = BookSourceDiscovery(catalog, indexedCatalog, torbox::library, torbox::checkCached, torrentFiles::recording)
+    val bookSources = BookSourceDiscovery(catalog, listOf(indexedCatalog, TorBoxSearchDiscovery(http, credentials::read)), torbox::library, torbox::checkCached, torrentFiles::recording)
     val textDiscovery = GutenbergTextDiscovery(http)
     val followAlong = FollowAlongStore(application, library, http, torbox)
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)

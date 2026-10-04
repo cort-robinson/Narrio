@@ -16,9 +16,22 @@ import app.narrio.playback.ListeningState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
+private const val SOURCE_RESULTS_MS = 10 * 60_000L
+
 data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null)
 data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
-data class SourceSearchState(val book: Audiobook? = null, val recordings: List<Audiobook> = emptyList(), val loading: Boolean = false, val searched: Boolean = false, val error: String? = null)
+/**
+ * [recordings] are verified and confidently matched, best first; [possible] need the listener's review.
+ * The automatic [choice] is the best recording unless the listener picked another version.
+ */
+data class SourceSearchState(
+    val book: Audiobook? = null, val recordings: List<Audiobook> = emptyList(), val loading: Boolean = false, val searched: Boolean = false,
+    val error: String? = null, val possible: List<Audiobook> = emptyList(), val chosenId: String? = null,
+) {
+    val choice: Audiobook? get() = recordings.firstOrNull { it.id == chosenId } ?: recordings.firstOrNull()
+    val versions: List<Audiobook> by lazy { SourceQuality.versions(recordings) }
+    val results: List<Audiobook> get() = recordings + possible
+}
 data class BookTextState(
     val bookId: String = "",
     val document: BookText? = null,
@@ -70,6 +83,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var sourceSearchJob: Job? = null
+    private val sourceResults = mutableMapOf<String, Pair<Long, SourceSearchState>>()
     private var detailMetadataJob: Job? = null
     private var metadataRequest = 0
     private var controller: MediaController? = null
@@ -110,22 +124,44 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun findSources(book: Audiobook) {
+    /** Runs automatically when a book opens. Complete results are reused briefly so returning to a book is instant. */
+    fun findSources(book: Audiobook, force: Boolean = false) {
         sourceSearchJob?.cancel()
+        val key = "${book.id}|${connected.value}"
+        sourceResults[key]?.takeIf { !force && System.currentTimeMillis() - it.first < SOURCE_RESULTS_MS }?.let { sourceSearch.value = it.second; return }
         sourceSearch.value = SourceSearchState(book = book, loading = true, searched = true)
         sourceSearchJob = viewModelScope.launch {
             try {
                 val results = graph.bookSources.search(book, connected.value)
-                sourceSearch.value = SourceSearchState(book, results.recordings, searched = true, error = results.error)
+                sourceSearch.value = SourceSearchState(book, results.recordings, searched = true, error = results.error, possible = results.possible)
+                if (results.error == null) sourceResults[key] = System.currentTimeMillis() to sourceSearch.value
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { sourceSearch.value = SourceSearchState(book, searched = true, error = friendly(error)) }
         }
     }
 
+    /** Opens a recording's own page, where its formats, files, downloads, and preparation are available. */
     fun chooseRecording(recording: Audiobook) {
         val book = sourceSearch.value.book ?: return
-        if (recording !in sourceSearch.value.recordings) return
+        if (recording !in sourceSearch.value.results) return
         open(SourceQuality.describe(recording, book), keepSources = true)
+    }
+
+    fun chooseVersion(recording: Audiobook) {
+        sourceSearch.update { state -> if (recording in state.recordings) state.copy(chosenId = recording.id) else state }
+    }
+
+    /** Plays the chosen recording directly when it is ready; otherwise its page offers explicit TorBox preparation. */
+    fun listenToChoice() {
+        val search = sourceSearch.value
+        val book = search.book ?: return
+        val recording = search.choice ?: return
+        val described = SourceQuality.describe(recording, book)
+        val formats = if (recording.provider == "archive") recording.sources else recording.sources.filter { it.format in recording.cachedFormats }
+        if (!SourceQuality.ready(recording) || formats.isEmpty()) return open(described, keepSources = true)
+        val saved = graph.preferences.getString("format:${described.id}", "")
+        val source = formats.firstOrNull { it.format == saved } ?: formats.firstOrNull { it.format == "M4B" } ?: formats.first()
+        start(described, source, if (recording.provider == "archive") "archive" else "torbox")
     }
 
     fun open(book: Audiobook, keepSources: Boolean = false) {
@@ -142,7 +178,11 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
                 var full = if (book.detailsLoaded) book else graph.catalog.recording(book.id)
                 if (!connected.value) full = full.copy(cacheState = "unchecked", cachedFormats = emptyList())
                 selection.value = SelectionState(full)
-                if (full.provider == "catalog") return@launch
+                if (full.provider == "catalog") {
+                    val search = sourceSearch.value
+                    if (search.book?.id != full.id || !search.searched || search.loading) findSources(full)
+                    return@launch
+                }
                 val saved = graph.library.find(full.id)
                 saved?.book()?.takeIf { it.metadataUpdatedAtMs > full.metadataUpdatedAtMs }?.let { full = full.withMetadataFrom(it) }
                 preferredFormat.value = saved?.pendingFormat?.takeIf { it.isNotBlank() } ?: graph.preferences.getString("format:${full.id}", saved?.source()?.format.orEmpty()).orEmpty()
@@ -297,7 +337,8 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         busy.value = true
         try {
             graph.torbox.connect(key.trim()); graph.credentials.write(key.trim())
-            connected.value = true; messages.emit("TorBox connected. Find sources from a book's details to check ready audio.")
+            connected.value = true; messages.emit("TorBox connected. Books now also check TorBox for ready audio.")
+            selection.value.book?.takeIf { it.provider == "catalog" }?.let { findSources(it) }
         } catch (error: Exception) { messages.emit(friendly(error)) }
         finally { busy.value = false }
     }
@@ -305,6 +346,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         graph.playback.service?.disconnect(); graph.offline.disconnect(); graph.credentials.clear(); connected.value = false
         sourceSearchJob?.cancel()
         sourceSearch.value = SourceSearchState(book = selection.value.book)
+        selection.value.book?.takeIf { it.provider == "catalog" }?.let { findSources(it) }
         messages.tryEmit("TorBox disconnected; its credential has been removed.")
     }
     fun updateAppearance(value: AppearanceSettings) {

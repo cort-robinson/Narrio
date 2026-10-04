@@ -106,8 +106,8 @@ class NarrioListeningTest {
         compose.waitUntil(60_000) { vm.catalog.value.books.any { it.title.startsWith("Pride and Prejudice") } }
         val book = vm.catalog.value.books.first { it.title.startsWith("Pride and Prejudice") }
         compose.runOnIdle { vm.open(book) }
-        compose.onNodeWithText("Find sources").performScrollTo().performClick()
         compose.waitUntil(90_000) { !vm.sourceSearch.value.loading && vm.sourceSearch.value.recordings.any { it.provider == "archive" } }
+        compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
         val recording = vm.sourceSearch.value.recordings.first { it.provider == "archive" }
         compose.runOnIdle { vm.chooseRecording(recording) }
         compose.waitUntil(30_000) { vm.selection.value.book?.id == recording.id && !vm.selection.value.loading }
