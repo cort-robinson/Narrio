@@ -10,9 +10,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 /** Release discovery only. Availability is checked independently against TorBox. */
 class KnabenDiscovery(private val http: OkHttpClient, private val endpoint: String = "https://api.knaben.org/v2/") : RecordingDiscovery {
-    override suspend fun search(query: String, category: String): List<Audiobook> = withContext(Dispatchers.IO) {
+    override suspend fun search(query: String, category: String): List<Audiobook> = search(query, AUDIOBOOKS)
+
+    /** Ebook releases, for book text. TorBox cache checks decide whether any can be used. */
+    suspend fun ebooks(query: String): List<Audiobook> = if (query.isBlank()) emptyList() else search(query, EBOOKS)
+
+    private suspend fun search(query: String, categoryId: Int): List<Audiobook> = withContext(Dispatchers.IO) {
         val url = (endpoint + if (query.isBlank()) "browse" else "search").toHttpUrl().newBuilder()
-            .addQueryParameter("c", "1003000").addQueryParameter("s", "60")
+            .addQueryParameter("c", categoryId.toString()).addQueryParameter("s", "60")
             .addQueryParameter("o", "seeders").addQueryParameter("dead", null)
         if (query.isNotBlank()) url.addQueryParameter("q", query.trim().take(250))
         val root = http.newCall(Request.Builder().url(url.build()).build()).execute().use { response ->
@@ -20,16 +25,19 @@ class KnabenDiscovery(private val http: OkHttpClient, private val endpoint: Stri
             runCatching { NarrioJson.parseToJsonElement(response.body?.string().orEmpty()).jsonObject }
                 .getOrElse { throw ProviderException("Knaben returned an unreadable search response.") }
         }
-        parse(root)
+        parse(root, categoryId)
     }
 
     override suspend fun recording(id: String): Audiobook = throw ProviderException("Choose an indexed release from search to inspect its cached audio files.")
 
     companion object {
-        fun parse(root: JsonObject): List<Audiobook> = root.objects("hits").mapNotNull { hit ->
+        const val AUDIOBOOKS = 1003000
+        const val EBOOKS = 9001000
+
+        fun parse(root: JsonObject, categoryId: Int = AUDIOBOOKS): List<Audiobook> = root.objects("hits").mapNotNull { hit ->
             val categories = (hit["categoryId"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.intOrNull }.orEmpty()
             val hash = hit.text("hash").lowercase()
-            if (1003000 !in categories || !hash.matches(Regex("[0-9a-f]{40}"))) return@mapNotNull null
+            if (categoryId !in categories || !hash.matches(Regex("[0-9a-f]{40}"))) return@mapNotNull null
             val title = hit.text("title").trim()
             if (title.isBlank()) return@mapNotNull null
             // A release name is not authoritative narration or language metadata.

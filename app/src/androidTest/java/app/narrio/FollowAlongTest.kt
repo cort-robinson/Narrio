@@ -74,7 +74,8 @@ Somewhere beyond the trees, a bell began to ring."""
     private fun open(book: Audiobook) {
         compose.waitUntil(15_000) { graph.playback.service?.initialized == true }
         runBlocking { withContext(Dispatchers.Main) { graph.playback.service!!.load(book, book.sources.single(), false, book.sources.single().parts.first().id, 0) } }
-        compose.runOnIdle { graph.preferences.edit().putBoolean("notificationAsked", true).apply(); vm.updateAppearance(AppearanceSettings()); vm.playerOpen.value = true }
+        // Controlled fixtures: no automatic ebook lookup or speech-model download.
+        compose.runOnIdle { graph.preferences.edit().putBoolean("notificationAsked", true).apply(); vm.setFollowAlongAuto(false); vm.updateAppearance(AppearanceSettings()); vm.playerOpen.value = true }
         compose.onNodeWithText("Follow along").performClick()
     }
 
