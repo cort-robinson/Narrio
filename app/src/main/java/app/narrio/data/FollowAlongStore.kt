@@ -44,20 +44,28 @@ class FollowAlongStore(private val context: Context, private val library: Librar
         attach(bytes, format, book, sourceId, partId, book.title, book.author, "Imported from your device")
     }
 
-    suspend fun fetch(candidate: BookTextSource, book: Audiobook, sourceId: String, partId: String): BookText = withContext(Dispatchers.IO) {
+    /** [validate] can reject the parsed text before anything replaces the current attachment. */
+    suspend fun fetch(candidate: BookTextSource, book: Audiobook, sourceId: String, partId: String, validate: (BookText) -> Unit = {}): BookText = withContext(Dispatchers.IO) {
         // Resolve TorBox in memory; no credential or generated link is stored with the ebook.
-        val url = if (candidate.provider == "torbox") torbox.resolve(AudioPart(candidate.id, candidate.title, candidate.title, torrentId = candidate.torrentId, fileId = candidate.fileId)) else candidate.url
+        val url = when (candidate.provider) {
+            "torbox" -> torbox.resolve(AudioPart(candidate.id, candidate.title, candidate.title, torrentId = candidate.torrentId, fileId = candidate.fileId))
+            "torbox-cache" -> torbox.cachedTextLink(candidate.torrentHash, candidate.magnetUri, candidate.fileName)
+            else -> candidate.url
+        }
         if (!url.startsWith("https://")) throw ProviderException("This source has no secure book-text link. Choose a local file instead.")
         val bytes = http.newCall(Request.Builder().url(url).build()).execute().use { response ->
             if (!response.isSuccessful) throw ProviderException("This book-text file is unavailable. Retry, or choose another edition.")
             BookTextParser.readBounded(response.body?.byteStream() ?: throw ProviderException("This book-text file is empty."))
         }
         attach(bytes, candidate.format, book, sourceId, partId, if (candidate.provider == "gutenberg") candidate.title else book.title,
-            candidate.author.ifBlank { book.author }, candidate.attribution.ifBlank { "From this audio source" })
+            candidate.author.ifBlank { book.author }, candidate.attribution.ifBlank { "From this audio source" }, candidate.language, validate)
     }
 
-    private suspend fun attach(bytes: ByteArray, format: String, book: Audiobook, sourceId: String, partId: String, title: String, author: String, attribution: String): BookText {
+    private suspend fun attach(bytes: ByteArray, format: String, book: Audiobook, sourceId: String, partId: String, title: String, author: String, attribution: String,
+                               language: String = "", validate: (BookText) -> Unit = {}): BookText {
         var document = BookTextParser.parse(bytes, format, title, author, attribution)
+        if (document.language.isBlank() && language.isNotBlank()) document = document.copy(language = language)
+        validate(document)
         if (format == "VTT") {
             if (sourceId.isBlank() || partId.isBlank()) throw ProviderException("Start an audio part before adding its timing track.")
             document = document.copy(timedSourceId = sourceId, timedPartId = partId)

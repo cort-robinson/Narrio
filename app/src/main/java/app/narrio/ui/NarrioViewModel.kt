@@ -29,6 +29,10 @@ data class BookTextState(
     val searched: Boolean = false,
     val results: List<BookTextSource> = emptyList(),
     val error: String? = null,
+    // Automatic lookup when follow along opens without text.
+    val finding: Boolean = false,
+    val findingStep: String = "",
+    val autoMissed: Boolean = false,
 )
 
 class NarrioViewModel(application: Application) : AndroidViewModel(application) {
@@ -53,8 +57,15 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     val shelf = graph.library.observeShelf().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val playback = graph.playback.state
     val bookText = MutableStateFlow(BookTextState())
+    val narrationSync = graph.narrationSync.status
+    /** Finds ebooks and syncs them with narration without being asked. */
+    val followAlongAuto = MutableStateFlow(graph.preferences.getBoolean("followAlongAuto", true))
+    private val autoFindText get() = followAlongAuto.value
+    private var syncJob: Job? = null
+    private val autoTextTried = mutableSetOf<String>()
     private var textSearchJob: Job? = null
     private val textJobs = mutableMapOf<String, Job>()
+    private val autoTextJobs = mutableMapOf<String, Job>()
     private var textImportTarget: ListeningState? = null
     private var searchJob: Job? = null
     private var detailJob: Job? = null
@@ -179,7 +190,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); sourceSearch.value = SourceSearchState(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false }
     fun save(book: Audiobook) = viewModelScope.launch { graph.library.save(book); messages.emit("Saved to your shelf") }
     fun remove(book: Audiobook) = viewModelScope.launch {
-        textJobs[book.id]?.cancel()
+        textJobs[book.id]?.cancel(); autoTextJobs[book.id]?.cancel()
         if (playback.value.book?.id == book.id) graph.playback.service?.forget()
         downloads.value.filter { it.book.id == book.id }.forEach { graph.offline.remove(it.source) }
         graph.followAlong.remove(book.id)
@@ -340,9 +351,60 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         graph.followAlong.fetch(candidate, book, source.id, part.id)
     }
 
+    /** Once per book and session: attach the best matching ebook without asking. Manual choices remain available. */
+    fun autoFindBookText() {
+        val target = playback.value
+        val book = target.book ?: return
+        val source = target.source ?: return
+        val part = target.part ?: return
+        val state = bookText.value
+        if (state.bookId != book.id || state.loading || state.document != null || book.id in autoTextTried || textJobs[book.id]?.isActive == true || !autoFindText) return
+        autoTextTried += book.id
+        fun update(change: (BookTextState) -> BookTextState) { if (bookText.value.bookId == book.id) bookText.value = change(bookText.value) }
+        val job = viewModelScope.launch {
+            update { it.copy(finding = true, autoMissed = false, error = null) }
+            try {
+                val found = graph.textFinder.find(book, source, connected.value, { step -> update { it.copy(findingStep = step) } }) { candidate ->
+                    graph.followAlong.fetch(candidate, book, source.id, part.id) { document ->
+                        require(BookTextFinder.plausible(document, book, source)) { "This file is too short to be the book." }
+                    }
+                }
+                if (found) messages.emit("Found the ebook. Follow along syncs with the narration as you listen.")
+                else update { it.copy(autoMissed = true) }
+            } finally { update { it.copy(finding = false, findingStep = "") } }
+        }
+        autoTextJobs[book.id] = job
+        job.invokeOnCompletion { if (autoTextJobs[book.id] == job) autoTextJobs.remove(book.id) }
+    }
+
+    /** Narration sync runs only while follow along is on screen, bounding battery and data use. */
+    fun followAlongVisible(visible: Boolean) {
+        syncJob?.cancel()
+        syncJob = if (!visible) null else viewModelScope.launch {
+            graph.narrationSync.run({ syncTarget() }) { bookId, binding -> graph.followAlong.bind(bookId, binding) }
+        }
+    }
+
+    fun allowSyncModelDownload() = graph.narrationSync.allowModelDownload()
+    fun setFollowAlongAuto(value: Boolean) { followAlongAuto.value = value; graph.preferences.edit().putBoolean("followAlongAuto", value).apply() }
+
+    private fun syncTarget(): app.narrio.playback.SyncTarget? {
+        if (!followAlongAuto.value) return null
+        val state = playback.value
+        val text = bookText.value
+        val book = state.book ?: return null
+        val source = state.source ?: return null
+        val part = state.part ?: return null
+        val document = text.document?.takeIf { text.bookId == book.id } ?: return null
+        val binding = text.bindings.firstOrNull { it.documentId == document.id && it.sourceId == source.id && it.partId == part.id }
+        return app.narrio.playback.SyncTarget(book, source, part, state.positionMs, state.durationMs, document, binding)
+    }
+
     private fun textWork(target: ListeningState, action: suspend (Audiobook, AudioSource, AudioPart) -> BookText): Job? {
         val book = target.book ?: return null
         if (textJobs[book.id]?.isActive == true) return null
+        // A listener's own choice replaces the automatic lookup.
+        autoTextJobs.remove(book.id)?.cancel()
         val job = viewModelScope.launch {
             val source = target.source ?: return@launch
             val part = target.part ?: return@launch
@@ -393,6 +455,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         val part = state.part ?: return@launch
         val binding = bookText.value.bindings.firstOrNull { it.sourceId == source.id && it.partId == part.id }
         if (binding != null) graph.followAlong.bind(state.book!!.id, binding.copy(anchors = emptyList()))
+        graph.narrationSync.retry(part.id)
         bookText.value = bookText.value.copy(error = null)
     }
 
@@ -401,13 +464,16 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         val document = bookText.value.document ?: return
         if (state.source?.id != binding.sourceId || state.part?.id != binding.partId || document.id != binding.documentId) return
         val time = FollowAlongTiming.timeline(document, binding, state.durationMs)?.starts?.getOrNull(index) ?: return
-        if (state.durationMs > 0 && time >= state.durationMs) { messages.tryEmit("That timestamp is beyond this audio part. Check that the timing track matches."); return }
+        if (time < 0 || (state.durationMs > 0 && time >= state.durationMs)) {
+            messages.tryEmit(if (document.timedSourceId.isNotBlank()) "That timestamp is beyond this audio part. Check that the timing track matches." else "That passage is narrated in another audio part.")
+            return
+        }
         graph.playback.service?.seek(time)
     }
 
     fun removeBookText() = viewModelScope.launch {
         val id = playback.value.book?.id ?: return@launch
-        textJobs[id]?.cancel()
+        textJobs[id]?.cancel(); autoTextJobs[id]?.cancel()
         graph.followAlong.remove(id)
         bookText.value = bookText.value.copy(error = null)
         messages.emit("Book text removed. Your audio and listening progress are saved.")

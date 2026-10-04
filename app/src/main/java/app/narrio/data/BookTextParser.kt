@@ -169,7 +169,8 @@ object BookTextParser {
             if (blocks.isEmpty()) lines += splitPassages(html.body().text(), path, 0)
             finish()
         }
-        return BookText(fingerprint(bytes), title, author, "EPUB", attribution, chapters)
+        val language = opf.getElementsByTag("dc:language").firstOrNull()?.text()?.trim()?.take(35).orEmpty()
+        return BookText(fingerprint(bytes), title, author, "EPUB", attribution, chapters, language = language)
     }
 
     private fun safePath(path: String): String {
