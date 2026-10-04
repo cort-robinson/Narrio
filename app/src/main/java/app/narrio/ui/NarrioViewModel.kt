@@ -124,6 +124,13 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun addonsChanged() {
+        sourceResults.clear()
+        sourceSearchJob?.cancel()
+        sourceSearch.value = SourceSearchState(book = sourceSearch.value.book)
+        search()
+    }
+
     /** Runs automatically when a book opens. Complete results are reused briefly so returning to a book is instant. */
     fun findSources(book: Audiobook, force: Boolean = false) {
         sourceSearchJob?.cancel()
@@ -369,13 +376,23 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun searchBookText(query: String) {
-        val id = playback.value.book?.id ?: return
+        val target = playback.value.book ?: return
+        val id = target.id
         textSearchJob?.cancel()
         textSearchJob = viewModelScope.launch {
             bookText.value = bookText.value.copy(searching = true, searched = true, results = emptyList(), error = null)
             try {
-                val results = graph.textDiscovery.search(query)
-                if (bookText.value.bookId == id) bookText.value = bookText.value.copy(results = results)
+                var failed = false
+                suspend fun read(block: suspend () -> List<BookTextSource>): List<BookTextSource> = try { block() }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { failed = true; emptyList() }
+                val results = coroutineScope {
+                    val public = async { read { graph.textDiscovery.search(query) } }
+                    val cached = async { if (connected.value) read { graph.textFinder.cachedReleases(target) } else emptyList() }
+                    cached.await() + public.await()
+                }
+                if (bookText.value.bookId == id) bookText.value = bookText.value.copy(results = results,
+                    error = if (failed) "Some ebook providers are unavailable. Try again later or import book text." else null)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { if (bookText.value.bookId == id) bookText.value = bookText.value.copy(error = textError(error)) }
             finally { if (bookText.value.bookId == id) bookText.value = bookText.value.copy(searching = false) }

@@ -13,6 +13,8 @@ class BookCatalog(
     private val metadata: BookMetadata,
     private val googleUrl: String = "https://www.googleapis.com/books/v1/volumes",
     private val now: () -> Long = System::currentTimeMillis,
+    private val addonSearch: (suspend (String) -> List<BookDetails>)? = null,
+    private val addonRevision: () -> Int = { 0 },
 ) {
     private data class Cached(val books: List<Audiobook>, val expires: Long)
     private val cache = object : LinkedHashMap<String, Cached>(32, .75f, true) {
@@ -21,14 +23,14 @@ class BookCatalog(
 
     suspend fun search(query: String, category: String = "All"): List<Audiobook> {
         val terms = query.trim().take(200)
-        val key = "${BookIdentity.normalize(terms)}|$category"
+        val key = "${BookIdentity.normalize(terms)}|$category|${addonRevision()}"
         synchronized(cache) { cache[key]?.takeIf { it.expires > now() } }?.let { return it.books }
         var failed = false
         suspend fun read(block: suspend () -> List<BookDetails>) = try { block() }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { failed = true; emptyList() }
         val browseTerm = when (category) { "Wonder" -> "fantasy"; "All" -> "bestsellers"; else -> category.lowercase(Locale.ROOT) }
-        var candidates = read { metadata.audible(terms.ifBlank { browseTerm }, 50) }
+        var candidates = read { addonSearch?.invoke(terms.ifBlank { browseTerm }) ?: metadata.audible(terms.ifBlank { browseTerm }, 50) }
         fun relevant(book: BookDetails): Boolean {
             if (terms.isBlank()) return true
             val text = " ${BookIdentity.normalize(book.title + " " + book.authors.joinToString(" "))} "
@@ -40,7 +42,7 @@ class BookCatalog(
         }
         if (candidates.none { it.description.isNotBlank() && it.coverUrl.isNotBlank() }) {
             // Work descriptions are separate requests; keep fallback hydration small and paced.
-            val works = read { metadata.librarySearch(terms.ifBlank { browseTerm }) }.filter(::relevant).take(6)
+            val works = (if (addonSearch == null) read { metadata.librarySearch(terms.ifBlank { browseTerm }) } else candidates.filter { it.provider == "Open Library" }).filter(::relevant).take(6)
             for ((index, work) in works.withIndex()) {
                 if (index > 0) delay(1_000)
                 candidates += metadata.libraryDetails(work)
