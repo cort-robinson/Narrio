@@ -23,6 +23,8 @@ class BookMetadata(
     private val audibleUrl: String = "https://api.audible.com/1.0/catalog/",
     private val libraryUrl: String = "https://openlibrary.org/",
     private val now: () -> Long = System::currentTimeMillis,
+    private val addonSearch: (suspend (String) -> List<BookDetails>)? = null,
+    private val addonRevision: () -> Int = { 0 },
 ) {
     private val http = http.newBuilder().connectTimeout(4, TimeUnit.SECONDS)
         .readTimeout(6, TimeUnit.SECONDS).callTimeout(8, TimeUnit.SECONDS).build()
@@ -38,7 +40,7 @@ class BookMetadata(
         if (!force && book.metadataSource.isNotBlank() && now() - book.metadataUpdatedAtMs in 0 until DAY) return book
         val query = cleanRelease(book.releaseTitle.ifBlank { book.title }).take(200)
         if (query.isBlank()) return book
-        val key = "$query|${book.author.takeUnless(::unknown).orEmpty()}|${book.language}".lowercase(Locale.ROOT)
+        val key = "$query|${book.author.takeUnless(::unknown).orEmpty()}|${book.language}|${addonRevision()}".lowercase(Locale.ROOT)
         return try {
             val candidates = requests.withPermit {
                 val cached = synchronized(cache) { cache[key]?.takeIf { it.expires > now() } }
@@ -47,8 +49,15 @@ class BookMetadata(
                     suspend fun optional(block: suspend () -> List<BookDetails>): List<BookDetails> = try { block() }
                         catch (cancelled: CancellationException) { throw cancelled }
                         catch (_: Exception) { failed = true; emptyList() }
-                    var found = optional { audible(query) }
-                    if (match(book, found) == null) found = optional { openLibrary(book, query) }
+                    var found = optional { addonSearch?.invoke(query) ?: audible(query) }
+                    if (addonSearch == null && match(book, found) == null) found = optional { openLibrary(book, query) }
+                    if (addonSearch != null) {
+                        val selected = match(book, found)
+                        if (selected?.provider == "Open Library") {
+                            val hydrated = libraryDetails(selected)
+                            found = found.map { if (it == selected) hydrated else it }
+                        }
+                    }
                     if (found.isNotEmpty() || !failed) synchronized(cache) {
                         cache[key] = Cached(found, now() + if (found.isEmpty()) 5 * 60_000 else DAY)
                     }
@@ -191,7 +200,7 @@ class BookMetadata(
     }
 }
 
-internal data class BookDetails(
+data class BookDetails(
     val title: String, val authors: List<String>, val narrators: List<String>, val description: String,
     val coverUrl: String, val language: String, val provider: String, val url: String,
 )

@@ -46,10 +46,12 @@ class SourceExperienceTest {
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.waitForIdle()
         compose.runOnIdle { vm.chooseFormat(book(), "M4B"); vm.preparation.value = Preparation(7, false, .35f, "Preparing in TorBox", 1_000_000, 3600, 2); vm.selection.value = SelectionState(book().copy(cacheState = "uncached", cachedFormats = emptyList())) }
+        compose.onNodeWithTag("book-details").performScrollToNode(hasText("35%", substring = true))
         compose.onNodeWithText("35%", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Check availability").performScrollTo().assertIsDisplayed()
         capture("preparation-$suffix")
         compose.runOnIdle { vm.connected.value = false; vm.preparation.value = null; vm.navigate(2); vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.DAY)) }
+        compose.onNodeWithTag("settings-options").performScrollToNode(hasText("Download only on Wi-Fi"))
         compose.onNodeWithText("Download only on Wi-Fi").performScrollTo().assertIsDisplayed()
         capture("offline-settings-$suffix")
     }

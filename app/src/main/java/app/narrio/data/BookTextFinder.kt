@@ -12,6 +12,7 @@ class BookTextFinder(
     private val gutenberg: GutenbergTextDiscovery,
     private val knaben: KnabenDiscovery,
     private val torbox: TorBoxDelivery,
+    private val ebookSearch: suspend (String) -> List<Audiobook> = knaben::ebooks,
 ) {
     suspend fun find(book: Audiobook, source: AudioSource?, connected: Boolean, step: (String) -> Unit, attach: suspend (BookTextSource) -> Unit): Boolean {
         suspend fun attempt(candidates: List<BookTextSource>): Boolean {
@@ -38,8 +39,8 @@ class BookTextFinder(
         return attempt(read { gutenberg.search("${BookIdentity.title(book.title)} ${book.author}".trim()).filter { EbookMatch.matches(book, "${it.title.substringBefore(';')} - ${it.author}") } })
     }
 
-    private suspend fun cachedReleases(book: Audiobook): List<BookTextSource> {
-        val releases = SourceQuality.searchTitles(book).flatMap { knaben.ebooks("$it ${book.author}") }
+    suspend fun cachedReleases(book: Audiobook): List<BookTextSource> {
+        val releases = SourceQuality.searchTitles(book).flatMap { ebookSearch("$it ${book.author}") }
             .distinctBy { it.torrentHash }.filter { EbookMatch.matches(book, it.title) }.sortedByDescending { it.seeders }.take(20)
         if (releases.isEmpty()) return emptyList()
         val cached = torbox.cachedTextFiles(releases.map { it.torrentHash })

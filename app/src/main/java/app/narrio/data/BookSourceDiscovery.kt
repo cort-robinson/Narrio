@@ -24,7 +24,7 @@ class BookSourceDiscovery(
         val titles = SourceQuality.searchTitles(book)
         val public = titles.map { title -> async { read { archive.search(title) } } }
         // Each index sees different trackers; the same release from several indexes shares one hash-based ID.
-        val releases = if (connected) indexed.flatMap { index -> titles.map { title -> async { read { index.search(title) } } } } else emptyList()
+        val releases = if (connected) indexed.flatMap { index -> titles.map { title -> async { read { index.searchBook(book, title) } } } } else emptyList()
         // Read the account once: provider substring search cannot match catalog subtitles or punctuation reliably.
         val library = async { if (connected) read { account("") } else emptyList<Audiobook>() to null }
         val results = public.awaitAll() + releases.awaitAll() + library.await()
