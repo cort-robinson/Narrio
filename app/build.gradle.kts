@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
@@ -34,7 +33,7 @@ if (providers.gradleProperty("requireSigning").getOrElse("false").toBoolean()) {
 
 android {
     namespace = "app.narrio"
-    compileSdk = 36
+    compileSdk = 37
     defaultConfig {
         applicationId = when {
             localBuild -> "app.narrio.local"
@@ -51,6 +50,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Readium uses java.time on API levels that predate it.
+        isCoreLibraryDesugaringEnabled = true
     }
     buildTypes {
         release {
@@ -98,9 +99,10 @@ dependencies {
     implementation("androidx.room:room-runtime:2.7.2")
     implementation("androidx.room:room-ktx:2.7.2")
     ksp("androidx.room:room-compiler:2.7.2")
-    implementation("androidx.media3:media3-exoplayer:1.8.0")
-    implementation("androidx.media3:media3-session:1.8.0")
-    implementation("androidx.media3:media3-datasource-okhttp:1.8.0")
+    implementation("androidx.media3:media3-exoplayer:1.11.0")
+    implementation("androidx.media3:media3-session:1.11.0")
+    implementation("androidx.media3:media3-datasource-okhttp:1.11.0")
+    implementation("androidx.media3:media3-inspector:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -108,6 +110,12 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     // On-device speech recognition for narration sync; models download on first use.
     implementation("com.alphacephei:vosk-android:0.3.75")
+    // Ebook reader: EPUB parsing and the WebView navigator, hosted as a fragment inside Compose.
+    implementation("org.readium.kotlin-toolkit:readium-shared:3.4.0")
+    implementation("org.readium.kotlin-toolkit:readium-streamer:3.4.0")
+    implementation("org.readium.kotlin-toolkit:readium-navigator:3.4.0")
+    implementation("androidx.fragment:fragment-ktx:1.9.1")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
