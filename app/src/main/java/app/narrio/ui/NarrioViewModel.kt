@@ -67,6 +67,8 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     val downloads = graph.offline.books
     val wifiOnly = MutableStateFlow(graph.preferences.getBoolean("downloadWifi", true))
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Emitted after Now playing is dismissed, so the shell can offer Undo. */
+    val dismissedPlayback = MutableSharedFlow<ListeningState>(extraBufferCapacity = 1)
     val shelf = graph.library.observeShelf().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val playback = graph.playback.state
     val bookText = MutableStateFlow(BookTextState())
@@ -360,6 +362,18 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         val normalized = value.normalized()
         appearanceStore.save(normalized)
         appearanceState.value = normalized
+    }
+    fun dismissPlayback() = viewModelScope.launch {
+        val state = playback.value
+        if (state.book == null || state.source == null) return@launch
+        playerOpen.value = false
+        graph.playback.service?.dismiss()
+        dismissedPlayback.emit(state)
+    }
+    fun undoDismissPlayback(state: ListeningState) = viewModelScope.launch {
+        val book = state.book ?: return@launch; val source = state.source ?: return@launch
+        if (playback.value.book != null) return@launch
+        awaitService().load(book, source, state.playing || state.buffering, state.part?.id, state.positionMs)
     }
     fun bookmark() = viewModelScope.launch { graph.playback.service?.bookmark(); messages.emit("Bookmark added") }
     fun deleteBookmark(id: Long) = viewModelScope.launch { graph.library.deleteBookmark(id) }

@@ -36,6 +36,7 @@ import androidx.window.layout.*
 import app.narrio.domain.Audiobook
 import app.narrio.domain.ThemeContrast
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -89,6 +90,11 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } }
         val snackbar = remember { SnackbarHostState() }
         LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+        LaunchedEffect(vm) {
+            vm.dismissedPlayback.collectLatest { dismissed ->
+                if (snackbar.showSnackbar("Closed ${dismissed.book?.title}. Your place is saved.", "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.undoDismissPlayback(dismissed)
+            }
+        }
         val updates by vm.graph.updates.state.collectAsStateWithLifecycle()
         var announcedUpdate by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(-1L) }
         LaunchedEffect(updates.phase, updates.available?.code, state.playing, state.buffering) {
