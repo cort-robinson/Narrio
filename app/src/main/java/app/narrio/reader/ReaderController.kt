@@ -4,6 +4,7 @@ import android.graphics.RectF
 import androidx.annotation.ColorInt
 import app.narrio.domain.ContentCursor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
@@ -96,6 +98,8 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
     private var targetAttempts = 0
     private var opening = false
     private val decorationGroups = mutableMapOf<String, List<TextDecoration>>()
+    /** Groups whose taps this controller already receives; Readium keeps every listener it's given. */
+    private val listenedGroups = mutableSetOf<String>()
 
     /** Sets the initial place without treating it as reading activity. */
     fun restore(cursor: ContentCursor?) { _cursor.value = cursor }
@@ -120,8 +124,17 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         return accepted
     }
 
-    /** A jump the reader asked for: contents, scrubber, or "Back to". */
-    fun jumpTo(cursor: ContentCursor) { scope.launch { goTo(cursor, asReader = true) } }
+    /**
+     * A jump the reader asked for: contents, scrubber, or "Back to". With [keepReturnPoint], an existing "Back to"
+     * place survives, so stepping through search matches still returns to where reading was before the search.
+     */
+    fun jumpTo(cursor: ContentCursor, keepReturnPoint: Boolean = false) {
+        scope.launch {
+            val back = _returnPoint.value
+            goTo(cursor, asReader = true)
+            if (keepReturnPoint && back != null) _returnPoint.value = back
+        }
+    }
 
     fun jumpTo(place: BookPlace) = jumpTo(book.cursor(place.resource, place.offset))
 
@@ -155,8 +168,13 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
     suspend fun setDecorations(group: String, decorations: List<TextDecoration>) {
         decorationGroups[group] = decorations
         val navigator = navigator ?: return
-        navigator.applyDecorations(decorations.flatMap { readiumDecorations(it) }, group)
-        navigator.addDecorationListener(group, this)
+        val resolved = decorations.flatMap { readiumDecorations(it) }
+        // Resolving ranges can read a chapter off the main thread; the navigator's WebView only accepts the main one.
+        withContext(Dispatchers.Main.immediate) {
+            if (this@ReaderController.navigator !== navigator) return@withContext
+            navigator.applyDecorations(resolved, group)
+            if (listenedGroups.add(group)) navigator.addDecorationListener(group, this@ReaderController)
+        }
     }
 
     private suspend fun readiumDecorations(decoration: TextDecoration): List<Decoration> {
@@ -195,6 +213,16 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         return CursorRange(cursor(obj.optJSONObject("start")) ?: return null, cursor(obj.optJSONObject("end")) ?: return null)
     }
 
+    /** The selected text as the page shows it, or null without a selection. For copy, share, and text actions. */
+    suspend fun selectedText(): String? {
+        val navigator = navigator ?: return null
+        val json = runCatching { navigator.evaluateJavascript(ReaderScripts.SELECTION) }.getOrNull()?.takeIf { it != "null" } ?: return null
+        return runCatching { JSONObject(json).optString("text") }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    /** Ends the page's text selection, after its toolbar action ran. */
+    fun clearSelection() { navigator?.clearSelection() }
+
     /** Runs [script] in the page on screen; for diagnostics and tests. */
     internal suspend fun evaluate(script: String): String? = navigator?.evaluateJavascript(script)
 
@@ -202,6 +230,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
 
     internal fun attach(fragment: EpubNavigatorFragment) {
         navigator = fragment
+        listenedGroups.clear()
         // The first layout settles through several locators; none of them is the reader's own navigation.
         markProgrammatic(4_000)
         opening = true

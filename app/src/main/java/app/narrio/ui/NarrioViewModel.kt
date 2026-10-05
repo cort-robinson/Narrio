@@ -334,6 +334,9 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         reader.value = ReaderRequest(book, edition, place)
     }
     fun closeReader() { reader.value = null }
+    /** A place the reader should go to once it opens, such as a reading bookmark chosen while listening. */
+    val readerTarget = MutableStateFlow<ContentCursor?>(null)
+    fun readAt(bookId: String, cursor: ContentCursor) { readerTarget.value = cursor; read(bookId) }
     fun setShelfFilter(filter: ShelfFilter) { shelfFilter.value = filter }
     private var announcedJump: PositionJump? = null
     fun announceJump(jump: PositionJump) { announcedJump = jump; positionJumps.tryEmit(jump) }
@@ -565,14 +568,15 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun bookmark() = viewModelScope.launch { graph.playback.service?.bookmark(); messages.emit("Bookmark added") }
     fun deleteBookmark(id: Long) = viewModelScope.launch { graph.library.deleteBookmark(id) }
-    fun jumpBookmark(bookmark: BookmarkEntry) = viewModelScope.launch {
+    /** Plays from a bookmark's listening place, stored or mapped from where it was read. */
+    fun jumpBookmark(bookId: String, audio: AudioCursor) = viewModelScope.launch {
         val state = playback.value
-        if (state.source?.id == bookmark.sourceId) graph.playback.service?.part(resumeIndex(state.source.parts, bookmark.partId), bookmark.positionMs)
+        if (state.source?.id == audio.sourceId) graph.playback.service?.part(resumeIndex(state.source.parts, audio.partId), audio.positionMs)
         else {
-            val entry = graph.library.find(bookmark.bookId)
-            val history = graph.library.position(bookmark.bookId, bookmark.sourceId)
+            val entry = graph.library.find(bookId)
+            val history = graph.library.position(bookId, audio.sourceId)
             val source = history?.sourceJson?.let { NarrioJson.decodeFromString<AudioSource>(it) } ?: entry?.source()
-            if (entry != null && source?.id == bookmark.sourceId) { awaitService().load(entry.book(), source, true, bookmark.partId, bookmark.positionMs); playerOpen.value = true }
+            if (entry != null && source?.id == audio.sourceId) { awaitService().load(entry.book(), source, true, audio.partId, audio.positionMs); playerOpen.value = true }
             else messages.emit("This bookmark belongs to a different audio source. Resume that source first.")
         }
     }

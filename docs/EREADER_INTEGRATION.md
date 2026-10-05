@@ -42,6 +42,26 @@ cursors at `normalizationVersion = 1`; passage ranges span `[offset, offset + te
 an optional reader cursor, while audio source/part/time stay available. Add the UI on these rows;
 do not introduce another annotation/bookmark store.
 
+Delivered (F):
+
+- `ReaderViewModel.marks` is the open edition's `ReaderMarks`: `highlights` in book order, `bookmarks`
+  (both modes, resolved), `search` (`BookSearch`), and the highlight/bookmark edits. Highlights draw in
+  `HIGHLIGHT_GROUP`, the current search match in `SEARCH_GROUP`; narration should use its own group.
+- Search runs over the served `ResourceTextIndex` text, so every hit is an exact parser `CursorRange`
+  (case, accents and typographic quotes fold one-to-one). Readium's string search reports its own text
+  extraction, which would need mapping back.
+- `AnnotationEntry` rows store durable cursors (no progression/locator cache), the colour by name
+  (`yellow`, `green`, `blue`, `pink`), a plain-text note, and the parser text of the range: export-ready.
+- A bookmark stores the place where it was made and the other mode's place only when narration
+  confirms it exactly. `playback.BookmarkMapping` maps a missing place whenever a list is shown (never
+  across a MISMATCH pair), so estimates improve with alignment and carry "≈". Text-only rows keep blank
+  source/part ids; pre-ebook audio rows need no change.
+- `ReaderController` additions: `jumpTo(cursor, keepReturnPoint)`, `selectedText()`,
+  `clearSelection()`. `setDecorations` now applies on the main thread and registers each group's tap
+  listener once per navigator (Readium keeps every listener it's given).
+- The selection toolbar replaces the WebView's own, so it re-adds Copy, Share, and installed
+  `PROCESS_TEXT` actions (Translate, dictionaries); the manifest declares that query.
+
 ## Contracts resolved
 
 - `Reading.kt`: KDoc only, original-byte fingerprint and TXT internal-EPUB locator semantics.
