@@ -7,7 +7,7 @@
 1. Update `dev`, then create `feature/<name>` or `fix/<name>` from it.
 2. Open a pull request targeting `dev`. Use a Conventional Commit title describing the resulting behavior, such as `feat(metadata): show audiobook descriptions`.
 3. Fill in the release-note and validation sections. Keep credentials, account data, audio files, signing keys, and generated APKs out of Git.
-4. Wait for **CI** and **PR policy** to pass, then **squash merge**. The PR title and body become one release commit. Delete only the completed feature branch; retain `dev`.
+4. Wait for **PR CI** and **PR policy** to pass, then **squash merge**. The PR title and body become one release commit. Delete only the completed feature branch; retain `dev`.
 
 ```powershell
 git switch dev
@@ -20,13 +20,55 @@ gh pr create --base dev
 
 PR policy checks Conventional Commit titles and meaningful release-note summaries. CI runs JVM tests, Android lint/build checks, release-tooling tests, and emulator smoke tests for persistence, encrypted credential removal, link renewal, metadata-only book details and source selection, source choices, closing Now playing, offline settings, follow-along interaction/source binding, the text-schema migration, and the ebook reader (opening EPUB and text, the hostile-EPUB filter, keeping the place across font changes and rotation, and reading-position commits). These required tests use controlled fixtures; live provider and listening checks remain separate because provider availability should not decide whether a release can build.
 
+### Local development verification
+
+This policy applies to agents working on Narrio. Keep it in this repository; it does not belong in user-wide agent instructions, skills, settings, or memory.
+
+During development, batch edits that address one behavior, then choose the smallest checks that can establish whether that behavior works. Use focused local checks during iteration; CI runs the complete required suite. Select checks from this table according to the changed behavior:
+
+| Changed behavior | Local verification |
+| --- | --- |
+| Documentation or agent instructions | Review the diff, links, and whitespace. Validate affected commands/examples when they change; no Android setup for prose-only edits. |
+| App wording or resources | Compile/build the affected variant and inspect the changed screen when layout or behavior could be affected. |
+| Parsing, matching, or provider logic | Run the affected JVM tests. Add a targeted Android check when SDK behavior can differ from the desktop JVM, such as Android regex handling. |
+| UI, layout, or interaction | Build/compile the affected variant, inspect the changed screen, and run the relevant UI test or user flow on a reused test device. |
+| Playback, storage, migrations, permissions, or updates | Run the related JVM tests and selected Android regression cases on a controlled test device. |
+| Dependencies, build configuration, or packaging | Verify the affected build and related tests/lint once the change is coherent. Broaden local checks for shared effects; verify optimized release behavior when shrinking, signing, or packaging is affected. |
+| CI or release tooling | Run the relevant tooling tests and workflow validation. Use Android checks when the changed tooling affects the Android build or device behavior. |
+
+Prefer incremental builds and the Gradle wrapper's default local daemon. Reserve `clean`, `--no-daemon`, and optimized release builds for a demonstrated need or the relevant release checks. Choose the appropriate command rather than running every example below:
+
+```powershell
+# A focused JVM regression; no emulator is needed.
+.\gradlew.bat :app:testDebugUnitTest --tests "app.narrio.data.BookSourceDiscoveryTest"
+
+# Compile Kotlin changes for Narrio Local without installing or running it.
+.\gradlew.bat :app:compileDebugKotlin -PnarrioLocal=true
+```
+
+For instrumentation, select the affected class or method with `-Pandroid.testInstrumentationRunnerArguments.class=<class>` or `<class>#<method>`, as the CI smoke job does. For example, Android source matching uses `app.narrio.BookSourceDiscoveryAndroidTest`. Bind the run to an explicitly selected, isolated project test device; keep synthetic fixture data separate from the user's stable and signed Dev installs.
+
+Reuse a booted project test emulator across iterations. Reset fixture/app state only when the test requires isolation, and use a fresh-device boot for startup, installation, or clean-state checks. Preserve devices and sessions used by other agents. Do not start a new emulator or run the full device suite merely because another file was edited or a task is finishing. Scripted and AI-driven UI testing use the same policy: exercise the affected flow or a planned QA milestone.
+
+Before marking a PR ready, inspect the completed diff and ensure the checks selected above have passed, including screen inspection for UI changes. Reuse passing results while their relevant inputs are unchanged. A passing result applies to the source, dependencies, fixtures, and configuration it covered; later changes invalidate the affected results. Repeat or broaden checks when those inputs change, failures remain unexplained, or shared behavior could be affected. Report the commands, selected cases/device, and actual results; distinguish focused checks from a full suite.
+
+The full required suite still runs in CI for code-related changes against the current PR candidate. Broader local suites are appropriate for changes with shared effects or unresolved concerns. Required CI, the verified-head merge guard, and the release, phone, and live-provider checks documented below still apply.
+
 ### CI runtime
 
 The build/lint/unit-test and Android smoke jobs run in parallel. The smoke job restores a clean API 35 Pixel 6 emulator snapshot when available. Only trusted branch pushes save snapshots, before installing the app or test APK; test runs do not save their device state. The cache key includes the runner platform and workflow configuration. On a cache miss, a trusted branch push boots a clean device, saves its snapshot, then runs the tests; that first run can take longer. PRs and manual runs with no matching cache boot a fresh device directly for testing. After SDK/emulator compatibility changes, increment the cache-key generation to invalidate old snapshots.
 
-PRs targeting `dev` that change only `README.md`, `AGENTS.md`, or Markdown files under `docs/` skip Android setup, compilation, lint, and emulator tests. Release-tooling and CI path-selection tests still run, and the required **CI** check explicitly verifies the intentional skip. Unknown files, empty/failed comparisons, workflow/build/tooling changes, PRs to `master`, branch pushes, and manual runs execute the full Android suite. The workflow itself always runs, so documentation PRs do not leave required checks pending. No smoke tests are removed.
+PRs targeting `dev` that change only `README.md`, `AGENTS.md`, or Markdown files under `docs/` skip Android setup, compilation, lint, and emulator tests. Release-tooling and CI path-selection tests still run, and the required **PR CI** check explicitly verifies the intentional skip. Unknown files, empty/failed comparisons, workflow/build/tooling changes, PRs to `master`, branch pushes, and manual runs execute the full Android suite. The workflow itself always runs, so documentation PRs do not leave required checks pending. No smoke tests are removed.
 
-To inspect runtime, open the linked Actions run and expand **Android smoke tests**. **Restore clean emulator snapshot** shows whether the cache was found; **Run Android smoke tests** contains emulator boot, build/install, and test timings. Compare cache-hit runs separately from cold runs, and use the overall **CI** completion time when judging PR wait time.
+To inspect runtime, open the linked Actions run and expand **Android smoke tests**. **Restore clean emulator snapshot** shows whether the cache was found; **Run Android smoke tests** contains emulator boot, build/install, and test timings. Compare cache-hit runs separately from cold runs, and use the overall **PR CI** completion time when judging PR wait time.
+
+### CI monitoring
+
+The aggregate gate is named **PR CI** for pull request workflows and **Branch CI** for branch pushes and manual runs. Both gates keep the same dependencies and fail-closed Android coverage. Branch rules require **PR CI** and **PR policy**, so a green Dev push cannot satisfy the PR gate by name.
+
+Before merging, verify the current PR head, the latest applicable PR workflow run, and its aggregate **PR CI** result. A passing branch run on the same head does not establish that the PR merge candidate passed. New commits or a changed merge candidate require checking the new run. Stable publication remains dependent on the branch workflow's aggregate gate.
+
+Before ending a turn to wait, register a monitor and confirm that its wake conditions cover the exact remaining checks or workflow run. T3's standard PR watcher reports required-check success; do not assume that optional checks or release publication finishing will produce another wake. After any notification, inspect the current results and continue all authorized work. Only say that work is being watched when a confirmed monitor covers it; if it does not, keep the turn active for the applicable workflow wait or clearly report the monitoring limitation. A registered watch is not evidence that a build, merge, or release completed.
 
 ## Test a development build
 
@@ -120,7 +162,7 @@ Published versions and assets are never replaced. For a bad published release, s
 
 ## Repository configuration
 
-- Both persistent branches require **CI** and **PR policy**, an up-to-date PR, and resolved conversations. Force pushes, branch deletion, and direct pushes are blocked, including for the owner. No additional reviewer is required for this solo-owner repository; merging the promotion is the release approval.
+- Both persistent branches require **PR CI** and **PR policy**, an up-to-date PR, and resolved conversations. Force pushes, branch deletion, and direct pushes are blocked, including for the owner. No additional reviewer is required for this solo-owner repository; merging the promotion is the release approval.
 - `master` allows merge commits; `dev` permits squash merges for features and merge commits for history synchronization. PR policy allows only `dev` or same-repository `hotfix/*` promotions to `master`.
 - The **release** environment allows only branch `master`; **preview** allows only `dev`. Each stores its own `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD` secrets, plus public variable `SIGNING_CERT_SHA256`.
 - The stable environment contains the original Narrio signing identity, preserving in-place upgrades and local app data. Keep a private backup of the ignored `.signing/` directory and `signing.properties`. The preview identity is independent.
