@@ -15,7 +15,7 @@ enum class BookFormat { AUDIO, EBOOK }
 @Serializable
 enum class PairingStatus { UNCHECKED, MATCHES, PARTIAL, MISMATCH }
 
-/** One ebook edition attached to a book. [id] is the `BookText.id` content fingerprint of its normalized text. */
+/** One ebook edition attached to a book. [id] is the `BookText.id` content fingerprint of its original bytes. */
 @Serializable
 data class EbookEdition(
     val id: String,
@@ -34,7 +34,8 @@ data class EbookEdition(
  * A durable location in an ebook edition. [resource] and [offset] use the same space as `TextPassage.resource`
  * and `TextPassage.offset` produced by `BookTextParser` at [normalizationVersion]; that pair is the identity used
  * for alignment and sync. [progression] (0..1 across the edition) and [locatorJson] (a Readium Locator, for exact
- * restoration in the reader) are views and caches only, never the authority.
+ * restoration in the reader) are views and caches only, never the authority. For TXT, [locatorJson] refers
+ * to the deterministic internal EPUB generated from the original bytes.
  */
 @Serializable
 data class ContentCursor(

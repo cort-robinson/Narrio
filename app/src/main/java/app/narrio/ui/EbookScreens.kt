@@ -318,26 +318,3 @@ fun EbookImportStatus(state: EbookImportState, chooseAnother: () -> Unit, dismis
         }
     }
 }
-
-/**
- * TEMPORARY until workstream B's reader screen replaces it at integration. It confirms where Read leads (book,
- * edition, and starting place) so the library flow can be exercised end to end.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PendingReaderScreen(request: ReaderRequest, close: () -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxSize().testTag("pending-reader")) {
-        TopAppBar(title = { Text(request.book.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            navigationIcon = { IconButton(close) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Close ${request.book.title}") } },
-            windowInsets = WindowInsets(0), colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent))
-        Column(Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.secondary)
-            Spacer(Modifier.height(20.dp))
-            Text("The reader opens here", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(12.dp))
-            Text(listOf(request.edition.format, request.edition.attribution).filter(String::isNotBlank).joinToString(" · ").ifBlank { "Ebook on this phone" },
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            request.place?.let { Spacer(Modifier.height(8.dp)); EstimatedPlace(it.label, it.confidence, prefix = "Opens at ") }
-        }
-    }
-}

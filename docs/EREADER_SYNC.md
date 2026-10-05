@@ -6,17 +6,17 @@ No Room schema or migration is added.
 
 ## Integration boundaries
 
-- A: replace `TemporaryFileSharedPositions`, `TemporaryFileAlignmentJobs`, and
-  `TemporaryLegacyMappingRepository` in `AppGraph` with the durable multi-edition repositories.
-  Keep `AudioOwnedPositionStore` around A's shared-position store; implement `GuardedSharedPositionStore`
-  to check ownership at the transaction commit boundary, including already queued reader saves. B and the service must use
-  the same gated instance. The temporary adapter treats the existing follow-along attachment
-  as the single active edition and supports recording history plus registered recordings.
-- A: `PositionMappingRepository.snapshot(bookId, sourceId)` must return the active normalized
-  `BookText`, chosen `AudioSource` (including known part durations), and edition-scoped bindings.
-  Return null for unavailable text/recordings. Persist alignment progress using `AlignmentKey`
-  and `AlignmentProgress`; source layout and normalization/algorithm versions invalidate old jobs.
-  Apply `mergeNarration` as an atomic read/merge/write against manual timing adjustments.
+- Storage: `AppGraph.sharedPositions` is one `AudioOwnedPositionStore` around
+  `RoomSharedPositionStore`. The latter implements `GuardedSharedPositionStore` and re-checks
+  playback ownership inside Room's transaction, after queued waits and before the write. Reader
+  and service use the same instance.
+- Mapping: `RoomPositionMappingRepository.snapshot(bookId, sourceId)` loads the active normalized
+  `BookText` and transactionally reads chosen persistent sources and edition-scoped bindings.
+  `register` retains sources on the book; measured durations are caches, excluded from identity.
+- Alignment: `RoomAlignmentJobs` retains full-library aggregates and resume positions in schema 5;
+  edition, layout fingerprint, normalization and algorithm versions invalidate stale evidence.
+  `FollowAlongStore.mergeNarration` delegates the anchor read/merge/write to one Room transaction,
+  preserving manual timing made during recognition. Deleted editions cannot be resurrected by a job.
 - B/D: `NarrioViewModel.resolveReadingStart(bookId, editionId, previous, pagesMoved)` returns a
   `SyncJump<ContentCursor>`. Supply rendered page distance when known; unknown changed locations
   conservatively offer Undo. B renders/restores the destination and implements text Undo by
@@ -61,9 +61,9 @@ and is excluded from pairing evidence. Turning the setting off cancels queued/ru
 Recognition is serialized across foreground/correction/background paths; each decode checks
 cancellation and has a 45-second decoder deadline plus bounded network timeouts. A window retains
 at most four million mono samples; background PCM/transcripts are not written to disk. Saved auto
-anchors are sampled down to 2,048 per part, preserving manual matches. Temporary progress retains
-512 recent pair/part aggregates; A's Room implementation should retain resumability for the full
-library without this temporary eviction policy. Foreground sync retains at most 4,096 attempt keys.
+anchors are sampled down to 2,048 per part, preserving manual matches. Room retains resume and
+coverage aggregates for the full library, without temporary eviction. Foreground sync retains at
+most 4,096 attempt keys.
 
 Pairing uses successfully decoded attempts and accepted recognized anchor coverage. Three or more
 attempts with at least 80% coverage yields MATCHES; any lesser positive coverage yields PARTIAL.
@@ -74,10 +74,10 @@ and recording mapping and sentence-to-audio seeks, without disabling independent
 
 ## Contract change requests / gaps
 
-No edits to `Reading.kt` are required for mapping. A must adopt or relocate the repository interfaces
-above and supply active-edition/binding lookup plus atomic alignment-progress persistence. A's
-store should also preserve the ownership gate's serialized commit boundary when replacing the
-temporary store. Reading Undo/rendered page-distance calculation belongs to B/D, not this worker.
+No mapping interface changes are required. The integrated library observes edition, binding and
+alignment flows to render pairing and mapped counterpart places. `SyncJump.from` provides the
+origin for D's snackbar; text Undo restores the previous cursor without a commit and expires when
+the reader navigates again or closes. `Reading.kt` KDoc now explains byte fingerprints and TXT locators.
 Publisher SMIL/media overlays remain unimplemented; supplied WebVTT is supported through the
 existing pair-bound timing path. Recognition accuracy, latency, battery cost, and background
 constraint behavior on physical phones require physical-device/provider acceptance separately

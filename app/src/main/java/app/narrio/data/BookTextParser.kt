@@ -145,7 +145,7 @@ object BookTextParser {
         files["META-INF/encryption.xml"]?.let { data ->
             val encryption = Jsoup.parse(data.toString(Charsets.UTF_8), "", Parser.xmlParser())
             if (encryption.getAllElements().filter { it.tagName().substringAfter(':') == "EncryptionMethod" }.any { it.attr("Algorithm") !in setOf("http://www.idpf.org/2008/embedding", "http://ns.adobe.com/pdf/enc#RC") })
-                throw ProviderException("Encrypted or DRM-protected ebooks aren't supported. Choose a DRM-free EPUB or text file.")
+                throw EbookImportException(EbookImportFailure.DRM_PROTECTED, "Encrypted or DRM-protected ebooks aren't supported. Choose a DRM-free EPUB or text file.")
         }
         val packagePath = xml("META-INF/container.xml").getElementsByTag("rootfile").firstOrNull()?.attr("full-path")?.let(::safePath)
             ?: throw ProviderException("This isn't a readable EPUB. Choose another file.")

@@ -95,7 +95,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } }
         val snackbar = remember { SnackbarHostState() }
         LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
-        LaunchedEffect(vm) { vm.positionJumps.collectLatest { snackbar.showJump(it) } }
+        LaunchedEffect(vm) { vm.positionJumps.collectLatest { jump -> try { snackbar.showJump(jump) } finally { vm.finishJump(jump) } } }
         LaunchedEffect(vm) {
             vm.dismissedPlayback.collectLatest { dismissed ->
                 if (snackbar.showSnackbar("Closed ${dismissed.book?.title}. Your place is saved.", "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.undoDismissPlayback(dismissed)
@@ -148,7 +148,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
                         }, label = "full canvas") { key ->
                             when (key) {
                                 "player" -> PlayerScreen(vm, true, Modifier.fillMaxSize())
-                                "reader" -> recentReader?.let { PendingReaderScreen(it, vm::closeReader) }
+                                "reader" -> recentReader?.let { ReaderScreen(vm, it.book.id, vm::closeReader) }
                                 else -> ExpandedPanes(vm, windowWidth, fold, density, destination, bookFor, scrollFor, playerOpen, state.book != null, selected.book?.id)
                             }
                         }
@@ -158,11 +158,6 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).then(
                 if (!expanded && !tabletop && current == Home) Modifier.padding(bottom = barHeight) else Modifier.navigationBarsPadding())) { NarrioSnackbar(it) }
-        }
-        // The reader takes the whole window, above every layout, and falls back into the book it came from.
-        val reading by vm.reading.collectAsStateWithLifecycle()
-        AnimatedContent(reading, Modifier.fillMaxSize(), transitionSpec = { if (targetState != null) Motion.rise() else Motion.fall() }, label = "reader") { bookId ->
-            if (bookId != null) ReaderScreen(vm, bookId, vm::closeReader)
         }
         }
     }
@@ -203,7 +198,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                             Home -> Box(Modifier.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
                             is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, Modifier.navigationBarsPadding(), scrollFor(it.id)) }
                             Listening -> PlayerScreen(vm, true, Modifier.fillMaxSize().navigationBarsPadding())
-                            is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { PendingReaderScreen(it, vm::closeReader, Modifier.navigationBarsPadding()) }
+                            is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader) }
                         }
                     }
                 }
@@ -230,7 +225,7 @@ private fun predictBack(vm: NarrioViewModel, current: Screen): Screen {
     val origin = vm.sourceSearch.value.book
     return when {
         current == Listening || current is Reading -> selected?.let { Details(it.id, it.provider == "catalog") } ?: Home
-        current is Details && origin?.provider == "catalog" && !current.catalog -> Details(origin.id, true)
+        current is Details && origin != null && selected?.recordingId?.isNotBlank() == true && selected.recordingId != origin.recordingId -> Details(origin.id, origin.provider == "catalog")
         else -> Home
     }
 }

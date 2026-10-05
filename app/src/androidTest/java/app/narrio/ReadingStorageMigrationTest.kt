@@ -92,6 +92,15 @@ class ReadingStorageMigrationTest {
             assertEquals("TXT", dao.editions(book.id).single().format)
             assertEquals(setOf(BookFormat.AUDIO, BookFormat.EBOOK), dao.observeShelfState(audio = true, ebook = true).first().single().formats)
             assertArrayEquals(bytes, File(folder, "${document.id}.txt").readBytes())
+            val readerBook = app.narrio.reader.ReaderBook.open(context, book.id, document.id,
+                File(folder, "${document.id}.txt"), "TXT", book.title, book.author, File(context.cacheDir, "reader-migration"))
+            try {
+                readerBook.prepare()
+                val anchor = document.chapters.first().passages.first()
+                assertNotNull(readerBook.locator(ContentCursor(document.id, anchor.resource, anchor.offset)))
+                assertEquals("text", readerBook.resourceName(readerBook.readingOrder.first()))
+            } finally { readerBook.publication.close() }
+
             assertEquals(document.id, dao.bookText(book.id)!!.documentId)
             assertEquals(binding, dao.observeTextBindings(book.id).first().single().binding())
             val migrated = RoomSharedPositionStore(dao).current(book.id)!!

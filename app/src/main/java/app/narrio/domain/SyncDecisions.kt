@@ -12,7 +12,7 @@ interface GuardedSharedPositionStore : SharedPositionStore {
 
 /** D renders [offerUndo] and the confidence; E consumes the mapped text independently of browsing. */
 data class SyncJump<T>(val destination: T?, val confidence: MappingConfidence = MappingConfidence.UNMAPPED,
-    val offerUndo: Boolean = false, val previous: T? = null, val sequence: Long = 0)
+    val offerUndo: Boolean = false, val previous: T? = null, val sequence: Long = 0, val from: PositionOrigin? = null)
 
 object SyncDecisions {
     fun listening(shared: SharedPosition?, source: AudioSource, mapped: MappedAudio?, previous: AudioCursor?, pairing: PairingStatus): SyncJump<AudioCursor> {
@@ -21,7 +21,7 @@ object SyncDecisions {
         val target = if (shared.origin == PositionOrigin.READING) mapped else same?.let { MappedAudio(it, shared.audioConfidence) } ?: mapped
         val audio = target?.audio ?: return SyncJump(null)
         val distance = previous?.let { distance(source, it, audio) }
-        return SyncJump(audio, target.confidence, previous != null && (distance == null || distance > SyncThresholds.UNDO_AUDIO_MS), previous, shared.sequence)
+        return SyncJump(audio, target.confidence, previous != null && (distance == null || distance > SyncThresholds.UNDO_AUDIO_MS), previous, shared.sequence, shared.origin)
     }
 
     fun reading(shared: SharedPosition?, editionId: String, mapped: MappedText?, previous: ContentCursor?, pagesMoved: Int?, pairing: PairingStatus): SyncJump<ContentCursor> {
@@ -30,7 +30,7 @@ object SyncDecisions {
             else mapped
         val text = target?.text?.takeIf { it.editionId == editionId } ?: return SyncJump(null)
         val moved = previous != null && (previous.editionId != text.editionId || previous.resource != text.resource || previous.offset != text.offset)
-        return SyncJump(text, target.confidence, moved && (pagesMoved == null || abs(pagesMoved) > SyncThresholds.UNDO_TEXT_PAGES), previous, shared.sequence)
+        return SyncJump(text, target.confidence, moved && (pagesMoved == null || abs(pagesMoved) > SyncThresholds.UNDO_TEXT_PAGES), previous, shared.sequence, shared.origin)
     }
 
     private fun distance(source: AudioSource, a: AudioCursor, b: AudioCursor): Long? {

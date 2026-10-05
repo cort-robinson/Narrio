@@ -55,6 +55,8 @@ data class Audiobook(
     val filesVerified: Boolean = false,
     val bookFilesSelected: Boolean = false,
     val sourceAddonName: String = "",
+    /** Provider recording identity when [id] belongs to its parent catalog/library book. */
+    val recordingId: String = "",
 )
 
 data class Chapter(val title: String, val startMs: Long)
@@ -119,3 +121,6 @@ interface DeliveryProvider {
     suspend fun sources(book: Audiobook, torrentId: Long): List<AudioSource>
     fun resolve(part: AudioPart): String
 }
+
+/** Explicit source selection attaches this recording to the selected book; media ids remain unchanged. */
+fun Audiobook.forBook(book: Audiobook): Audiobook = copy(id = book.id, recordingId = recordingId.ifBlank { id })

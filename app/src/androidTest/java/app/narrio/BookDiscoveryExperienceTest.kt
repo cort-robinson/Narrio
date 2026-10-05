@@ -59,7 +59,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithText(book.description).performScrollTo().assertIsDisplayed()
 
         compose.onNodeWithText("Listening options").performScrollTo().performClick()
-        compose.waitUntil { vm.selection.value.book?.id == chosen.id && !vm.selection.value.loading }
+        compose.waitUntil { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == chosen.id && !vm.selection.value.loading }
         compose.onNodeWithText("The recording").assertIsDisplayed()
         compose.onNodeWithText("Read by Fixture Reader").assertIsDisplayed()
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
@@ -90,7 +90,7 @@ class BookDiscoveryExperienceTest {
         reveal(hasText("Possible match", substring = true))
         compose.onNodeWithText("Possible match", substring = true).assertIsDisplayed()
         compose.onNodeWithText(possible.title).performClick()
-        compose.waitUntil { vm.selection.value.book?.id == possible.id && !vm.selection.value.loading }
+        compose.waitUntil { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == possible.id && !vm.selection.value.loading }
         compose.onNodeWithText("The recording").assertIsDisplayed()
 
         show(SourceSearchState(book, searched = true))

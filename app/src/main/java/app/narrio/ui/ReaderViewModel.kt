@@ -8,6 +8,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import app.narrio.NarrioApplication
 import app.narrio.data.ProviderException
+import app.narrio.data.NarrioJson
+import app.narrio.domain.*
+import kotlinx.serialization.encodeToString
 import app.narrio.reader.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -34,11 +37,12 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
     val state = _state.asStateFlow()
     private val _settings = MutableStateFlow(ReaderSettingsCodec.decode(graph.preferences.getString(SETTINGS, null)))
     val settings = _settings.asStateFlow()
+    private val _startJump = MutableStateFlow<SyncJump<ContentCursor>?>(null)
+    val startJump = _startJump.asStateFlow()
+    fun clearStartJump() { _startJump.value = null }
     private var book: ReaderBook? = null
     private var session: ReaderSession? = null
     private var sessionScope: CoroutineScope? = null
-    /** The reader's place when the screen last closed, and when; reused if nothing moved the shared position since. */
-    private var released: Pair<app.narrio.domain.ContentCursor, Long>? = null
 
     private val paceStore = object : PaceStore {
         override fun read() = ReadingPace(graph.preferences.getFloat(PACE_CPM, ReadingPace.DEFAULT_CPM.toFloat()).toDouble(), graph.preferences.getInt(PACE_SAMPLES, 0))
@@ -54,20 +58,34 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
         _state.value = ReaderState.Opening
         viewModelScope.launch {
             try {
-                val editions = graph.editionFiles.editions(bookId)
+                val editions = graph.editionFiles.editions(bookId).filter { it.format in setOf("EPUB", "TXT") }
                 val edition = editions.firstOrNull { it.active } ?: editions.firstOrNull()
-                    ?: throw ProviderException("This book has no ebook to read yet. Add its text from Follow along.")
-                val file = graph.editionFiles.original(bookId, edition.id) ?: throw ProviderException("This book's text is missing. Add it again from Follow along.")
+                    ?: throw ProviderException("This book has no ebook to read yet. Use Find ebook to add an edition.")
+                val file = graph.editionFiles.original(bookId, edition.id) ?: throw ProviderException("This book's text is missing. Add this edition again using Find ebook.")
                 val opened = ReaderBook.open(getApplication(), bookId, edition.id, file, edition.format, edition.title, edition.author, File(getApplication<Application>().cacheDir, "reader"))
                 book = opened
                 val scope = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
                 sessionScope = scope
                 val controller = ReaderController(opened, scope)
                 val audioPlaying = graph.playback.state.map { it.playing && it.book?.id == bookId }
-                val session = ReaderSession(controller, graph.sharedPositions, audioPlaying, paceStore, scope)
-                val shared = graph.sharedPositions.current(bookId)
-                session.restore()
-                released?.let { (cursor, at) -> if ((shared?.updatedAtMs ?: 0) <= at && cursor.editionId == edition.id) controller.restore(cursor) }
+                val historyKey = "readerHistory:$bookId:${edition.id}"
+                val session = ReaderSession(controller, graph.sharedPositions, audioPlaying, paceStore, scope,
+                    audioFor = { cursor ->
+                        val sourceId = graph.sharedPositions.current(bookId)?.audio?.sourceId
+                            ?: graph.library.find(bookId)?.source()?.id ?: graph.library.find(bookId)?.book()?.sources?.firstOrNull()?.id
+                        val snapshot = sourceId?.let { graph.mappingRepository.snapshot(bookId, it) }
+                        if (snapshot == null || graph.readingSync.pairing(bookId, snapshot) == PairingStatus.MISMATCH) null
+                        else graph.positionMapper.audioFor(bookId, cursor, snapshot.source.id)
+                    }, onCommitted = { cursor -> graph.preferences.edit().putString(historyKey, NarrioJson.encodeToString(cursor)).apply() })
+                val history = graph.preferences.getString(historyKey, null)?.let {
+                    runCatching { NarrioJson.decodeFromString<ContentCursor>(it) }.getOrNull()
+                }
+                val previous = history
+                    ?: opened.readingOrder.firstOrNull()?.let { opened.cursor(opened.resourceName(it), 0) }
+                val jump = graph.readingSync.readingStart(bookId, edition.id, previous, null)
+                val start = jump.destination ?: previous
+                session.restoreAt(start)
+                _startJump.value = jump.takeIf { it.offerUndo }
                 this@ReaderViewModel.session = session
                 scope.launch { runCatching { opened.prepare() } }
                 _state.value = ReaderState.Ready(session)
@@ -84,7 +102,10 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
 
     /** Closes the publication when the reader leaves the screen, keeping the reader's place for a quick return. */
     fun release() {
-        session?.controller?.cursor?.value?.let { released = it to System.currentTimeMillis() }
+        session?.controller?.cursor?.value?.let {
+            graph.preferences.edit().putString("readerHistory:$bookId:${it.editionId}", NarrioJson.encodeToString(it)).apply()
+        }
+        _startJump.value = null
         session = null
         sessionScope?.cancel()
         sessionScope = null

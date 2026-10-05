@@ -46,6 +46,8 @@ class ReaderSession(
     private val paceStore: PaceStore,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val audioFor: suspend (ContentCursor) -> app.narrio.domain.MappedAudio? = { null },
+    private val onCommitted: (ContentCursor) -> Unit = {},
 ) {
     val book: ReaderBook get() = controller.book
     private val activity = ReadingActivity<ContentCursor>()
@@ -53,6 +55,8 @@ class ReaderSession(
     private var observedSequence = 0L
     private var tickJob: Job? = null
     private var lastMove: Pair<ContentCursor, Long>? = null
+    var navigationVersion: Long = 0
+        private set
 
     val location: StateFlow<ReaderLocation> = combine(controller.visible, book.layout, book.contents, book.pages, pace) { visible, layout, contents, pages, pace ->
         locate(visible?.first ?: controller.cursor.value, layout, contents, pages, pace)
@@ -66,14 +70,26 @@ class ReaderSession(
     /** The place to open at: the shared position when it's in this edition. Never commits. */
     suspend fun restore(): ContentCursor? {
         val shared = positions.current(book.bookId)
-        observedSequence = shared?.sequence ?: 0L
         val cursor = shared?.text?.takeIf { it.editionId == book.editionId && book.linkFor(it.resource, it.offset) != null }
-        cursor?.let(activity::restored)
-        controller.restore(cursor)
+        restoreAt(cursor)
         return cursor
     }
 
+    /** Mode starts and Undo are restoration, never reading activity. */
+    suspend fun restoreAt(cursor: ContentCursor?) {
+        tickJob?.cancel()
+        observedSequence = positions.current(book.bookId)?.sequence ?: 0L
+        lastMove = null
+        cursor?.let(activity::restored)
+        controller.restore(cursor)
+    }
+    suspend fun undo(cursor: ContentCursor) {
+        restoreAt(cursor)
+        controller.goTo(cursor)
+    }
+
     private fun moved(event: ReaderEvent.Moved) {
+        navigationVersion++
         val now = clock()
         val previous = lastMove
         lastMove = event.cursor to now
@@ -90,13 +106,16 @@ class ReaderSession(
     }
 
     private fun commit(cursor: ContentCursor) {
+        val expected = observedSequence
         scope.launch {
             val withLocator = cursor.copy(
                 progression = book.layout.value?.progression(cursor.resource, cursor.offset) ?: cursor.progression,
                 locatorJson = book.locator(cursor)?.toJSON()?.toString().orEmpty(),
             )
-            val committed = positions.commit(PositionUpdate(book.bookId, PositionOrigin.READING, text = withLocator,
-                textConfidence = MappingConfidence.EXACT, basedOnSequence = observedSequence))
+            val mapped = audioFor(withLocator)
+            val committed = positions.commit(PositionUpdate(book.bookId, PositionOrigin.READING, text = withLocator, audio = mapped?.audio,
+                textConfidence = MappingConfidence.EXACT, audioConfidence = mapped?.confidence ?: MappingConfidence.UNMAPPED, basedOnSequence = expected))
+            if (committed != null) onCommitted(withLocator)
             // A stale write means listening moved the position meanwhile; the next reading activity builds on that.
             observedSequence = committed?.sequence ?: positions.current(book.bookId)?.sequence ?: observedSequence
         }

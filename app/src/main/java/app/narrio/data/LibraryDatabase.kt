@@ -4,6 +4,7 @@ import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import app.narrio.domain.*
 import kotlinx.serialization.encodeToString
 
@@ -60,11 +61,13 @@ interface LibraryDao {
     @Query("SELECT * FROM shelf WHERE bookId = :id") suspend fun find(id: String): ShelfEntry?
     @Query("SELECT * FROM shelf WHERE playedAt > 0 AND sourceJson != '' ORDER BY playedAt DESC LIMIT 1") suspend fun lastPlayed(): ShelfEntry?
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insert(entry: ShelfEntry)
+    @Upsert suspend fun putShelf(entry: ShelfEntry)
     @Query("UPDATE shelf SET bookJson = :json, hasAudio = CASE WHEN sourceJson != '' THEN 1 ELSE :audio END WHERE bookId = :id") suspend fun metadata(id: String, json: String, audio: Boolean)
     @Query("UPDATE shelf SET sourceJson = :source, hasAudio = 1, partId = :part, positionMs = :position, playedAt = :time, state = CASE WHEN state IN ('preparing', 'ready') THEN state ELSE 'listening' END WHERE bookId = :id")
     suspend fun shelfProgress(id: String, source: String, part: String, position: Long, time: Long)
     @Query("SELECT * FROM positions WHERE bookId = :book AND sourceId = :source") suspend fun position(book: String, source: String): SourcePosition?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putPosition(position: SourcePosition)
+    @Query("SELECT * FROM positions WHERE bookId = :book") fun observePositions(book: String): Flow<List<SourcePosition>>
     @Transaction suspend fun progress(id: String, source: String, part: String, position: Long, time: Long) {
         shelfProgress(id, source, part, position, time)
         val sourceId = NarrioJson.decodeFromString<AudioSource>(source).id
@@ -82,6 +85,24 @@ interface LibraryDao {
     @Query("SELECT * FROM book_text WHERE bookId = :id") fun observeBookText(id: String): Flow<BookTextEntry?>
     @Query("SELECT * FROM book_text WHERE bookId = :id") suspend fun bookText(id: String): BookTextEntry?
     @Query("SELECT t.* FROM text_bindings t JOIN book_text b ON t.bookId = b.bookId AND t.editionId = b.documentId WHERE t.bookId = :id") fun observeTextBindings(id: String): Flow<List<TextBindingEntry>>
+    @Query("SELECT * FROM text_bindings WHERE bookId = :book AND editionId = :edition")
+    suspend fun editionBindings(book: String, edition: String): List<TextBindingEntry>
+    @Transaction suspend fun bindActive(book: String, binding: TextBinding) {
+        require(bookText(book)?.documentId == binding.documentId) { "The active ebook changed during narration sync." }
+        putTextBinding(TextBindingEntry(book, binding.sourceId, binding.partId, NarrioJson.encodeToString(binding)))
+    }
+    @Transaction suspend fun mergeNarration(book: String, document: BookText, fallback: TextBinding,
+        anchors: List<TextAnchor>, durationMs: Long): TextBinding {
+        require(bookText(book)?.documentId == document.id) { "The active ebook changed during narration sync." }
+        val latest = editionBindings(book, document.id).map { it.binding() }
+            .firstOrNull { it.sourceId == fallback.sourceId && it.partId == fallback.partId } ?: fallback
+        val merged = FollowAlongTiming.mergeAuto(document, latest, anchors, durationMs)
+        val auto = merged.anchors.filter { it.auto }
+        val bounded = if (auto.size <= 2048) merged else merged.copy(anchors = (merged.anchors.filterNot { it.auto } +
+            (0 until 2048).map { auto[it * auto.lastIndex / 2047] }).sortedBy { it.positionMs })
+        bindActive(book, bounded)
+        return bounded
+    }
     @Upsert suspend fun putBookText(entry: BookTextEntry)
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putTextBinding(entry: TextBindingEntry)
     @Query("DELETE FROM text_bindings WHERE bookId = :id") suspend fun deleteTextBindings(id: String)
@@ -93,8 +114,10 @@ interface LibraryDao {
         putBookText(BookTextEntry(book.id, documentId))
     }
     @Transaction suspend fun save(book: Audiobook) {
-        val json = NarrioJson.encodeToString(book)
-        insert(ShelfEntry(book.id, json)); metadata(book.id, json, book.sources.any { it.parts.isNotEmpty() })
+        val previous = find(book.id)?.book()
+        val merged = book.copy(sources = (book.sources + previous?.sources.orEmpty()).distinctBy { it.id })
+        val json = NarrioJson.encodeToString(merged)
+        insert(ShelfEntry(book.id, json)); metadata(book.id, json, merged.sources.any { it.parts.isNotEmpty() })
     }
     @Transaction suspend fun updateBookDetails(book: Audiobook) {
         val saved = find(book.id) ?: return
@@ -103,9 +126,51 @@ interface LibraryDao {
     }
     @Transaction suspend fun remove(id: String) { deleteBookmarks(id); deletePositions(id); deleteShelf(id) }
 
+    /** An explicit recording choice associates old recording-scoped data with its parent book. */
+    @Transaction suspend fun adoptRecording(oldId: String, book: Audiobook) {
+        if (oldId == book.id) return
+        val old = find(oldId) ?: return
+        val target = find(book.id)
+        save(book.copy(sources = (book.sources + old.book().sources).distinctBy { it.id }))
+        if (target == null || old.playedAt > target.playedAt) {
+            val saved = find(book.id)!!
+            putShelf(old.copy(bookId = book.id, bookJson = saved.bookJson, hasAudio = saved.hasAudio))
+        }
+        val active = bookText(book.id)
+        val oldActive = bookText(oldId)
+        for (edition in editions(oldId)) {
+            if (edition(book.id, edition.editionId) == null) putEdition(edition.copy(bookId = book.id))
+            for (binding in editionBindings(oldId, edition.editionId)) {
+                if (editionBindings(book.id, edition.editionId).none { it.sourceId == binding.sourceId && it.partId == binding.partId })
+                    putTextBinding(binding.copy(bookId = book.id))
+            }
+            annotations(oldId, edition.editionId).first().forEach { putAnnotation(it.copy(bookId = book.id)) }
+            alignmentJobs(oldId, edition.editionId).first().forEach { putAlignmentJob(it.copy(bookId = book.id)) }
+        }
+        if (active == null && oldActive != null) activateEdition(book.id, oldActive.documentId)
+        observePositions(oldId).first().forEach { history ->
+            if ((position(book.id, history.sourceId)?.updatedAt ?: -1) < history.updatedAt) putPosition(history.copy(bookId = book.id))
+        }
+        bookmarks(oldId).first().forEach { mark -> deleteBookmark(mark.id); bookmark(mark.copy(bookId = book.id)) }
+        val current = sharedPosition(book.id)?.position()
+        sharedPosition(oldId)?.position()?.let { shared ->
+            if (current == null) {
+                val moved = shared.copy(bookId = book.id)
+                insertSharedPosition(SharedPositionEntry(book.id, NarrioJson.encodeToString(moved), moved.sequence))
+            } else if (shared.updatedAtMs > current.updatedAtMs) {
+                val moved = shared.copy(bookId = book.id, sequence = maxOf(current.sequence, shared.sequence) + 1)
+                compareAndSetPosition(book.id, current.sequence, moved.sequence, NarrioJson.encodeToString(moved))
+            }
+        }
+        deletePositions(oldId)
+        deleteShelf(oldId)
+    }
+
     @Query("SELECT * FROM ebook_editions WHERE bookId = :book ORDER BY addedAtMs, editionId") suspend fun editions(book: String): List<EbookEditionEntry>
     @Query("SELECT * FROM ebook_editions WHERE bookId = :book ORDER BY addedAtMs, editionId") fun observeEditions(book: String): Flow<List<EbookEditionEntry>>
     @Query("SELECT * FROM ebook_editions WHERE bookId = :book AND editionId = :edition") suspend fun edition(book: String, edition: String): EbookEditionEntry?
+    @Query("SELECT s.* FROM shelf s JOIN ebook_editions e ON s.bookId = e.bookId WHERE e.editionId = :edition ORDER BY s.savedAt LIMIT 1")
+    suspend fun bookWithEdition(edition: String): ShelfEntry?
     @Upsert suspend fun putEdition(entry: EbookEditionEntry)
     @Transaction suspend fun attachEdition(book: Audiobook, entry: EbookEditionEntry) {
         save(book)
@@ -133,10 +198,12 @@ interface LibraryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertSharedPosition(entry: SharedPositionEntry): Long
     @Query("UPDATE shared_positions SET positionJson = :json, sequence = :next WHERE bookId = :book AND sequence = :expected")
     suspend fun compareAndSetPosition(book: String, expected: Long, next: Long, json: String): Int
-    @Transaction suspend fun commitPosition(update: PositionUpdate, time: Long): SharedPosition? {
+    @Transaction suspend fun commitPosition(update: PositionUpdate, time: Long, allowed: () -> Boolean = { true }): SharedPosition? {
         val position = nextSharedPosition(sharedPosition(update.bookId)?.position(), update, time) ?: return null
         if (find(update.bookId) == null) return null
         val json = NarrioJson.encodeToString(position)
+        // This runs after Room's transaction queue and reads, immediately before the guarded write.
+        if (!allowed()) return null
         val saved = if (position.sequence == 1L) insertSharedPosition(SharedPositionEntry(update.bookId, json, 1)) != -1L
             else compareAndSetPosition(update.bookId, update.basedOnSequence, position.sequence, json) == 1
         return position.takeIf { saved }

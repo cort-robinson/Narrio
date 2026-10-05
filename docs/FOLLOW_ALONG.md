@@ -59,7 +59,7 @@ state for the reader/library workstreams.
 downloads align using cache-only reads; streamed alignment waits for an unmetered connection while
 charging. WorkManager saves progress after each window and resumes in bounded batches. The English
 model downloads once on an unmetered connection. See [sync integration](EREADER_SYNC.md) for the
-temporary persistence adapters, UI state, bounds, and workstream A/B/D/E integration requirements.
+Room persistence, UI state, bounds, and the reader/together-mode integration API.
 
 ## Storage and identity
 

@@ -31,14 +31,17 @@ class ReadingSyncSmokeTest {
         assertFalse(graph.bookAlignment.enabled())
         compose.onNodeWithTag("background-alignment").performClick().assertIsOn()
         val key = AlignmentKey("smoke-${System.nanoTime()}", "edition", "recording", "part", 1, "layout")
+        graph.library.save(Audiobook(key.bookId, "Sync storage", "Fixture", detailsLoaded = true))
+        graph.library.putEdition(EbookEditionEntry(key.bookId, key.editionId, format = "TXT"))
         graph.alignmentJobs.save(AlignmentProgress(key, 60_000, 2, 1, 0, 30_000))
-        assertEquals(60_000, TemporaryFileAlignmentJobs(compose.activity).progress(key).nextWindowMs)
+        assertEquals(60_000, RoomAlignmentJobs(graph.database).progress(key).nextWindowMs)
         val bookId = key.bookId
-        val store = TemporaryFileSharedPositions(compose.activity)
+        val store = RoomSharedPositionStore(graph.library)
         val update = PositionUpdate(bookId, PositionOrigin.READING, text = ContentCursor("edition", "chapter", 5), basedOnSequence = 0)
         assertEquals(1, store.commit(update)!!.sequence)
-        assertNull(TemporaryFileSharedPositions(compose.activity).commit(update))
-        assertEquals(5, TemporaryFileSharedPositions(compose.activity).current(bookId)!!.text!!.offset)
+        assertNull(RoomSharedPositionStore(graph.library).commit(update))
+        assertEquals(5, RoomSharedPositionStore(graph.library).current(bookId)!!.text!!.offset)
+        graph.library.remove(bookId)
     }
 
     @Test fun textStartSeeksAndPlayingAudioOwnsSharedPositionAfterDwell() = runBlocking {

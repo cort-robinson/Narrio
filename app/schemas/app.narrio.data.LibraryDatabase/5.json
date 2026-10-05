@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "9a72dc25bc5eb898ad6bee4737361780",
+    "identityHash": "2e7435f871a9d9922df365729b14990a",
     "entities": [
       {
         "tableName": "shelf",
@@ -573,7 +573,7 @@
       },
       {
         "tableName": "alignment_jobs",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookId` TEXT NOT NULL, `editionId` TEXT NOT NULL, `recordingId` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `partId` TEXT NOT NULL, `status` TEXT NOT NULL, `progress` REAL NOT NULL, `textFingerprint` TEXT NOT NULL, `audioFingerprint` TEXT NOT NULL, `normalizationVersion` INTEGER NOT NULL, `alignmentVersion` INTEGER NOT NULL, `resumePositionMs` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, PRIMARY KEY(`bookId`, `editionId`, `recordingId`, `sourceId`, `partId`), FOREIGN KEY(`bookId`, `editionId`) REFERENCES `ebook_editions`(`bookId`, `editionId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`bookId` TEXT NOT NULL, `editionId` TEXT NOT NULL, `recordingId` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `partId` TEXT NOT NULL, `status` TEXT NOT NULL, `progress` REAL NOT NULL, `textFingerprint` TEXT NOT NULL, `audioFingerprint` TEXT NOT NULL, `normalizationVersion` INTEGER NOT NULL, `alignmentVersion` INTEGER NOT NULL, `resumePositionMs` INTEGER NOT NULL, `updatedAtMs` INTEGER NOT NULL, `attempted` INTEGER NOT NULL DEFAULT 0, `matched` INTEGER NOT NULL DEFAULT 0, `firstAttemptMs` INTEGER NOT NULL DEFAULT -1, `lastAttemptMs` INTEGER NOT NULL DEFAULT -1, PRIMARY KEY(`bookId`, `editionId`, `recordingId`, `sourceId`, `partId`), FOREIGN KEY(`bookId`, `editionId`) REFERENCES `ebook_editions`(`bookId`, `editionId`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "bookId",
@@ -652,6 +652,34 @@
             "columnName": "updatedAtMs",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "attempted",
+            "columnName": "attempted",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "matched",
+            "columnName": "matched",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "firstAttemptMs",
+            "columnName": "firstAttemptMs",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "-1"
+          },
+          {
+            "fieldPath": "lastAttemptMs",
+            "columnName": "lastAttemptMs",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "-1"
           }
         ],
         "primaryKey": {
@@ -683,7 +711,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9a72dc25bc5eb898ad6bee4737361780')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '2e7435f871a9d9922df365729b14990a')"
     ]
   }
 }

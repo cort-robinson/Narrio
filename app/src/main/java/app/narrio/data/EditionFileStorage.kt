@@ -32,6 +32,15 @@ internal class EditionFileStorage(private val root: File) {
             Files.move(pending.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } finally { pending.delete() }
     }
+    /** Copies even damaged normalized caches verbatim; association must not discard recoverable originals. */
+    fun copyEdition(fromBook: String, toBook: String, edition: String) {
+        checked(edition)
+        val target = directory(toBook).apply { check(mkdirs() || isDirectory) }
+        for (extension in listOf("epub", "txt", "vtt", "json")) {
+            val original = File(directory(fromBook), "$edition.$extension")
+            if (original.isFile) atomic(File(target, original.name), original.readBytes())
+        }
+    }
     fun remove(book: String, edition: String) {
         checked(edition)
         directory(book).listFiles()?.filter { it.name.startsWith("$edition.") }?.forEach { check(it.delete() || !it.exists()) }

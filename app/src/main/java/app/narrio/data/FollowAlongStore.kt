@@ -9,8 +9,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.flow.first
-import kotlinx.serialization.encodeToString
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -21,6 +19,16 @@ class FollowAlongStore(private val context: Context, private val library: Librar
     private val root = File(context.filesDir, "follow-along")
     private val mutations = Mutex()
     private val files = EditionFileStorage(root)
+
+    suspend fun adoptRecording(recording: Audiobook, book: Audiobook): Audiobook = withContext(Dispatchers.IO) { mutations.withLock {
+        val associated = recording.forBook(book)
+        if (recording.id != book.id && library.find(recording.id) != null) {
+            for (edition in library.editions(recording.id)) files.copyEdition(recording.id, book.id, edition.editionId)
+            library.adoptRecording(recording.id, associated)
+            files.removeAll(recording.id)
+        }
+        associated
+    } }
 
     internal suspend fun importLocal(bytes: ByteArray, format: String, book: Audiobook): BookText = withContext(Dispatchers.IO) {
         attach(bytes, format, book, "", "", book.title, book.author, "Imported from your device")
@@ -108,7 +116,7 @@ class FollowAlongStore(private val context: Context, private val library: Librar
 
     suspend fun bind(bookId: String, binding: TextBinding) = mutations.withLock {
         if (library.bookText(bookId)?.documentId != binding.documentId) throw ProviderException("The book text changed. Choose the chapter again.")
-        library.putTextBinding(TextBindingEntry(bookId, binding.sourceId, binding.partId, NarrioJson.encodeToString(binding)))
+        library.bindActive(bookId, binding)
     }
 
     /** Serial read/merge/write preserves a manual match made during recognition. No schema changes. */
@@ -116,14 +124,7 @@ class FollowAlongStore(private val context: Context, private val library: Librar
         val entry = library.bookText(bookId)?.takeIf { it.documentId == fallback.documentId }
             ?: throw ProviderException("The active ebook changed during narration sync.")
         val document = load(entry)
-        val latest = library.observeTextBindings(bookId).first().map { it.binding() }
-            .firstOrNull { it.documentId == document.id && it.sourceId == fallback.sourceId && it.partId == fallback.partId } ?: fallback
-        val merged = FollowAlongTiming.mergeAuto(document, latest, anchors, durationMs)
-        val auto = merged.anchors.filter { it.auto }
-        val bounded = if (auto.size <= 2048) merged else merged.copy(anchors = (merged.anchors.filterNot { it.auto } +
-            (0 until 2048).map { auto[it * auto.lastIndex / 2047] }).sortedBy { it.positionMs })
-        library.putTextBinding(TextBindingEntry(bookId, bounded.sourceId, bounded.partId, NarrioJson.encodeToString(bounded)))
-        bounded
+        library.mergeNarration(bookId, document, fallback, anchors, durationMs)
     }
 
     suspend fun remove(bookId: String) = withContext(Dispatchers.IO) { mutations.withLock {

@@ -43,6 +43,10 @@ data class AlignmentJobEntry(
     val status: String = "queued", val progress: Double = 0.0,
     val textFingerprint: String, val audioFingerprint: String, val normalizationVersion: Int = 1,
     val alignmentVersion: Int = 1, val resumePositionMs: Long = 0, val updatedAtMs: Long = 0,
+    @ColumnInfo(defaultValue = "0") val attempted: Int = 0,
+    @ColumnInfo(defaultValue = "0") val matched: Int = 0,
+    @ColumnInfo(defaultValue = "-1") val firstAttemptMs: Long = -1,
+    @ColumnInfo(defaultValue = "-1") val lastAttemptMs: Long = -1,
 )
 
 data class LibraryShelfEntry(
@@ -79,10 +83,11 @@ internal fun nextSharedPosition(current: SharedPosition?, update: PositionUpdate
         update.audioConfidence, update.basedOnSequence + 1, time)
 }
 
-class RoomSharedPositionStore(private val library: LibraryDao, private val now: () -> Long = System::currentTimeMillis) : SharedPositionStore {
+class RoomSharedPositionStore(private val library: LibraryDao, private val now: () -> Long = System::currentTimeMillis) : GuardedSharedPositionStore {
     override fun observe(bookId: String) = library.observeSharedPosition(bookId).map { it?.position() }
     override suspend fun current(bookId: String) = library.sharedPosition(bookId)?.position()
     override suspend fun commit(update: PositionUpdate) = library.commitPosition(update, now())
+    override suspend fun commitWhen(update: PositionUpdate, allowed: () -> Boolean) = library.commitPosition(update, now(), allowed)
 }
 
 fun BookmarkEntry.contentCursor(): ContentCursor? {

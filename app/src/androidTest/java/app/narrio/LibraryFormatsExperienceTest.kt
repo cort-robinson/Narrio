@@ -106,7 +106,7 @@ class LibraryFormatsExperienceTest {
         compose.waitUntil(5_000) { vm.reader.value != null }
         assertEquals(both.id, vm.reader.value!!.book.id)
         assertEquals("Ch 12 · 43%", vm.reader.value!!.place!!.label)
-        compose.onNodeWithTag("pending-reader").assertIsDisplayed()
+        compose.onNodeWithTag("reader").assertIsDisplayed()
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.waitUntil(5_000) { vm.reader.value == null }
         assertEquals(1, vm.destination.value)

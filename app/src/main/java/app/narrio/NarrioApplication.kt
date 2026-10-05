@@ -28,7 +28,6 @@ class AppGraph(application: Application) {
         override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE shelf ADD COLUMN pendingFormat TEXT NOT NULL DEFAULT ''") }
     }, LibraryMigration3To4, LibraryMigration4To5).build()
     val library = database.library()
-    val sharedPositions: app.narrio.domain.SharedPositionStore = RoomSharedPositionStore(library)
     val credentials = CredentialStore(application)
     val catalog = ArchiveDiscovery(http)
     val indexedCatalog = KnabenDiscovery(http)
@@ -48,11 +47,10 @@ class AppGraph(application: Application) {
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks)
     val speechModels = SpeechModelStore(application, http)
     val narrationSync = app.narrio.playback.NarrationSync(application, http, offline, torbox, speechModels)
-    // TEMPORARY adapters: replace with workstream A's repositories when rebasing; retain ownership gate.
-    val sharedPositions = app.narrio.domain.AudioOwnedPositionStore(TemporaryFileSharedPositions(application))
-    val mappingRepository = TemporaryLegacyMappingRepository(library, followAlong)
+    val sharedPositions = app.narrio.domain.AudioOwnedPositionStore(RoomSharedPositionStore(library))
+    val mappingRepository = RoomPositionMappingRepository(database, followAlong)
     val positionMapper: app.narrio.domain.PositionMapper = app.narrio.domain.NarrationPositionMapper(mappingRepository)
-    val alignmentJobs: app.narrio.domain.AlignmentJobRepository = TemporaryFileAlignmentJobs(application)
+    val alignmentJobs: app.narrio.domain.AlignmentJobRepository = RoomAlignmentJobs(database)
     val readingSync = app.narrio.playback.ReadingSync(sharedPositions, positionMapper, mappingRepository, alignmentJobs)
     val bookAlignment = app.narrio.playback.BookAlignmentScheduler(application)
     val updates = app.narrio.updates.AppUpdates(application, playback)

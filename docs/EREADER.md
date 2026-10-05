@@ -59,3 +59,27 @@ E and F start once B's reader component exists. Until A lands, other workstreams
 - Don't modify `Reading.kt` without coordinating; report needed contract changes in the PR.
 - Add focused JVM tests and emulator smoke tests for new behavior. Report physical-device checks separately.
 - Update `PRODUCT.md`, `docs/FOLLOW_ALONG.md`, or `docs/ARCHITECTURE.md` only for behavior your workstream changes.
+
+## Integrated contracts
+
+The integration branch combines A/B/C/D; its adapters are real storage and sync implementations.
+`Reading.kt` keeps its source-compatible interfaces. `EbookEdition.id` fingerprints original bytes;
+TXT `ContentCursor.locatorJson` caches a locator into the deterministic internal EPUB, while the
+`("text", offset)` parser cursor remains authoritative.
+
+`RoomReadingLibrary.observeBook/observeShelf` provides reactive editions, active selection,
+shared progress and per-pair status. `activate` selects a retained edition.
+`RoomReadingLibrary.chapterOf(bookId, cursor)` returns the 1-based parser chapter, or null for
+unavailable/foreign cursors. `LocalEbookImporter.importResult` returns a created/existing book;
+`EbookImportException.reason` distinguishes unsupported, DRM-protected and unreadable files.
+`SyncJump` carries destination, previous, confidence, offerUndo, sequence, and the origin that set
+the shared place. D's `PositionJump` displays it; programmatic restoration and Undo are not reading activity.
+
+An explicit recording choice keeps its parent `Audiobook.id` and retains the original provider id
+as `recordingId`. Sources/parts keep their own ids. Existing data saved under that recording id is
+adopted into the parent book transactionally; originals are copied before the transaction. This is
+an explicit association, not title-only merging of unrelated library entries. Room retains each
+recording's history and edition's bindings. Alignment attempt/coverage counters are part of the
+single, not-yet-released v4-to-v5 migration. No schema/version bump or release identity changes.
+
+See [integration API and verification](EREADER_INTEGRATION.md) for E/F's component entry points.

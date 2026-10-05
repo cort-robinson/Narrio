@@ -78,6 +78,17 @@ import kotlin.math.roundToInt
 fun ReaderScreen(appVm: NarrioViewModel, bookId: String, onClose: () -> Unit) {
     val vm: ReaderViewModel = viewModel(key = "reader:$bookId", factory = ReaderViewModel.factory(bookId))
     val state by vm.state.collectAsStateWithLifecycle()
+    val startJump by vm.startJump.collectAsStateWithLifecycle()
+    LaunchedEffect(startJump, state) {
+        val jump = startJump ?: return@LaunchedEffect
+        val session = (state as? ReaderState.Ready)?.session ?: return@LaunchedEffect
+        val destination = jump.destination ?: return@LaunchedEffect
+        val navigationVersion = session.navigationVersion
+        appVm.announceJump(PositionJump(bookId, jump.from ?: PositionOrigin.LISTENING, readingPlace(destination, null).label, jump.confidence) {
+            jump.previous?.let { previous -> session.controller.stopFollowing(); appVm.undoReadingJump(session, previous, navigationVersion) }
+        })
+        vm.clearStartJump()
+    }
     DisposableEffect(vm) { vm.ensureOpen(); onDispose { vm.release() } }
     BackHandler(onBack = onClose)
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("reader")) {
