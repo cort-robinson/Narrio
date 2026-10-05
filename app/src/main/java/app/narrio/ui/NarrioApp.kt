@@ -55,6 +55,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     val state by vm.playback.collectAsStateWithLifecycle()
     val destination by vm.destination.collectAsStateWithLifecycle()
     val reader by vm.reader.collectAsStateWithLifecycle()
+    val ebookWebsite by vm.ebookWebsite.collectAsStateWithLifecycle()
     val windowInfo by remember(activity) { WindowInfoTracker.getOrCreate(activity).windowLayoutInfo(activity).map { it as WindowLayoutInfo? } }.collectAsStateWithLifecycle(null)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -160,6 +161,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
                 if (!expanded && !tabletop && current == Home) Modifier.padding(bottom = barHeight) else Modifier.navigationBarsPadding())) { NarrioSnackbar(it) }
         }
         }
+        ebookWebsite.request?.let { request -> EbookWebsiteBrowser(request, ebookWebsite, vm::closeEbookWebsite) { vm.downloadWebsiteEbook(request, it) } }
     }
 }
 

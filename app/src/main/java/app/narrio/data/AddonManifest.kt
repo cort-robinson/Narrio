@@ -11,6 +11,7 @@ data class InstalledAddon(val manifest: JsonObject, val manifestUrl: String, val
     val contentType get() = manifest.text("contentType")
     val catalog get() = "catalog" in (manifest["provides"] as? JsonArray).orEmpty().map { it.stringValue() }
     val source get() = "source" in (manifest["provides"] as? JsonArray).orEmpty().map { it.stringValue() }
+    val ebookSearch get() = "ebook-search" in (manifest["provides"] as? JsonArray).orEmpty().map { it.stringValue() }
     val purpose get() = if (catalog) "Book metadata" else if (contentType == "ebook") "Ebook sources" else "Audiobook sources"
 }
 
@@ -23,7 +24,8 @@ object AddonManifest {
         require(root.text("id").matches(Regex("[a-zA-Z0-9_-]{1,80}")) && root.text("name").isNotBlank()) { "The add-on needs a valid ID and name." }
         require(root.text("contentType") in setOf("audiobook", "ebook")) { "Only audiobook and ebook add-ons are supported." }
         val provides = (root["provides"] as? JsonArray).orEmpty().map { it.stringValue() }
-        require(provides.isNotEmpty() && provides.all { it in setOf("source", "catalog") }) { "This add-on capability is not supported." }
+        require(provides.isNotEmpty() && provides.all { it in setOf("source", "catalog", "ebook-search") }) { "This add-on capability is not supported." }
+        require("ebook-search" !in provides || root.text("contentType") == "ebook") { "Browser ebook search is only available for ebook add-ons." }
         val addon = InstalledAddon(root, url)
         val adapters = root["adapters"] as? JsonObject ?: error("The add-on has no adapters.")
         provides.forEach { capability ->
@@ -42,6 +44,13 @@ object AddonManifest {
         require(request.text("method").ifBlank { "GET" } in setOf("GET", "POST")) { "Only GET and POST requests are supported." }
         val headers = request["headers"] as? JsonObject
         require(headers.orEmpty().keys.all { it.lowercase() in setOf("accept", "content-type") }) { "Only public JSON request headers are supported." }
+        if (capability == "ebook-search") {
+            require(request.text("method").ifBlank { "GET" } == "GET" && headers.isNullOrEmpty() && request["body"] == null) {
+                "Browser search links must use GET without headers or a body."
+            }
+            require(request.text("url").contains("{TITLE}") || request.text("url").contains("{QUERY}")) { "Browser search must include the book title." }
+            return
+        }
         val response = adapter["response"] as? JsonObject ?: error("An add-on response mapping is required.")
         require(response.text("type") == "json") { "Only JSON responses are supported." }
         val mapping = response["mapping"] as? JsonObject ?: error("An add-on field mapping is required.")

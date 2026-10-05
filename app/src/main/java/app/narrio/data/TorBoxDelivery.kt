@@ -167,7 +167,10 @@ class TorBoxDelivery(
         when (it) { is JsonArray -> it.mapNotNull { x -> x as? JsonObject }; is JsonObject -> listOf(it); else -> emptyList() }
     }
 
-    private fun request(path: String, params: Map<String, String> = emptyMap(), body: RequestBody? = null, overrideToken: String? = null): JsonObject {
+    internal fun webTextLink(webId: Long, fileId: Long): String = request("webdl/requestdl", params = mapOf(
+        "token" to token(), "web_id" to webId.toString(), "file_id" to fileId.toString(), "redirect" to "false"))["data"].stringValue()
+
+    internal fun request(path: String, params: Map<String, String> = emptyMap(), body: RequestBody? = null, overrideToken: String? = null): JsonObject {
         val url = (baseUrl + path).toHttpUrl().newBuilder().apply { params.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
         val builder = Request.Builder().url(url).header("Authorization", "Bearer ${overrideToken ?: token()}")
         if (body != null) builder.post(body)

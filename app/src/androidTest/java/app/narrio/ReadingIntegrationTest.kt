@@ -32,6 +32,28 @@ class ReadingIntegrationTest {
         clean.forEach { graph.followAlong.remove(it); graph.library.remove(it) }
     }
 
+    @Test fun downloadedEbookIsDurableWithoutChangingTheSelectedRecordingOrListeningPlace() = runBlocking {
+        val source = AudioSource("web-import-source", "Fixture recording", "MP3", listOf(AudioPart("part", "1.mp3", "Chapter", 120_000)))
+        val book = Audiobook("integration-web-import", "Website ebook", "Fixture", sources = listOf(source), detailsLoaded = true)
+        clean += book.id
+        graph.library.save(book)
+        graph.library.progress(book.id, NarrioJson.encodeToString(source), "part", 35_000, 1)
+        val before = graph.library.find(book.id)!!
+        val document = graph.followAlong.importDownloaded(ReaderFixtures.sampleEpub(), "EPUB", book, "Fixture website via TorBox", "torbox-web")
+        val editions = graph.editionFiles.editions(book.id)
+        assertEquals(document.id, editions.single().id)
+        assertEquals("Fixture website via TorBox", editions.single().attribution)
+        assertEquals("torbox-web", editions.single().provider)
+        assertNotNull(graph.editionFiles.original(book.id, document.id))
+        val after = graph.library.find(book.id)!!
+        assertEquals(before.sourceJson, after.sourceJson)
+        assertEquals(before.partId, after.partId)
+        assertEquals(before.positionMs, after.positionMs)
+        val restarted = FollowAlongStore(compose.activity, graph.library, graph.http, graph.torbox)
+        assertEquals(document.id, restarted.load(graph.library.bookText(book.id)!!).id)
+        assertEquals(book.id, after.book().id)
+    }
+
     @Test fun selectingARecordingKeepsTheParentBookAndAdoptsOldEditionsAndAnchors() = runBlocking {
         val catalog = Audiobook("integration-catalog", "Integration Book", "Fixture", provider = "catalog", detailsLoaded = true)
         val source = AudioSource("integration-source", "Recording", "MP3", listOf(AudioPart("part", "1.mp3", "Chapter", 120_000)))

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -151,7 +152,7 @@ fun PairingLine(status: PairingStatus, copy: PairingCopy, modifier: Modifier = M
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, connected: Boolean, retry: () -> Unit, add: (BookTextSource) -> Unit,
-               chooseFile: () -> Unit, activate: (EbookEdition) -> Unit, dismiss: () -> Unit) {
+               chooseFile: () -> Unit, activate: (EbookEdition) -> Unit, dismiss: () -> Unit, searchLinks: List<EbookSearchLink> = emptyList(), openSearch: (EbookSearchLink) -> Unit = {}) {
     val state = search.takeIf { it.bookId == book.id } ?: EbookSearchState(book.id)
     LaunchedEffect(state.added) { if (state.added != null) dismiss() }
     ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
@@ -203,7 +204,8 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                     TextButton(retry, enabled = !busy) { Text("Search again") }
                 }
                 state.searched && state.results.isEmpty() -> item {
-                    Text("No ebook with this exact title and author turned up. Add your own EPUB or text file below.", style = MaterialTheme.typography.bodyMedium)
+                    Text(if (searchLinks.isEmpty()) "No ebook with this exact title and author turned up. Add your own EPUB or text file below."
+                         else "No ebook with this exact title and author turned up here. Try an ebook website or add your own file below.", style = MaterialTheme.typography.bodyMedium)
                     if (state.incomplete) TextButton(retry, enabled = !busy) { Text("Search again") }
                 }
                 else -> {
@@ -216,6 +218,17 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             }
             if (state.error != null && state.results.isNotEmpty()) item {
                 Text(state.error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            }
+            if (searchLinks.isNotEmpty()) item {
+                Text("Search ebook websites", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                Spacer(Modifier.height(4.dp))
+                Text("Choose an EPUB on the website. Narrio tries TorBox first, then saves the website download when needed. Verification stays inside the app.",
+                    style = MaterialTheme.typography.bodySmall, color = muted)
+                searchLinks.forEach { link ->
+                    OutlinedButton({ openSearch(link) }, Modifier.fillMaxWidth(), enabled = !busy) {
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Search ${link.name}")
+                    }
+                }
             }
             item {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 8.dp))

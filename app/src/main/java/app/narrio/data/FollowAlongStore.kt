@@ -34,6 +34,10 @@ class FollowAlongStore(private val context: Context, private val library: Librar
         attach(bytes, format, book, "", "", book.title, book.author, "Imported from your device")
     }
 
+    internal suspend fun importDownloaded(bytes: ByteArray, format: String, book: Audiobook, attribution: String, provider: String): BookText = withContext(Dispatchers.IO) {
+        attach(bytes, format, book, "", "", book.title, book.author, attribution, provider = provider)
+    }
+
     suspend fun load(entry: BookTextEntry): BookText = withContext(Dispatchers.IO) {
         if (!entry.documentId.matches(Regex("[a-f0-9]{64}"))) throw ProviderException("Saved book text is unreadable. Choose the file again.")
         try { files.load(entry.bookId, entry.documentId) }
@@ -62,6 +66,7 @@ class FollowAlongStore(private val context: Context, private val library: Librar
         val url = when (candidate.provider) {
             "torbox" -> torbox.resolve(AudioPart(candidate.id, candidate.title, candidate.title, torrentId = candidate.torrentId, fileId = candidate.fileId))
             "torbox-cache" -> torbox.cachedTextLink(candidate.torrentHash, candidate.magnetUri, candidate.fileName)
+            "torbox-web" -> torbox.webTextLink(candidate.torrentId ?: error("Missing web download ID"), candidate.fileId ?: error("Missing ebook file ID"))
             else -> candidate.url
         }
         if (!url.startsWith("https://")) throw ProviderException("This source has no secure book-text link. Choose a local file instead.")

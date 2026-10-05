@@ -61,6 +61,21 @@ class AddonManager(
     override suspend fun search(query: String, category: String): List<Audiobook> = sources(query, "", "audiobook")
     override suspend fun searchBook(book: Audiobook, title: String): List<Audiobook> = sources(title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), "audiobook")
     suspend fun ebooks(query: String): List<Audiobook> = sources(query, "", "ebook")
+    /** Browser-only providers are offered separately from verified ebook files and need no delivery account. */
+    fun ebookSearchLinks(book: Audiobook): List<EbookSearchLink> {
+        val title = BookIdentity.title(book.title)
+        if (title.isBlank()) return emptyList()
+        val author = book.author.takeUnless(BookMetadata::unknown).orEmpty()
+        val replacements = mapOf("{TITLE}" to title.take(250), "{AUTHOR}" to author.take(200), "{QUERY}" to "$title $author".trim().take(450))
+        return installed.value.filter { it.enabled && it.ebookSearch }.map { addon ->
+            val spec = addon.manifest["adapters"]!!.jsonObject["ebook-search"]!!.jsonObject["request"]!!.jsonObject
+            val url = Regex("\\{(?:TITLE|AUTHOR|QUERY)\\}").replace(spec.text("url")) { match ->
+                java.net.URLEncoder.encode(replacements.getValue(match.value), "UTF-8").replace("+", "%20")
+            }
+            AddonManifest.secureUrl(url)
+            EbookSearchLink(addon.name, url)
+        }
+    }
     override suspend fun recording(id: String): Audiobook = throw ProviderException("Choose a release to inspect its TorBox availability.")
 
     private suspend fun sources(title: String, author: String, type: String): List<Audiobook> = collect(
@@ -182,17 +197,28 @@ class AddonManager(
             "knaben-audiobooks" to "https://api.npoint.io/bd3157954016bd9fd1ed",
             "audible-audiobooks" to "https://api.npoint.io/112b9e0e87362772f7c3",
             "open-library-metadata" to "https://api.npoint.io/2b23d8b5a9ef68a0090e",
+            "annas-archive-ebooks" to "https://raw.githubusercontent.com/cort-robinson/Narrio/dev/app/src/main/assets/addons/annas-archive-ebooks.json",
         )
+        // Installs predating bundled-provider tracking already knew these six defaults, including removed ones.
+        private val legacyBundledIds = setOf("audiobookbay", "tpb-audiobooks", "knaben-ebooks", "knaben-audiobooks", "audible-audiobooks", "open-library-metadata")
+        internal fun addNewBundled(saved: List<InstalledAddon>, defaults: List<InstalledAddon>, known: Set<String>) =
+            saved + defaults.filter { it.id !in known && saved.none { installed -> installed.id == it.id } }
         fun create(context: Context, http: OkHttpClient): AddonManager {
             val preferences = context.getSharedPreferences("addons.v1", Context.MODE_PRIVATE)
             val defaults = bundledUrls.map { (id, url) -> AddonManifest.parse(context.assets.open("addons/$id.json").bufferedReader().use { it.readText() }, url) }
             val saved = preferences.getString("installed", null)
-            val initial = if (saved == null) defaults else runCatching {
+            val known = preferences.getStringSet("known-bundled", null) ?: legacyBundledIds
+            val restored = if (saved == null) Result.success(defaults) else runCatching {
                 NarrioJson.decodeFromString<List<InstalledAddon>>(saved).map { entry ->
                     AddonManifest.secureUrl(entry.manifestUrl)
                     AddonManifest.parse(entry.manifest.toString(), entry.manifestUrl).copy(enabled = entry.enabled)
-                }
-            }.getOrDefault(emptyList())
+                }.let { addNewBundled(it, defaults, known) }
+            }
+            val initial = restored.getOrDefault(emptyList())
+            if (restored.isSuccess) {
+                check(preferences.edit().putString("installed", NarrioJson.encodeToString(initial))
+                    .putStringSet("known-bundled", known + defaults.map { it.id }).commit()) { "Could not save add-on settings." }
+            }
             return AddonManager(http, initial, persist = { list ->
                 check(preferences.edit().putString("installed", NarrioJson.encodeToString(list)).commit()) { "Could not save add-on settings." }
             })

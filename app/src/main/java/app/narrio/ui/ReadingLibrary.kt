@@ -21,6 +21,9 @@ interface ReadingLibrary {
     suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition
     /** Adds a found ebook to [book] as an edition. */
     suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition
+    /** Acquires a user-initiated website download, trying TorBox before the browser session. */
+    suspend fun downloadWebsiteEbook(book: Audiobook, request: EbookDownloadRequest, connected: Boolean, step: (String) -> Unit): EbookEdition =
+        throw ProviderException("Website ebook downloads are unavailable.")
     /** Makes [editionId] the edition used for reading and sync. */
     suspend fun activate(bookId: String, editionId: String)
     /** Matching ebooks from the existing providers, reporting each provider as it's checked. */
@@ -93,6 +96,12 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
     override suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition {
         val doc = graph.followAlong.fetch(candidate, book, "", "")
         return graph.editionFiles.editions(book.id).first { it.id == doc.id }
+    }
+    override suspend fun downloadWebsiteEbook(book: Audiobook, request: EbookDownloadRequest, connected: Boolean, step: (String) -> Unit): EbookEdition {
+        val downloaded = graph.webEbookAcquisition.acquire(request, connected, step)
+        step("Adding this ebook to your library")
+        val document = graph.followAlong.importDownloaded(downloaded.bytes, downloaded.format, book, downloaded.attribution, downloaded.provider)
+        return graph.editionFiles.editions(book.id).first { it.id == document.id }
     }
     override suspend fun activate(bookId: String, editionId: String) = graph.followAlong.activateEdition(bookId, editionId)
     override suspend fun findEditions(book: Audiobook, connected: Boolean, step: (String) -> Unit): BookTextFinder.Candidates {

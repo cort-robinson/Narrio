@@ -37,6 +37,8 @@ class AddonSettingsExperienceTest {
             reveal(hasText("Knaben AudioBooks")); compose.onNodeWithText("Knaben AudioBooks").assertIsDisplayed()
             reveal(hasText("The Pirate Bay")); compose.onNodeWithText("The Pirate Bay").assertIsDisplayed()
             reveal(hasText("Knaben Ebooks")); compose.onNodeWithText("Knaben Ebooks").assertIsDisplayed()
+            reveal(hasText("Anna's Archive")); compose.onNodeWithText("Anna's Archive").assertIsDisplayed()
+            compose.onNodeWithText("Enabled · Opens inside Narrio").assertExists()
             compose.onNodeWithContentDescription("Back to settings").performClick()
             compose.onNodeWithText("Add-ons · Book metadata, audio & ebooks").assertIsDisplayed()
             compose.onNodeWithText("Add-ons · Book metadata, audio & ebooks").performScrollTo().performClick()

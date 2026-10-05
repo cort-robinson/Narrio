@@ -54,6 +54,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val sourceSearch by vm.sourceSearch.collectAsStateWithLifecycle()
     val ebookSearch by vm.ebookSearch.collectAsStateWithLifecycle()
+    val installedAddons by vm.graph.addons.installed.collectAsStateWithLifecycle()
+    val ebookSearchLinks = remember(book.title, book.author, installedAddons) { vm.graph.addons.ebookSearchLinks(book) }
     val loadedFormats by vm.detailFormats.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var sourcePicker by remember(book.id) { mutableStateOf(false) }
@@ -220,7 +222,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
     if (ebookSheet) EbookSheet(book, formats, ebookSearch, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
         chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
-        activate = { vm.chooseEdition(book, it.id) }, dismiss = { ebookSheet = false })
+        activate = { vm.chooseEdition(book, it.id) }, dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks,
+        openSearch = { vm.openEbookWebsite(book, it) })
 }
 
 /** The leading format is the filled action; the other available format is tonal. */

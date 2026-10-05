@@ -2,6 +2,9 @@ package app.narrio.domain
 
 import kotlinx.serialization.Serializable
 
+/** An external search destination, not a discovered or downloadable ebook edition. */
+data class EbookSearchLink(val name: String, val url: String)
+
 /** A discovery reference, never a temporary delivery URL or a claim of edition equivalence. */
 @Serializable
 data class BookTextSource(

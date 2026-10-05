@@ -55,6 +55,25 @@ class BookTextFinderTest {
         } finally { knaben.shutdown(); torbox.shutdown() }
     }
 
+    @Test fun readyWebEbooksSurviveTorrentAccountFailuresAndKeepExactBookMatching() = runTest {
+        val gutenberg = MockWebServer().apply { start() }
+        val torbox = MockWebServer().apply { start() }
+        try {
+            gutenberg.enqueue(MockResponse().setBody("""{"results":[]}"""))
+            torbox.enqueue(MockResponse().setResponseCode(500))
+            val delivery = TorBoxDelivery(OkHttpClient(), { "fixture-key" }, torbox.url("/").toString())
+            val matching = BookTextSource("torbox-web:12:3", "Pride and Prejudice - Jane Austen.epub", format = "EPUB", provider = "torbox-web", torrentId = 12, fileId = 3)
+            val unrelated = matching.copy(id = "wrong", title = "Pride and Prejudice - Study Guide - Jane Austen.epub")
+            val finder = BookTextFinder(GutenbergTextDiscovery(OkHttpClient(), gutenberg.url("/").toString()),
+                KnabenDiscovery(OkHttpClient(), gutenberg.url("/").toString()), delivery, ebookSearch = { emptyList() },
+                webAccountText = { listOf("" to matching, "" to unrelated) })
+            val candidates = finder.candidates(book, emptyList(), true) {}
+            assertEquals(listOf(matching), candidates.results)
+            assertTrue(candidates.incomplete)
+            assertEquals(1, torbox.requestCount)
+        } finally { gutenberg.shutdown(); torbox.shutdown() }
+    }
+
     @Test fun automaticTextMustBeLongEnoughForTheRecording() {
         fun text(words: Int) = BookText("d", "Book", "Author", "TXT", "", listOf(TextChapter("c", "C", listOf(TextPassage("p", List(words) { "word" }.joinToString(" "), "text", 0)))))
         val sevenHours = AudioSource("s", "Parts", "MP3", listOf(AudioPart("a", "a.mp3", "A", durationMs = 7 * 3_600_000L)))

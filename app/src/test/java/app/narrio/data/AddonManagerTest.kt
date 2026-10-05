@@ -4,6 +4,7 @@ import app.narrio.domain.Audiobook
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.*
@@ -22,13 +23,56 @@ class AddonManagerTest {
         return addon.copy(manifest = JsonObject(addon.manifest + ("adapters" to JsonObject(adapters + ("source" to JsonObject(source + ("request" to JsonObject(request + ("url" to JsonPrimitive(url))))))))))
     }
 
-    @Test fun allSixBundledManifestsValidateAndOlderLinksKeepTheSameIds() {
+    @Test fun allBundledManifestsValidateAndOlderLinksKeepTheSameIds() {
         val addons = AddonManager.bundledUrls.keys.map(::bundled)
-        assertEquals(6, addons.size)
+        assertEquals(7, addons.size)
         assertEquals(2, addons.count { it.catalog })
         assertEquals(3, addons.count { it.source && it.contentType == "audiobook" })
-        assertEquals(1, addons.count { it.contentType == "ebook" })
+        assertEquals(2, addons.count { it.contentType == "ebook" })
+        assertEquals(1, addons.count { it.ebookSearch })
         assertEquals("audiobookbay", AddonManifest.parse(bundled("audiobookbay").manifest.toString(), "https://jsonkeeper.com/b/QL9DT").id)
+    }
+
+    @Test fun browserEbookSearchEncodesBookIdentityAndNeedsNoNetworkOrTorbox() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { error("Browser links must not issue network requests") }.build()
+        val manager = AddonManager(client, listOf(bundled("annas-archive-ebooks")))
+        val book = Audiobook("catalog:test", "A & B? #1", "Writer + Co")
+        val link = manager.ebookSearchLinks(book).single()
+        val url = link.url.toHttpUrl()
+        assertEquals("Anna's Archive", link.name)
+        assertEquals("https", url.scheme)
+        assertEquals("annas-archive.gl", url.host)
+        assertEquals("A & B? #1 Writer + Co", url.queryParameter("q"))
+        assertEquals("epub", url.queryParameter("ext"))
+        assertEquals(setOf("q", "ext"), url.queryParameterNames)
+        assertTrue(manager.ebooks(book.title).isEmpty())
+        assertTrue(manager.search(book.title).isEmpty())
+        assertEquals("A & B? #1", manager.ebookSearchLinks(book.copy(author = "Author not verified")).single().url.toHttpUrl().queryParameter("q"))
+        manager.enable("annas-archive-ebooks", false)
+        assertTrue(manager.ebookSearchLinks(book).isEmpty())
+        manager.remove("annas-archive-ebooks")
+        assertTrue(manager.ebookSearchLinks(book).isEmpty())
+    }
+
+    @Test fun browserSearchManifestsRejectNonEbookAndNonBrowserRequests() {
+        val manifest = bundled("annas-archive-ebooks").manifest.toString()
+        for (invalid in listOf(manifest.replace("\"ebook\"", "\"audiobook\""), manifest.replace("\"GET\"", "\"POST\""),
+            manifest.replace("\"method\":\"GET\"", "\"method\":\"GET\",\"headers\":{\"Authorization\":\"secret\"}"),
+            manifest.replace("{QUERY}", "fixed"))) {
+            assertTrue(runCatching { AddonManifest.parse(invalid, "https://example.com/addon.json") }.isFailure)
+        }
+    }
+
+    @Test fun upgradesAddNewBundledProvidersOnceWithoutRestoringRemovedOrDisabledProviders() {
+        val defaults = AddonManager.bundledUrls.keys.map(::bundled)
+        val legacy = defaults.filterNot { it.ebookSearch }
+        val saved = legacy.filterNot { it.id == "audiobookbay" }.map { it.copy(enabled = it.id != "knaben-ebooks") }
+        val upgraded = AddonManager.addNewBundled(saved, defaults, legacy.map { it.id }.toSet())
+        assertEquals(saved.map { it.id } + "annas-archive-ebooks", upgraded.map { it.id })
+        assertFalse(upgraded.first { it.id == "knaben-ebooks" }.enabled)
+        assertEquals(upgraded, AddonManager.addNewBundled(upgraded, defaults, defaults.map { it.id }.toSet()))
+        val removed = upgraded.filterNot { it.ebookSearch }
+        assertEquals(removed, AddonManager.addNewBundled(removed, defaults, defaults.map { it.id }.toSet()))
     }
 
     @Test fun pathsSupportArraysIndexesAndNumericObjectKeys() {

@@ -37,7 +37,7 @@ fun AddonSettings(manager: AddonManager, changed: () -> Unit, back: () -> Unit) 
         scope.launch {
             try { message = action(); error = false; changed() }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { message = "Could not $label. Check the HTTPS manifest URL and try again. Only schema 1.0.0 JSON source and catalog add-ons are supported."; error = true }
+            catch (_: Exception) { message = "Could not $label. Check the HTTPS manifest URL and try again. Only schema 1.0.0 JSON source, catalog, and browser ebook-search add-ons are supported."; error = true }
             finally { working = null }
         }
     }
@@ -48,7 +48,7 @@ fun AddonSettings(manager: AddonManager, changed: () -> Unit, back: () -> Unit) 
             item {
                 Text("Choose where Narrio finds books, audio, and ebooks.", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(8.dp))
-                Text("Enabled add-ons receive your search terms directly. Audio and ebook releases use your TorBox connection; add-ons never receive its key or your listening history. Disabling or removing an add-on keeps saved books and progress.",
+                Text("Enabled add-ons receive your search terms directly. Torrent releases use your TorBox connection; ebook websites open inside Narrio when you choose them. Add-ons never receive your TorBox key or listening history. Disabling or removing an add-on keeps saved books and progress.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
@@ -73,7 +73,7 @@ fun AddonSettings(manager: AddonManager, changed: () -> Unit, back: () -> Unit) 
                                 enabled = working == null, modifier = Modifier.semantics { contentDescription = "Enable ${addon.name}" })
                         }
                         Text(addon.manifest.text("description"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(if (!addon.enabled) "Disabled" else statuses[addon.id] ?: "Enabled · Not checked yet", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelMedium,
+                        Text(if (!addon.enabled) "Disabled" else if (addon.ebookSearch) "Enabled · Opens inside Narrio" else statuses[addon.id] ?: "Enabled · Not checked yet", Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.secondary)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             TextButton({ run("refresh add-on") { manager.refresh(addon.id); "${addon.name} refreshed." } }, enabled = working == null) { Text("Refresh ${addon.name}") }

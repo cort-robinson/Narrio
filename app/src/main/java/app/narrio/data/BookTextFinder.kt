@@ -13,6 +13,7 @@ class BookTextFinder(
     private val knaben: KnabenDiscovery,
     private val torbox: TorBoxDelivery,
     private val ebookSearch: suspend (String) -> List<Audiobook> = knaben::ebooks,
+    private val webAccountText: suspend () -> List<Pair<String, BookTextSource>> = { emptyList() },
 ) {
     suspend fun find(book: Audiobook, source: AudioSource?, connected: Boolean, step: (String) -> Unit, attach: suspend (BookTextSource) -> Unit): Boolean {
         suspend fun attempt(candidates: List<BookTextSource>): Boolean {
@@ -32,6 +33,7 @@ class BookTextFinder(
         if (connected && !BookMetadata.unknown(book.author)) {
             step("Checking your TorBox ebooks")
             if (attempt(read { accountMatches(book) })) return true
+            if (attempt(read { webAccountMatches(book) })) return true
             step("Checking TorBox for a cached ebook")
             if (attempt(read { cachedReleases(book) })) return true
         }
@@ -57,6 +59,7 @@ class BookTextFinder(
         if (connected && !BookMetadata.unknown(book.author)) {
             step("Checking your TorBox ebooks")
             results += read { accountMatches(book) }
+            results += read { webAccountMatches(book) }
             step("Checking TorBox for a cached ebook")
             results += read { cachedReleases(book) }
         }
@@ -67,6 +70,9 @@ class BookTextFinder(
 
     private suspend fun accountMatches(book: Audiobook) =
         torbox.accountText().filter { (release, file) -> EbookMatch.matches(book, release) || EbookMatch.matches(book, file.title) }.map { it.second }.preferEpub()
+
+    private suspend fun webAccountMatches(book: Audiobook) =
+        webAccountText().filter { (release, file) -> EbookMatch.matches(book, release) || EbookMatch.matches(book, file.title) }.map { it.second }.preferEpub()
 
     private suspend fun publicMatches(book: Audiobook) =
         gutenberg.search("${BookIdentity.title(book.title)} ${book.author}".trim()).filter { EbookMatch.matches(book, "${it.title.substringBefore(';')} - ${it.author}") }

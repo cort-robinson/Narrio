@@ -1,6 +1,12 @@
 package app.narrio
 
 import android.net.Uri
+import android.view.View
+import android.view.ViewGroup
+import android.view.inspector.WindowInspector
+import android.webkit.*
+import java.io.ByteArrayInputStream
+import java.util.concurrent.atomic.AtomicBoolean
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
@@ -144,7 +150,7 @@ class LibraryFormatsExperienceTest {
         capture("find-ebook-results-night")
         compose.runOnIdle { fake.findDelayMs = 0; fake.found = BookTextFinder.Candidates(emptyList(), incomplete = false) }
         compose.onNodeWithText("Search again").performClick()
-        compose.waitUntil(10_000) { shown("No ebook with this exact title and author turned up. Add your own EPUB or text file below.") }
+        compose.waitUntil(10_000) { shown("No ebook with this exact title and author turned up here. Try an ebook website or add your own file below.") }
         theme(ThemeMode.DAY)
         capture("find-ebook-empty-day")
         // Adding an edition closes the sheet.
@@ -166,7 +172,7 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Reading · Ch 12 · 43%").assertIsDisplayed()
         compose.onNodeWithContentDescription("Listening starts at about Part 5 of 12, 35%, estimated").assertIsDisplayed()
         compose.onNodeWithTag("book-details").performScrollToNode(hasText("Partly matches the narration"))
-        compose.onNodeWithText("Choose another edition").assertIsDisplayed()
+        compose.onNodeWithText("Choose another edition").performScrollTo().assertIsDisplayed()
         capture("details-both-day")
         theme(ThemeMode.NIGHT)
         capture("details-both-night")
@@ -180,6 +186,78 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("On this phone").assertExists()
         compose.waitUntil(10_000) { !vm.ebookSearch.value.searching }
         capture("choose-edition-night")
+    }
+
+    @Test fun annasArchiveInterceptsAChosenDownloadInsideNarrio() {
+        seed()
+        theme(ThemeMode.NIGHT)
+        val addonId = "annas-archive-ebooks"
+        val original = graph.addons.installed.value.first { it.id == addonId }.enabled
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val fixtureUrl = "https://ebook-fixture.narrio.example/search"
+        val ready = AtomicBoolean(false)
+        var web: WebView? = null
+        fun findWeb(view: View): WebView? = when (view) {
+            is WebView -> view
+            is ViewGroup -> (0 until view.childCount).firstNotNullOfOrNull { findWeb(view.getChildAt(it)) }
+            else -> null
+        }
+        try {
+            compose.runOnIdle {
+                graph.addons.enable(addonId, true)
+                fake.found = BookTextFinder.Candidates(emptyList(), incomplete = false)
+                vm.selection.value = SelectionState(audioOnly)
+            }
+            compose.onNodeWithTag("find-ebook-action").performClick()
+            compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Search Anna's Archive"))
+            compose.onNodeWithText("Search Anna's Archive").performClick()
+            compose.onNodeWithTag("ebook-website").assertIsDisplayed()
+            compose.runOnIdle {
+                val url = Uri.parse(vm.ebookWebsite.value.request!!.link.url)
+                assertEquals("annas-archive.gl", url.host)
+                assertEquals("${audioOnly.title} ${audioOnly.author}", url.getQueryParameter("q"))
+                assertEquals("epub", url.getQueryParameter("ext"))
+                assertNull(vm.ebookSearch.value.added)
+                assertFalse(fake.formats.value.getValue(audioOnly.id).ebook)
+            }
+            // Controlled HTTPS responses exercise the actual WebView download listener without a live provider.
+            instrumentation.runOnMainSync {
+                web = WindowInspector.getGlobalWindowViews().firstNotNullOfOrNull(::findWeb)!!
+                web!!.stopLoading()
+                web!!.webViewClient = object : WebViewClient() {
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
+                        val ebook = request.url.path == "/book.txt"
+                        val bytes = if (ebook) "Controlled ebook content." else "<html><body><a id='download' href='/book.txt'>Download fixture ebook</a></body></html>"
+                        return WebResourceResponse(if (ebook) "text/plain" else "text/html", "UTF-8", 200, "OK",
+                            if (ebook) mapOf("Content-Disposition" to "attachment; filename=book.txt") else emptyMap(), ByteArrayInputStream(bytes.toByteArray()))
+                    }
+                    override fun onPageFinished(view: WebView, url: String) { if (url == fixtureUrl) ready.set(true) }
+                }
+                CookieManager.getInstance().setCookie(fixtureUrl, "verification=fixture; Secure")
+                web!!.loadUrl(fixtureUrl)
+            }
+            compose.waitUntil(10_000) { ready.get() }
+            capture("anna-archive-in-app-night")
+            instrumentation.runOnMainSync { web!!.evaluateJavascript("document.getElementById('download').click()", null) }
+            compose.waitUntil(10_000) { shown("Download ebook?") }
+            assertNull(fake.websiteDownload)
+            capture("anna-archive-download-confirm-night")
+            compose.onNodeWithText("Download ebook", useUnmergedTree = true).performClick()
+            compose.waitUntil(10_000) { vm.ebookSearch.value.added != null }
+            compose.runOnIdle {
+                assertNull(vm.ebookWebsite.value.request)
+                assertEquals("https://ebook-fixture.narrio.example/book.txt", fake.websiteDownload!!.url)
+                assertEquals("verification=fixture", fake.websiteDownload!!.cookie)
+                assertEquals("Anna's Archive", fake.websiteDownload!!.sourceName)
+                assertTrue(fake.formats.value.getValue(audioOnly.id).ebook)
+                assertEquals(300_000L, fake.formats.value.getValue(audioOnly.id).position!!.audio!!.positionMs)
+                graph.addons.enable(addonId, false)
+            }
+            compose.onNodeWithTag("find-ebook-action").assertDoesNotExist()
+        } finally {
+            instrumentation.runOnMainSync { CookieManager.getInstance().setCookie(fixtureUrl, "verification=; Max-Age=0; Secure") }
+            compose.runOnIdle { vm.closeEbookWebsite(); graph.addons.enable(addonId, original) }
+        }
     }
 
     @Test fun addingAnEbookFileOpensItsBookOrExplainsTheFile() {
@@ -230,6 +308,7 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
     @Volatile var importDelayMs = 0L
     @Volatile var found = BookTextFinder.Candidates(emptyList(), incomplete = false)
     @Volatile var findDelayMs = 0L
+    @Volatile var websiteDownload: EbookDownloadRequest? = null
     override fun observeShelf(): Flow<Map<String, BookFormats>> = formats
     override fun observeBook(book: Audiobook): Flow<BookFormats> =
         formats.map { it[book.id] ?: BookFormats(book.id, audio = book.provider != "catalog" && book.sources.isNotEmpty()) }
@@ -242,6 +321,12 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
     }
     override suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition = throw ProviderException("Not used by this fixture.")
     override suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition = throw ProviderException("Not used by this fixture.")
+    override suspend fun downloadWebsiteEbook(book: Audiobook, request: EbookDownloadRequest, connected: Boolean, step: (String) -> Unit): EbookEdition {
+        websiteDownload = request
+        val edition = EbookEdition("ed-web", book.id, book.title, book.author, "TXT", attribution = "Controlled website download", active = true)
+        formats.update { it + (book.id to it.getValue(book.id).copy(editions = listOf(edition))) }
+        return edition
+    }
     override suspend fun activate(bookId: String, editionId: String) = Unit
     override suspend fun findEditions(book: Audiobook, connected: Boolean, step: (String) -> Unit): BookTextFinder.Candidates {
         step("Checking Project Gutenberg"); delay(findDelayMs); return found
