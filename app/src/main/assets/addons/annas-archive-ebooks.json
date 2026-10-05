@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "id": "annas-archive-ebooks",
+  "name": "Anna's Archive",
+  "version": "1.0.0",
+  "contentType": "ebook",
+  "provides": ["ebook-search"],
+  "description": "Search EPUB editions inside Narrio. Downloads try TorBox first, with website verification and direct download as a fallback.",
+  "adapters": {
+    "ebook-search": {
+      "request": {
+        "method": "GET",
+        "url": "https://annas-archive.gl/search?q={QUERY}&ext=epub"
+      }
+    }
+  }
+}

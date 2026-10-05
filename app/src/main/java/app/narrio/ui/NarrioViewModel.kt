@@ -20,6 +20,8 @@ private const val SOURCE_RESULTS_MS = 10 * 60_000L
 
 data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null)
 data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
+data class EbookWebsiteRequest(val book: Audiobook, val link: EbookSearchLink)
+data class EbookWebsiteState(val request: EbookWebsiteRequest? = null, val working: Boolean = false, val step: String = "", val error: String? = null)
 /**
  * [recordings] are verified and confidently matched, best first; [possible] need the listener's review.
  * The automatic [choice] is the best recording unless the listener picked another version.
@@ -100,6 +102,8 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val shelfFilter = MutableStateFlow(ShelfFilter.ALL)
     val ebookSearch = MutableStateFlow(EbookSearchState())
+    val ebookWebsite = MutableStateFlow(EbookWebsiteState())
+    private var ebookWebsiteJob: Job? = null
     val ebookImport = MutableStateFlow(EbookImportState())
     val reader = MutableStateFlow<ReaderRequest?>(null)
     /** Moves to the shared place large enough to offer Undo; the shell shows them with [showJump]. */
@@ -358,6 +362,35 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun addEbook(book: Audiobook, candidate: BookTextSource) = editionWork(book, candidate.id) { readingLibrary.value.addEdition(book, candidate) }
+
+    fun openEbookWebsite(book: Audiobook, link: EbookSearchLink) {
+        AddonManifest.secureUrl(link.url)
+        ebookWebsiteJob?.cancel()
+        ebookWebsite.value = EbookWebsiteState(EbookWebsiteRequest(book, link))
+    }
+    fun closeEbookWebsite() {
+        ebookWebsiteJob?.cancel()
+        ebookWebsite.value = EbookWebsiteState()
+    }
+    fun downloadWebsiteEbook(target: EbookWebsiteRequest, request: EbookDownloadRequest) {
+        if (ebookWebsite.value.request != target || ebookWebsite.value.working) return
+        ebookWebsite.value = EbookWebsiteState(target, working = true, step = "Checking this ebook download")
+        ebookWebsiteJob = viewModelScope.launch {
+            try {
+                val edition = readingLibrary.value.downloadWebsiteEbook(target.book, request, connected.value) { step ->
+                    ebookWebsite.update { if (it.request == target) it.copy(step = step) else it }
+                }
+                if (ebookWebsite.value.request != target) return@launch
+                ebookSearch.value = EbookSearchState(target.book.id, searched = true, added = edition.id)
+                ebookWebsite.value = EbookWebsiteState()
+                messages.emit("Ebook added. Read opens it.")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                val message = if (error is WebEbookPendingException) error.message else textError(error)
+                ebookWebsite.update { if (it.request == target) it.copy(working = false, step = "", error = message) else it }
+            }
+        }
+    }
 
     fun chooseEdition(book: Audiobook, editionId: String) = viewModelScope.launch {
         try { readingLibrary.value.activate(book.id, editionId) }
