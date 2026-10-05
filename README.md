@@ -22,14 +22,14 @@ Successful metadata lookups are cached for a day and saved with shelf items. Met
 
 ## Included
 
-Follow along is available on this development branch and its Narrio Dev preview. Stable updates are published from `master` through the [development workflow](docs/DEVELOPMENT.md); see [current validation](docs/VALIDATION.md) for feature evidence.
+Read along is available on this development branch and its Narrio Dev preview. Stable updates are published from `master` through the [development workflow](docs/DEVELOPMENT.md); see [current validation](docs/VALIDATION.md) for feature evidence.
 
 - Metadata-only title/author search with one result per book, followed by explicit discovery of matching narrated recordings.
 - TorBox account connection, batched hash/file cache checks, cached-source filtering, existing-source reuse, torrent/magnet creation, detailed cloud preparation status, and temporary per-file playback links.
 - Explicit offline phone downloads with storage estimates, Wi-Fi preference, progress, pause/resume/retry, and removal. Ordinary streaming does not write to the offline audio cache.
 - Whole-book M4B and naturally ordered multipart MP3 playback, 30-second skip controls, speed, a sleep timer, and bookmarks.
 - Room-backed library and independent saved positions for different recordings and source layouts.
-- **Listening room → Follow along**: highlighted, scrolling passages that stay in step with the narration. Narrio finds the ebook automatically from the recording's own files, your TorBox account, TorBox-cached ebook releases, or Project Gutenberg, and recognizes the narration on the phone to sync text to audio. EPUB/text/WebVTT imports, chapter choice, and manual timing adjustments remain available. Text and timing are saved locally.
+- **Listening room → Read along**: the full reader highlights the narrated sentence and turns pages with the narration, with a compact player (a side panel when unfolded, controls below the hinge in tabletop). Find ebook checks the recording's own files, your TorBox account, TorBox-cached ebook releases, or Project Gutenberg, and Narrio recognizes the narration on the phone to sync text to audio. EPUB/text imports, chapter choice, and manual timing fixes remain available. Text and timing are saved locally.
 - Media3 background service and system media controls; pause on headphone disconnection and Android audio-focus handling.
 - Night, Day, and System appearance; retrieved cover art with original artwork fallbacks and bundled Newsreader/Manrope typography.
 
@@ -87,6 +87,6 @@ Instrumented listening tests use real Internet Archive audio and need network ac
 
 [Architecture](docs/ARCHITECTURE.md) describes provider seams, source identity, persistence, and playback. [Validation](docs/VALIDATION.md) records completed signed-release phone checks, native audio and layout tests, and the precise validation limits. [Artwork](docs/ART.md) contains provenance and font licenses.
 
-[Follow along](docs/FOLLOW_ALONG.md) explains automatic ebook lookup, on-device narration sync, estimated and supplied timing, and the plan for a full reader with a shared reading/listening cursor. Narration sync is English-only for now; other languages use adjustable estimated timing.
+[Reading along](docs/FOLLOW_ALONG.md) explains read along, ebook lookup, on-device narration sync, estimated and supplied timing, and the shared reading/listening cursor. Narration sync is English-only for now; other languages use adjustable estimated timing.
 
 V1 supports streaming and optional offline phone audio. It has no cloud sync, casting, Android Auto, or addon marketplace. Torrentio's current stream resources target movies, series, and anime; Narrio uses an audiobook-capable index instead of claiming compatibility with those addons. Chapters support Nero `chpl` M4B metadata and ID3 chapter frames; unsupported chapter encodings retain audio-part and elapsed-time navigation.

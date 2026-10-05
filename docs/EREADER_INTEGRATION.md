@@ -30,6 +30,27 @@ maps Media3's clock for narration decorations; `seekFromText` is the explicit se
 changed distances conservatively offer Undo. `ReaderSession.undo` restores without an activity commit.
 `undoSyncJump` preserves play/pause and expires after another playback navigation.
 
+### What together mode adds (E)
+
+Read along (`ui/ReadAlong.kt`) is built on the API above without contract changes to `Reading.kt` or Room:
+
+- `ReaderController`: narration styles `TextDecoration.Style.NARRATED/ESTIMATED/WORD` (drawn by `NarrationMark`
+  templates registered in `EpubReaderView`); `textTaps` with `ReaderEvent.TextTapped(cursor)` and `cursorAt(x, y)`;
+  `follow` records the place relayouts restore while following; `leaveFollowing()`; `clearDecorations(group)`;
+  `touched()` (the page container reports touches so a navigator settle is never mistaken for a page turn).
+  Decorations are applied without cancellation, serialized, and redrawn after each resource layout or relayout.
+  The page's Readium viewport width is refitted when the page view resizes without a configuration change.
+- `ReaderSession.commitNow(cursor)`: an explicit "listen from this page" commit. `ListeningService.alignToSharedPosition()`:
+  start the audio at a newer reading place with the usual Undo. `NarrioViewModel.seekFromText` now reports success.
+- `ReaderRequest.together/fromListening`, `NarrioViewModel.readAlong()/setReadAlong()/listenFromPage()`;
+  `ReaderSettings.wordHighlight` (default off); `LocalFold` carries the hinge to the reader.
+- `MappingEngine.audioFor` uses the timeline's measured pace beyond the outermost anchors, as `textFor` already did,
+  so an estimated place mapped to audio and back stays on its sentence (C's engine; covered by `NarrationTest`).
+
+F's selection menu, highlight groups, and search hits can coexist: read along uses its own decoration groups
+(`narration`, `narration-word`, `narration-selected`) and leaves `selectionActionMode` untouched. With `textTaps` on,
+taps on text seek; F's highlight activation still arrives as `DecorationActivated`.
+
 ## Annotations and search (F)
 
 Reuse `ReaderController.selection(): CursorRange?` and the navigator's optional
@@ -82,8 +103,8 @@ Delivered (F):
 
 ## Remaining scope
 
-No open product identity decision. Together mode and annotations/search UI remain E/F's work.
-Fixed-layout/PDF/DRM remain unsupported. Window-size spreads do not yet use a real separating hinge.
+No open product identity decision. Annotations/search UI remain F's work. Read along can't show WebVTT-only text, so VTT import was retired with the passage list.
+Fixed-layout/PDF/DRM remain unsupported. Two-page spreads do not yet use a real separating hinge; read along places its panel beyond one.
 Real narration accuracy, battery/background behavior, physical devices, live delivery providers,
 TalkBack and minified-release runtime acceptance remain separate from controlled integration checks.
 
