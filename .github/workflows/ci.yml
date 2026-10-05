@@ -154,7 +154,8 @@ jobs:
           retention-days: 14
 
   gate:
-    name: CI
+    # A branch push must never satisfy a pull request's merge gate on the same SHA.
+    name: ${{ github.event_name == 'pull_request' && 'PR CI' || 'Branch CI' }}
     if: always()
     needs: [changes, build, native]
     runs-on: ubuntu-24.04
