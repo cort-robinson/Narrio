@@ -105,7 +105,20 @@ class ReaderSession(
         }
     }
 
-    private fun commit(cursor: ContentCursor) {
+    /**
+     * An explicit "listen from this page" (starting read along from the reader) makes [cursor] the shared place
+     * right away instead of waiting for the reading dwell. Returns false when audio owns the position or the
+     * shared place moved meanwhile.
+     */
+    suspend fun commitNow(cursor: ContentCursor): Boolean {
+        tickJob?.cancel()
+        observedSequence = positions.current(book.bookId)?.sequence ?: observedSequence
+        commit(cursor).join()
+        val shared = positions.current(book.bookId)
+        return shared?.origin == PositionOrigin.READING && shared.text?.resource == cursor.resource && shared.text.offset == cursor.offset
+    }
+
+    private fun commit(cursor: ContentCursor): Job = run {
         val expected = observedSequence
         scope.launch {
             val withLocator = cursor.copy(

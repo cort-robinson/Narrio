@@ -43,6 +43,11 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
     private val _marks = MutableStateFlow<ReaderMarks?>(null)
     /** Highlights, bookmarks, and search for the open edition; set before [state] becomes ready. */
     val marks = _marks.asStateFlow()
+    /**
+     * The reader request ([ReaderRequest.opened]) read along last started for. The screen and its session can be
+     * recreated (rotation moves the reader between shells) without starting read along again.
+     */
+    var readAlongStartedFor: Long? = null
     private var book: ReaderBook? = null
     private var session: ReaderSession? = null
     private var sessionScope: CoroutineScope? = null

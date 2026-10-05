@@ -222,7 +222,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
     if (ebookSheet) EbookSheet(book, formats, ebookSearch, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
         chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
-        activate = { vm.chooseEdition(book, it.id) }, dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks,
+        activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks,
         openSearch = { vm.openEbookWebsite(book, it) })
 }
 
@@ -427,6 +427,7 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, key: String, setKey: (String) -> Unit, openAddons: () -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
     val backgroundAlignment by vm.backgroundAlignment.collectAsStateWithLifecycle()
+    val readAlongSync by vm.readAlongSync.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item { AppearanceEntry(appearance, openAppearance) }
@@ -443,6 +444,13 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
                 Switch(backgroundAlignment, vm::setBackgroundAlignment, Modifier.testTag("background-alignment"))
             }
             Text("Align downloaded audio on this phone. Streaming alignment waits for Wi-Fi and charging. The English narration model downloads once over Wi-Fi.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Sync while reading along", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                Switch(readAlongSync, vm::setReadAlongSync, Modifier.testTag("read-along-sync"))
+            }
+            Text("While read along is open, listens to the narration on this phone to keep the highlight in step. Audio isn't uploaded.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {

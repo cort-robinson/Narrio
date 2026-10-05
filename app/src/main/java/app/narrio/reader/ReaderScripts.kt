@@ -119,12 +119,49 @@ var narrio = window.__narrio || (window.__narrio = (function () {
     var range = selection.getRangeAt(0);
     return { start: position(range.startContainer, range.startOffset), end: position(range.endContainer, range.endOffset), text: selection.toString() };
   }
-  return { visible: visible, selection: selection };
+  // The character under a tap, when the tap lands on a line of text rather than a margin or a gap.
+  function at(x, y) {
+    var range = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
+    if (!range || range.startContainer.nodeType !== 3) return null;
+    var node = range.startContainer, offset = range.startOffset;
+    function near(index) {
+      if (index < 0 || index >= node.data.length) return false;
+      var probe = document.createRange();
+      probe.setStart(node, index); probe.setEnd(node, index + 1);
+      var rects = probe.getClientRects();
+      for (var i = 0; i < rects.length; i++) {
+        var r = rects[i];
+        if (y >= r.top - 4 && y <= r.bottom + 4 && x >= r.left - 16 && x <= r.right + 16) return true;
+      }
+      return false;
+    }
+    if (!near(offset) && !near(offset - 1)) return null;
+    return position(node, Math.min(offset, node.data.length - 1));
+  }
+  return { visible: visible, selection: selection, at: at };
 })());
 """
 
     /** `{first: {o, r}, last: {o, r} | null}`: the first visible character and the first one past the page. */
     const val VISIBLE = "$COMMON\nnarrio.visible();"
+
+    /** The text position `{o, r}` under CSS pixel [x], [y], or null when that point isn't on text. */
+    fun at(x: Float, y: Float): String = "$COMMON\nnarrio.at($x, $y);"
+
+    /**
+     * Readium fixes the page's viewport width when a resource loads. A page view resized without a configuration
+     * change (a hinge, a side panel) keeps the old width and clips lines; this refits it. Returns true when it changed.
+     */
+    const val FIT_VIEWPORT = """(function () {
+  var root = document.documentElement;
+  var current = root.style.getPropertyValue('--RS__viewportWidth').trim();
+  if (!current) return false;
+  var calc = current.match(/calc\(([\d.]+)px \/ ([\d.]+)\)/);
+  var width = calc ? calc[1] / calc[2] : parseFloat(current);
+  if (Math.abs(width - window.innerWidth) < 1) return false;
+  root.style.setProperty('--RS__viewportWidth', window.innerWidth + 'px', 'important');
+  return true;
+})();"""
 
     /** The current text selection as `{start, end, text}`, or null. */
     const val SELECTION = "$COMMON\nnarrio.selection();"

@@ -82,6 +82,6 @@ fun unsupportedEbook(name: String): String = when (name.substringAfterLast('.', 
     "mobi", "azw", "azw3", "kfx" -> "Kindle files (MOBI, AZW3) can't be opened. Choose an EPUB or a UTF-8 .txt file."
     "pdf" -> "PDF reading isn't available yet. Choose an EPUB or a UTF-8 .txt file."
     "cbz", "cbr" -> "Comic archives can't be opened. Choose an EPUB or a UTF-8 .txt file."
-    "vtt" -> "That's a timing track, not an ebook. Add it from Follow along while its audio part plays."
+    "vtt" -> "That's a timing track, not an ebook. Choose an EPUB or text file."
     else -> "Choose an EPUB or a UTF-8 .txt ebook."
 }

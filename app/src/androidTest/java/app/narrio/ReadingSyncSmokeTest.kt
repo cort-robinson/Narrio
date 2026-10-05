@@ -46,7 +46,7 @@ class ReadingSyncSmokeTest {
 
     @Test fun textStartSeeksAndPlayingAudioOwnsSharedPositionAfterDwell() = runBlocking {
         compose.waitUntil(15_000) { graph.playback.service?.initialized == true }
-        compose.runOnIdle { vm.setBackgroundAlignment(false); vm.setFollowAlongAuto(false) }
+        compose.runOnIdle { vm.setBackgroundAlignment(false); vm.setReadAlongSync(false) }
         val id = "sync-smoke-${System.nanoTime()}"
         val wave = File(compose.activity.filesDir, "$id.wav")
         val size = 120 * 8000 * 2
