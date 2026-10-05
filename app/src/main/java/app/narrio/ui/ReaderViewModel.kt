@@ -77,7 +77,8 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
                         if (snapshot == null || graph.readingSync.pairing(bookId, snapshot) == PairingStatus.MISMATCH) null
                         else graph.positionMapper.audioFor(bookId, cursor, snapshot.source.id)
                     }, onCommitted = { cursor -> graph.preferences.edit().putString(historyKey, NarrioJson.encodeToString(cursor)).apply() })
-                val history = graph.preferences.getString(historyKey, null)?.let {
+                val shared = graph.sharedPositions.current(bookId)
+                val history = if (shared == null) null else graph.preferences.getString(historyKey, null)?.let {
                     runCatching { NarrioJson.decodeFromString<ContentCursor>(it) }.getOrNull()
                 }
                 val previous = history
@@ -102,9 +103,6 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
 
     /** Closes the publication when the reader leaves the screen, keeping the reader's place for a quick return. */
     fun release() {
-        session?.controller?.cursor?.value?.let {
-            graph.preferences.edit().putString("readerHistory:$bookId:${it.editionId}", NarrioJson.encodeToString(it)).apply()
-        }
         _startJump.value = null
         session = null
         sessionScope?.cancel()
