@@ -25,6 +25,9 @@ class ReadingRestartTest {
             "Paragraph $it. The reader turns a page through this offline imported book. ".repeat(10)
         }).toByteArray()
         val graph = seeds.graph
+        graph.preferences.getString("integrationRestartBook", null)?.let { previous ->
+            runBlocking { graph.followAlong.remove(previous); graph.library.remove(previous) }
+        }
         val book = runBlocking { LocalEbookImporter(compose.activity, graph.library, graph.followAlong).import(bytes, "TXT", "Integration restart fixture") }
         graph.preferences.edit().putString("integrationRestartBook", book.id).apply()
         assertTrue(book.sources.isEmpty())
@@ -49,7 +52,8 @@ class ReadingRestartTest {
         val book = runBlocking { graph.library.find(bookId)!!.book() }
         assertEquals(expected, runBlocking { RoomSharedPositionStore(graph.library).current(bookId) })
         val controller = seeds.open(book)
-        compose.waitUntil(10_000) { controller.visible.value?.contains(expected.text!!) == true }
+        try { compose.waitUntil(10_000) { controller.visible.value?.contains(expected.text!!) == true } }
+        catch (timeout: Throwable) { throw AssertionError("Restart target=${expected.text} visible=${controller.visible.value} cursor=${controller.cursor.value}", timeout) }
         assertEquals(expected.sequence, runBlocking { graph.sharedPositions.current(bookId)!!.sequence })
         seeds.remove(book)
         graph.preferences.edit().remove("integrationRestartBook").remove("integrationRestartPosition").apply()

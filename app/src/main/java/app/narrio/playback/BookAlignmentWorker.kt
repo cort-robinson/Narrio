@@ -102,7 +102,8 @@ class BookAlignmentWorker(context: Context, params: WorkerParameters) : Coroutin
             }
             val duration = part.durationMs.takeIf { it > 0 } ?: graph.narrationSync.duration(part, downloaded)
             if (duration <= 0) return Result.retry()
-            graph.mappingRepository.duration(part.id, duration)
+            graph.mappingRepository.duration(key.bookId, key.sourceId, part.id, duration)
+            graph.mappingRepository.persistDuration(key.bookId, key.sourceId, part.id, duration)
             var progress = graph.alignmentJobs.progress(key)
             val deadline = android.os.SystemClock.elapsedRealtime() + 240_000
             repeat(AlignmentPolicy.WINDOWS_PER_RUN) {

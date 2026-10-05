@@ -47,14 +47,19 @@ class ReaderExperienceTest {
         compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Contents").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Contents").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("IV · Martha").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals("OEBPS/text/chapter4.xhtml", controller.book.contents.value.first { it.title.contains("Martha") }.place?.resource)
+        compose.onNodeWithText("IV · Martha").assertIsEnabled()
         compose.onNodeWithText("IV · Martha").performClick()
-        compose.waitUntil(10_000) { controller.cursor.value?.resource == "OEBPS/text/chapter4.xhtml" }
+        try { compose.waitUntil(10_000) { controller.cursor.value?.resource == "OEBPS/text/chapter4.xhtml" } }
+        catch (timeout: Throwable) { throw AssertionError("Contents target=chapter4 return=${controller.returnPoint.value} visible=${controller.visible.value} cursor=${controller.cursor.value}", timeout) }
+        compose.waitUntil(10_000) { controller.visible.value?.first?.resource == "OEBPS/text/chapter4.xhtml" }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("reader-return").fetchSemanticsNodes().isNotEmpty() }
 
         // Going back is a backward jump: it must land on the earlier page, not the end of that chapter.
         val before = controller.returnPoint.value!!
         compose.onNodeWithTag("reader-return").performClick()
-        compose.waitUntil(10_000) { controller.visible.value?.contains(before) == true }
+        try { compose.waitUntil(10_000) { controller.visible.value?.contains(before) == true } }
+        catch (timeout: Throwable) { throw AssertionError("Return target=$before visible=${controller.visible.value} cursor=${controller.cursor.value}", timeout) }
     }
 
     @Test fun hostileEpubRunsNoScriptsAndLoadsNothingRemote() {

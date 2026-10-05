@@ -63,15 +63,18 @@ interface LibraryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insert(entry: ShelfEntry)
     @Upsert suspend fun putShelf(entry: ShelfEntry)
     @Query("UPDATE shelf SET bookJson = :json, hasAudio = CASE WHEN sourceJson != '' THEN 1 ELSE :audio END WHERE bookId = :id") suspend fun metadata(id: String, json: String, audio: Boolean)
+    @Query("UPDATE shelf SET sourceJson = :json WHERE bookId = :book") suspend fun sourceDetails(book: String, json: String)
     @Query("UPDATE shelf SET sourceJson = :source, hasAudio = 1, partId = :part, positionMs = :position, playedAt = :time, state = CASE WHEN state IN ('preparing', 'ready') THEN state ELSE 'listening' END WHERE bookId = :id")
     suspend fun shelfProgress(id: String, source: String, part: String, position: Long, time: Long)
     @Query("SELECT * FROM positions WHERE bookId = :book AND sourceId = :source") suspend fun position(book: String, source: String): SourcePosition?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun putPosition(position: SourcePosition)
     @Query("SELECT * FROM positions WHERE bookId = :book") fun observePositions(book: String): Flow<List<SourcePosition>>
     @Transaction suspend fun progress(id: String, source: String, part: String, position: Long, time: Long) {
-        shelfProgress(id, source, part, position, time)
-        val sourceId = NarrioJson.decodeFromString<AudioSource>(source).id
-        putPosition(SourcePosition(id, sourceId, source, part, position, time))
+        val incoming = NarrioJson.decodeFromString<AudioSource>(source)
+        val previous = find(id)?.book()?.sources?.firstOrNull { it.id == incoming.id }
+        val json = NarrioJson.encodeToString(incoming.withKnownDurations(previous))
+        shelfProgress(id, json, part, position, time)
+        putPosition(SourcePosition(id, incoming.id, json, part, position, time))
     }
     @Query("UPDATE shelf SET state = 'preparing', preparationId = :torrent, pendingFormat = :format WHERE bookId = :id") suspend fun preparing(id: String, torrent: Long, format: String)
     @Query("UPDATE shelf SET state = 'listening', preparationId = 0, pendingFormat = '' WHERE bookId = :id") suspend fun finishPreparation(id: String)
@@ -115,7 +118,8 @@ interface LibraryDao {
     }
     @Transaction suspend fun save(book: Audiobook) {
         val previous = find(book.id)?.book()
-        val merged = book.copy(sources = (book.sources + previous?.sources.orEmpty()).distinctBy { it.id })
+        val sources = book.sources.map { it.withKnownDurations(previous?.sources?.firstOrNull { old -> old.id == it.id }) }
+        val merged = book.copy(sources = (sources + previous?.sources.orEmpty()).distinctBy { it.id })
         val json = NarrioJson.encodeToString(merged)
         insert(ShelfEntry(book.id, json)); metadata(book.id, json, merged.sources.any { it.parts.isNotEmpty() })
     }
@@ -123,6 +127,25 @@ interface LibraryDao {
         val saved = find(book.id) ?: return
         val updated = saved.book().withMetadataFrom(book)
         metadata(book.id, NarrioJson.encodeToString(updated), updated.sources.any { it.parts.isNotEmpty() })
+    }
+    @Transaction suspend fun recordingDuration(bookId: String, sourceId: String, partId: String, durationMs: Long) {
+        if (durationMs <= 0) return
+        val entry = find(bookId) ?: return
+        fun AudioSource.measured() = if (id != sourceId) this else copy(parts = parts.map {
+            if (it.id == partId) it.copy(durationMs = durationMs) else it
+        })
+        val book = entry.book()
+        val measured = book.copy(sources = book.sources.map { it.measured() })
+        if (measured != book) metadata(bookId, NarrioJson.encodeToString(measured), measured.sources.any { it.parts.isNotEmpty() })
+        entry.source()?.takeIf { it.id == sourceId }?.let { source ->
+            val updated = source.measured()
+            if (updated != source) sourceDetails(bookId, NarrioJson.encodeToString(updated))
+        }
+        position(bookId, sourceId)?.let { history ->
+            val source = NarrioJson.decodeFromString<AudioSource>(history.sourceJson)
+            val updated = source.measured()
+            if (updated != source) putPosition(history.copy(sourceJson = NarrioJson.encodeToString(updated)))
+        }
     }
     @Transaction suspend fun remove(id: String) { deleteBookmarks(id); deletePositions(id); deleteShelf(id) }
 

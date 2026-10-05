@@ -210,7 +210,14 @@ class ListeningService : MediaSessionService() {
 
     private fun publish() {
         graph.sharedPositions.playingBookId = if (player.isPlaying) currentBook?.id else null
-        currentSource?.parts?.getOrNull(player.currentMediaItemIndex)?.let { graph.mappingRepository.duration(it.id, player.duration) }
+        val source = currentSource
+        val bookId = currentBook?.id
+        source?.parts?.getOrNull(player.currentMediaItemIndex)?.let { part ->
+            val duration = player.duration
+            if (bookId != null && graph.mappingRepository.duration(bookId, source.id, part.id, duration)) scope.launch {
+                graph.mappingRepository.persistDuration(bookId, source.id, part.id, duration)
+            }
+        }
         graph.playback.state.value = ListeningState(currentBook, currentSource, player.currentMediaItemIndex.coerceAtLeast(0),
             player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: currentSource?.parts?.getOrNull(player.currentMediaItemIndex)?.durationMs ?: 0,
             player.isPlaying, player.playbackState == Player.STATE_BUFFERING, player.playbackParameters.speed, sleepUntil, sleepAtEnd, chapters, error)

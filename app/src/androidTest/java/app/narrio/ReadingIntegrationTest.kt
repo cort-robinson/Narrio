@@ -11,6 +11,7 @@ import app.narrio.reader.*
 import app.narrio.ui.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.encodeToString
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Rule
@@ -81,6 +82,25 @@ class ReadingIntegrationTest {
         release.complete(Unit)
         try { assertNull(write.await()); assertNull(store.current(book.id)) }
         finally { blocker.join(); store.playingBookId = null }
+    }
+
+    @Test fun measuredDurationsSurviveRestartAndStayWithTheirRecording() = runBlocking {
+        val source = AudioSource("duration-source", "Fixture", "MP3", listOf(AudioPart("shared-part", "1.mp3", "Chapter")))
+        val other = source.copy(id = "other-duration-source")
+        val book = Audiobook("integration-duration", "Duration", "Fixture", sources = listOf(source, other), durationMs = 600_000, detailsLoaded = true)
+        clean += book.id
+        graph.followAlong.importLocal("one two three four five six".toByteArray(), "TXT", book)
+        assertEquals(0L, graph.mappingRepository.snapshot(book.id, source.id)!!.source.parts.single().durationMs)
+        graph.mappingRepository.duration(book.id, source.id, "shared-part", 90_000)
+        graph.mappingRepository.persistDuration(book.id, source.id, "shared-part", 90_000)
+        assertEquals(0L, graph.mappingRepository.snapshot(book.id, other.id)!!.source.parts.single().durationMs)
+        val restarted = RoomPositionMappingRepository(graph.database, graph.followAlong)
+        assertEquals(90_000L, restarted.snapshot(book.id, source.id)!!.source.parts.single().durationMs)
+        graph.library.save(book)
+        restarted.register(book.id, source)
+        graph.library.progress(book.id, NarrioJson.encodeToString(source), "shared-part", 10_000, 1)
+        assertEquals(90_000L, restarted.snapshot(book.id, source.id)!!.source.parts.single().durationMs)
+        assertEquals(0L, restarted.snapshot(book.id, other.id)!!.source.parts.single().durationMs)
     }
 
     @Test fun estimatedStartCorrectsThroughRoomAndKeepsManualTiming() = runBlocking {

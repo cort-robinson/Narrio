@@ -58,7 +58,7 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
         // Hydrates old v4 metadata without changing bytes or locators.
         val editions = graph.editionFiles.editions(book.id).filter { it.format in setOf("EPUB", "TXT") }
         val stored = state.entry?.book() ?: book
-        val sources = (book.sources + stored.sources + listOfNotNull(state.entry?.source()) +
+        val sources = (stored.sources + book.sources + listOfNotNull(state.entry?.source()) +
             state.histories.map { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }).distinctBy { it.id }
         val shared = state.shared
         val source = sources.firstOrNull { it.id == shared?.audio?.sourceId } ?: state.entry?.source() ?: sources.firstOrNull()

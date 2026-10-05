@@ -9,13 +9,18 @@ import java.util.concurrent.ConcurrentHashMap
 /** Multi-edition mapping reads persisted recordings and only the active edition's bindings. */
 class RoomPositionMappingRepository(private val database: LibraryDatabase, private val text: FollowAlongStore) : PositionMappingRepository {
     private val library get() = database.library()
-    private val durations = ConcurrentHashMap<String, Long>()
+    private val durations = ConcurrentHashMap<Triple<String, String, String>, Long>()
     suspend fun register(bookId: String, source: AudioSource) {
         val book = library.find(bookId)?.book() ?: return
-        if (book.sources.firstOrNull { it.id == source.id } != source)
-            library.save(book.copy(sources = listOf(source) + book.sources.filterNot { it.id == source.id }))
+        val previous = book.sources.firstOrNull { it.id == source.id }
+        val known = source.withKnownDurations(previous)
+        if (previous != known)
+            library.save(book.copy(sources = listOf(known) + book.sources.filterNot { it.id == source.id }))
     }
-    fun duration(partId: String, durationMs: Long) { if (durationMs > 0) durations[partId] = durationMs }
+    fun duration(bookId: String, sourceId: String, partId: String, durationMs: Long): Boolean =
+        durationMs > 0 && durations.put(Triple(bookId, sourceId, partId), durationMs) != durationMs
+    suspend fun persistDuration(bookId: String, sourceId: String, partId: String, durationMs: Long) =
+        library.recordingDuration(bookId, sourceId, partId, durationMs)
     override suspend fun snapshot(bookId: String, sourceId: String): MappingSnapshot? {
         val entry = library.bookText(bookId) ?: return null
         val document = try { text.load(entry) }
@@ -27,8 +32,8 @@ class RoomPositionMappingRepository(private val database: LibraryDatabase, priva
             val source = library.position(bookId, sourceId)?.let { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }
                 ?: shelf.source()?.takeIf { it.id == sourceId } ?: shelf.book().sources.firstOrNull { it.id == sourceId }
                 ?: return@withTransaction null
-            val effective = source.copy(parts = source.parts.map { part -> part.copy(durationMs = durations[part.id]
-                ?: part.durationMs.takeIf { it > 0 } ?: shelf.book().durationMs.takeIf { source.parts.size == 1 } ?: 0) })
+            val effective = source.copy(parts = source.parts.map { part -> part.copy(durationMs = durations[Triple(bookId, sourceId, part.id)]
+                ?: part.durationMs.takeIf { it > 0 } ?: 0) })
             MappingSnapshot(document, effective, library.editionBindings(bookId, document.id).map { it.binding() })
         }
     }

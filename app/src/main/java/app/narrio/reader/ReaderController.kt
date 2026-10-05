@@ -92,6 +92,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
     private var restoreAttempts = 0
     /** Where the last [goTo] should land; re-sent if the navigator settles elsewhere (its pager can override a jump). */
     private var target: ContentCursor? = null
+    private var readerTarget: ContentCursor? = null
     private var targetAttempts = 0
     private var opening = false
     private val decorationGroups = mutableMapOf<String, List<TextDecoration>>()
@@ -105,10 +106,18 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
     suspend fun goTo(cursor: ContentCursor, animated: Boolean = false, asReader: Boolean = false): Boolean {
         val locator = book.locator(cursor) ?: return false
         val navigator = navigator ?: run { if (asReader) _cursor.value = cursor; return false }
-        if (asReader) { _cursor.value?.let { if (it != cursor) _returnPoint.value = it }; jumpPending = true; turnsSinceJump = 0 }
+        if (asReader) {
+            _cursor.value?.let { if (it != cursor) _returnPoint.value = it }
+            jumpPending = true; turnsSinceJump = 0
+            readerTarget = cursor
+            // A requested jump supersedes any reflow that was restoring the previous page.
+            restorePending = false; restoreJob?.cancel(); restoreAttempts = 0; programmaticUntil = 0
+        }
         else markProgrammatic()
         target = cursor; targetAttempts = 2
-        return navigator.go(locator, animated)
+        val accepted = navigator.go(locator, animated)
+        if (!accepted && asReader) readerTarget = null
+        return accepted
     }
 
     /** A jump the reader asked for: contents, scrubber, or "Back to". */
@@ -226,7 +235,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
 
     private suspend fun restoreNow() {
         restorePending = false
-        val target = _cursor.value ?: return
+        val target = readerTarget ?: this.target ?: _cursor.value ?: return
         restoreAttempts = 3
         goTo(target)
         scheduleProbe(350)
@@ -257,7 +266,11 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
                 if (!range.contains(wanted) && targetAttempts > 0) {
                     targetAttempts--
                     if (System.currentTimeMillis() < programmaticUntil) markProgrammatic()
-                    book.locator(wanted)?.let { navigator.go(it) }
+                    // Readium can resolve a quote on the preceding page when it starts exactly at
+                    // the exclusive page boundary. Re-sending that locator lands there again.
+                    if (range.end?.let { it.resource == wanted.resource && it.offset == wanted.offset } == true)
+                        navigator.goForward(animated = false)
+                    else book.locator(wanted)?.let { navigator.go(it) }
                     scheduleProbe(350)
                     return@launch
                 }
@@ -266,7 +279,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             if (_cursor.value == null) _cursor.value = first
             _ready.value = true
             if (opening) { opening = false; programmaticUntil = System.currentTimeMillis() + 700 }
-            if (System.currentTimeMillis() < programmaticUntil) {
+            if (System.currentTimeMillis() < programmaticUntil && !jumpPending) {
                 // The navigator may adjust the page after a restore (late reflow); put the reader's place back.
                 val anchor = _cursor.value
                 if (anchor != null && restoreAttempts > 0 && !VisibleRange(first, end).contains(anchor)) {
@@ -280,6 +293,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             if (first == previous) return@launch
             val jump = jumpPending
             jumpPending = false
+            readerTarget = null
             if (!jump && ++turnsSinceJump >= 2) _returnPoint.value = null
             _cursor.value = first
             _following.value = false

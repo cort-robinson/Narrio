@@ -57,6 +57,8 @@ do not introduce another annotation/bookmark store.
 - Book identity: explicit selection adopts old recording data to the parent book. Provider
   `recordingId` and all source/part ids remain intact; unrelated titles are not merged.
 - Schema 5: adds attempt/match/time counters to A's single 4-to-5 migration for durable C pairing.
+- Measured durations persist by book/recording/part and survive provider refreshes and playback
+  history writes. Unknown layouts remain unmapped; another recording's book duration is never used.
 
 ## Remaining scope
 

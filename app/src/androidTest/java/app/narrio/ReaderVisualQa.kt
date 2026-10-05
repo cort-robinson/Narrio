@@ -8,6 +8,7 @@ import app.narrio.domain.AppearanceSettings
 import app.narrio.domain.ThemeMode
 import app.narrio.reader.ReaderFixtures
 import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,21 +25,31 @@ class ReaderVisualQa {
     private val automation get() = InstrumentationRegistry.getInstrumentation().uiAutomation
     private val book by lazy { seeds.book("reader-visual-qa", ReaderFixtures.sampleEpub(24), "EPUB", "The Secret Garden") }
     private val output by lazy { File(compose.activity.getExternalFilesDir(null), "reader-qa").apply { mkdirs() } }
+    private var originalSize: String? = null
+    private var originalDensity: String? = null
+
+    private fun command(command: String): String = automation.executeShellCommand(command).use {
+        java.io.FileInputStream(it.fileDescriptor).bufferedReader().readText()
+    }
+
+    @Before fun rememberDisplay() {
+        originalSize = Regex("Override size: (\\S+)").find(command("wm size"))?.groupValues?.get(1)
+        originalDensity = Regex("Override density: (\\d+)").find(command("wm density"))?.groupValues?.get(1)
+    }
 
     @After fun restore() {
-        // The QA emulator's baseline override.
-        shell("wm size 1248x1972"); shell("wm density 420")
+        shell("wm size ${originalSize ?: "reset"}"); shell("wm density ${originalDensity ?: "reset"}")
         seeds.remove(book)
     }
 
     private fun shell(command: String) { automation.executeShellCommand(command).close(); Thread.sleep(1_500) }
 
-    /** Screenshots go to /data/local/tmp/reader-qa, which outlives the test APK's uninstall. */
+    /** Screenshots use the current display and can be pulled from this app's external files. */
     private fun capture(name: String) {
         compose.waitForIdle(); Thread.sleep(900)
-        automation.executeShellCommand("mkdir -p /data/local/tmp/reader-qa").close()
-        val display = System.getenv("NARRIO_QA_DISPLAY") ?: "4619827259835644672"
-        automation.executeShellCommand("screencap -p -d $display /data/local/tmp/reader-qa/$name.png").use { java.io.FileInputStream(it.fileDescriptor).readBytes() }
+        val bitmap = requireNotNull(automation.takeScreenshot()) { "Couldn't capture the reader display" }
+        File(output, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
     }
 
     private fun states(mode: ThemeMode, prefix: String) {
