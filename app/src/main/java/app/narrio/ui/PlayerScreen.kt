@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -333,6 +334,8 @@ private fun PlayerMode(follow: Boolean, select: (Boolean) -> Unit) {
 
 @Composable
 private fun FollowTransport(vm: NarrioViewModel, state: ListeningState, modifier: Modifier = Modifier) {
+    val sync by vm.readingSync.collectAsStateWithLifecycle()
+    val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
     var dragging by remember { mutableStateOf(false) }
     var position by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(state.positionMs, state.partIndex) { if (!dragging) position = state.positionMs.toFloat() }
@@ -342,7 +345,7 @@ private fun FollowTransport(vm: NarrioViewModel, state: ListeningState, modifier
             onValueChangeFinished = { vm.graph.playback.service?.seek(position.toLong()); dragging = false }, valueRange = 0f..state.durationMs.coerceAtLeast(1).toFloat(), enabled = state.durationMs > 0,
             modifier = Modifier.semantics { contentDescription = "Listening position" })
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("${formatTime(if (dragging) position.toLong() else state.positionMs)} / ${formatTime(state.durationMs)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+            EstimatedPlace("${formatTime(if (dragging) position.toLong() else state.positionMs)} / ${formatTime(state.durationMs)}", if (dragging) MappingConfidence.EXACT else confidence, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
             SkipButton(false, 48.dp, 24.dp) { vm.graph.playback.service?.skip(-30_000) }
             PlayButton(state, 56.dp, 32.dp) { vm.graph.playback.service?.toggle() }
             SkipButton(true, 48.dp, 24.dp) { vm.graph.playback.service?.skip(30_000) }
@@ -384,6 +387,8 @@ private fun BookmarkNow(vm: NarrioViewModel) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> Unit, sleep: () -> Unit, parts: () -> Unit, bookmarks: () -> Unit, dense: Boolean = false) {
+    val sync by vm.readingSync.collectAsStateWithLifecycle()
+    val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
     var dragging by remember { mutableStateOf(false) }
     var slider by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(state.positionMs, state.partIndex) { if (!dragging) slider = state.positionMs.toFloat() }
@@ -396,7 +401,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
             valueRange = 0f..state.durationMs.coerceAtLeast(1).toFloat(), enabled = state.durationMs > 0,
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Listening position" })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatTime(if (dragging) slider.toLong() else state.positionMs), style = MaterialTheme.typography.labelMedium, color = if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            EstimatedPlace(formatTime(if (dragging) slider.toLong() else state.positionMs), if (dragging) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (if (dragging) slider.toLong() else state.positionMs)).coerceAtLeast(0))}" else "Loading length", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))

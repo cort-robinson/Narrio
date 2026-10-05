@@ -3,28 +3,40 @@ package app.narrio.data
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.util.AtomicFile
 import app.narrio.domain.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.encodeToString
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import kotlin.coroutines.coroutineContext
 
 /** Original files and normalized locators are private, durable, and independent of audio downloads. */
-class FollowAlongStore(private val context: Context, private val library: LibraryDao, private val http: OkHttpClient, private val torbox: TorBoxDelivery) {
+class FollowAlongStore(private val context: Context, private val library: LibraryDao, private val http: OkHttpClient, private val torbox: TorBoxDelivery) : EditionFiles {
     private val root = File(context.filesDir, "follow-along")
     private val mutations = Mutex()
-    private fun directory(bookId: String) = File(root, BookTextParser.fingerprint(bookId.toByteArray(Charsets.UTF_8)))
+    private val files = EditionFileStorage(root)
+
+    suspend fun adoptRecording(recording: Audiobook, book: Audiobook): Audiobook = withContext(Dispatchers.IO) { mutations.withLock {
+        val associated = recording.forBook(book)
+        if (recording.id != book.id && library.find(recording.id) != null) {
+            for (edition in library.editions(recording.id)) files.copyEdition(recording.id, book.id, edition.editionId)
+            library.adoptRecording(recording.id, associated)
+            files.removeAll(recording.id)
+        }
+        associated
+    } }
+
+    internal suspend fun importLocal(bytes: ByteArray, format: String, book: Audiobook): BookText = withContext(Dispatchers.IO) {
+        attach(bytes, format, book, "", "", book.title, book.author, "Imported from your device")
+    }
 
     suspend fun load(entry: BookTextEntry): BookText = withContext(Dispatchers.IO) {
         if (!entry.documentId.matches(Regex("[a-f0-9]{64}"))) throw ProviderException("Saved book text is unreadable. Choose the file again.")
-        try { NarrioJson.decodeFromString<BookText>(File(directory(entry.bookId), "${entry.documentId}.json").readText()) }
+        try { files.load(entry.bookId, entry.documentId) }
         catch (_: Exception) { throw ProviderException("Saved book text is unavailable. Choose the file again to restore it.") }
     }
 
@@ -58,11 +70,11 @@ class FollowAlongStore(private val context: Context, private val library: Librar
             BookTextParser.readBounded(response.body?.byteStream() ?: throw ProviderException("This book-text file is empty."))
         }
         attach(bytes, candidate.format, book, sourceId, partId, if (candidate.provider == "gutenberg") candidate.title else book.title,
-            candidate.author.ifBlank { book.author }, candidate.attribution.ifBlank { "From this audio source" }, candidate.language, validate)
+            candidate.author.ifBlank { book.author }, candidate.attribution.ifBlank { "From this audio source" }, candidate.language, candidate.provider, validate)
     }
 
     private suspend fun attach(bytes: ByteArray, format: String, book: Audiobook, sourceId: String, partId: String, title: String, author: String, attribution: String,
-                               language: String = "", validate: (BookText) -> Unit = {}): BookText {
+                               language: String = "", provider: String = "local", validate: (BookText) -> Unit = {}): BookText {
         var document = BookTextParser.parse(bytes, format, title, author, attribution)
         if (document.language.isBlank() && language.isNotBlank()) document = document.copy(language = language)
         validate(document)
@@ -74,30 +86,49 @@ class FollowAlongStore(private val context: Context, private val library: Librar
         if (format == "VTT") document = document.copy(id = BookTextParser.fingerprint((document.id + sourceId + "\n" + partId).toByteArray()))
         mutations.withLock {
             coroutineContext.ensureActive()
-            val folder = directory(book.id).apply { mkdirs() }
-            writeAtomic(File(folder, "${document.id}.${format.lowercase()}"), bytes)
-            writeAtomic(File(folder, "${document.id}.json"), NarrioJson.encodeToString(document).toByteArray(Charsets.UTF_8))
-            library.attachText(book, document.id)
-            // Replacement keeps only the currently attached original and normalized document.
-            folder.listFiles()?.filter { !it.name.startsWith("${document.id}.") }?.forEach { it.delete() }
+            files.save(book.id, document, bytes)
+            library.attachEdition(book, document.editionEntry(book.id, provider))
         }
         return document
     }
 
-    private fun writeAtomic(file: File, bytes: ByteArray) {
-        val atomic = AtomicFile(file)
-        val stream = atomic.startWrite()
-        try { stream.write(bytes); atomic.finishWrite(stream) }
-        catch (error: Exception) { atomic.failWrite(stream); throw error }
+    override suspend fun editions(bookId: String): List<EbookEdition> = withContext(Dispatchers.IO) { mutations.withLock {
+        val active = library.bookText(bookId)?.documentId
+        library.editions(bookId).map { entry ->
+            val hydrated = if (entry.format.isBlank()) runCatching { files.load(bookId, entry.editionId).editionEntry(bookId, entry.provider, entry.addedAtMs) }.getOrNull() else null
+            if (hydrated != null) library.putEdition(hydrated)
+            (hydrated ?: entry).edition(entry.editionId == active)
+        }
+    } }
+
+    override suspend fun original(bookId: String, editionId: String): File? = withContext(Dispatchers.IO) {
+        if (library.edition(bookId, editionId) == null) null else files.original(bookId, editionId)
     }
+
+    suspend fun activateEdition(bookId: String, editionId: String) = mutations.withLock {
+        library.activateEdition(bookId, editionId)
+    }
+
+    suspend fun removeEdition(bookId: String, editionId: String) = withContext(Dispatchers.IO) { mutations.withLock {
+        library.removeEdition(bookId, editionId)
+        files.remove(bookId, editionId)
+    } }
 
     suspend fun bind(bookId: String, binding: TextBinding) = mutations.withLock {
         if (library.bookText(bookId)?.documentId != binding.documentId) throw ProviderException("The book text changed. Choose the chapter again.")
-        library.putTextBinding(TextBindingEntry(bookId, binding.sourceId, binding.partId, NarrioJson.encodeToString(binding)))
+        library.bindActive(bookId, binding)
+    }
+
+    /** Serial read/merge/write preserves a manual match made during recognition. No schema changes. */
+    suspend fun mergeNarration(bookId: String, fallback: TextBinding, anchors: List<TextAnchor>, durationMs: Long): TextBinding = mutations.withLock {
+        val entry = library.bookText(bookId)?.takeIf { it.documentId == fallback.documentId }
+            ?: throw ProviderException("The active ebook changed during narration sync.")
+        val document = load(entry)
+        library.mergeNarration(bookId, document, fallback, anchors, durationMs)
     }
 
     suspend fun remove(bookId: String) = withContext(Dispatchers.IO) { mutations.withLock {
-        library.deleteBookText(bookId)
-        directory(bookId).deleteRecursively()
+        library.removeText(bookId)
+        files.removeAll(bookId)
     } }
 }

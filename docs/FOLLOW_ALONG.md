@@ -19,9 +19,9 @@ Summaries, study guides, collections, box sets, sequels, and releases naming ano
 
 **Manage book text → Find and sync automatically** turns automatic lookup and narration sync off or on.
 
-Files are limited to 20 MB. DRM, Kindle formats, PDFs, pagination, annotations, text search, images, layout styling, and standalone reader navigation are outside this increment. EPUB parsing follows the declared spine order. Scripts and remote resources never execute. Original file bytes, provenance, resource names, normalized text offsets, and a normalization version are retained for a later reader.
+Files are limited to 20 MB. DRM, Kindle formats, and PDFs are unsupported. Attached EPUB and text also open in the full reader (**Read** in book details, or the book icon beside the Follow along heading), which positions by the same `(resource, offset)` locators; see [EREADER.md](EREADER.md). Annotations and text search belong to later reader work. EPUB parsing follows the declared spine order. Scripts and remote resources never execute. Original file bytes, provenance, resource names, normalized text offsets, and a normalization version are retained for a later reader.
 
-**Manage book text** replaces or removes text. Replacing a document clears its timing matches. Removing text keeps audio, bookmarks, and listening progress. Removing a shelf recording removes its attached text too. Saved text and adjustments work without connectivity; lookup and downloads need a connection.
+**Manage book text** attaches or removes text. Attaching a different document makes it active and retains earlier editions and their timing matches. Data APIs support activating or removing an individual edition; edition-picker UI is a separate reader workstream. Removing text keeps audio, bookmarks, and listening progress. Removing a shelf recording removes its attached text too. Saved text and adjustments work without connectivity; lookup and downloads need a connection.
 
 ## Timing
 
@@ -43,14 +43,30 @@ The status line reads **Synced with narration** when recognized anchors are clos
 
 Without anchors, **Estimated timing** distributes passages by word count over the selected chapter/audio-part duration. A single-file recording uses the whole book, and its chapter menu seeks to an estimated text position. Matching chapter/part counts use ordered chapters; otherwise an ambiguous multipart layout asks for a chapter until narration sync places the part. Use **Adjust timing**, tap the line being narrated, and **Match at [audio time]** to anchor it manually.
 
-Highlighting reads `ListeningState.positionMs`, rather than wall time. Pause, resume, speed changes, slider seeks, bookmarks, and part transitions therefore use the same media clock as playback. Existing Room source positions remain the authority for listening progress. There is no second reading percentage that could disagree with them.
+Highlighting reads `ListeningState.positionMs`, rather than wall time. Pause, resume, speed changes, slider seeks, bookmarks, and part transitions therefore use the same media clock as playback. Room source positions retain listening history. Schema 5 also stores one shared reading/listening position per book; reader and listening activity commits use its sequence guard. Listening commits after about ten seconds of playback; audio owns the position while playing.
+
+### Ebook sync engine
+
+The sync engine maps the active edition and a chosen recording in both directions. Text starts use
+anchors first, then unambiguous chapter/part estimates. An estimated start tries one 20-second
+recognition window using an already installed English model; a locally confirmed target corrects
+the seek and becomes exact. Unavailable models/audio and unsupported languages keep the estimate.
+Pairing status derives from attempted narration windows and recognized anchor coverage; mismatched
+pairs keep independent positions. Mode/recording jumps above one page or thirty seconds expose Undo
+state for the reader/library workstreams.
+
+**Settings → Reading & listening → Sync narration in the background** is on by default. Phone
+downloads align using cache-only reads; streamed alignment waits for an unmetered connection while
+charging. WorkManager saves progress after each window and resumes in bounded batches. The English
+model downloads once on an unmetered connection. See [sync integration](EREADER_SYNC.md) for the
+Room persistence, UI state, bounds, and the reader/together-mode integration API.
 
 ## Storage and identity
 
 - `AudioSource.textFiles` holds stable provider references. TorBox ebook links resolve immediately before fetching; generated URLs and credentials are never serialized with text.
 - `BookText` contains ordered chapters and passage locators `(resource, normalized offset)`. Its content fingerprint identifies imported bytes. Standalone timing-track identity additionally includes its audio layout/part. Later normalization changes must version locators explicitly.
-- `book_text` attaches one chosen document to a shelf recording. `text_bindings` stores chapter choices and anchors by `(bookId, sourceId, partId)` and checks document identity. Private `files/follow-along/<hashed recording id>/` stores the original and normalized copy. Writes are atomic and attachment/anchor mutations are serialized.
-- Migration 3 → 4 adds the text tables while retaining shelf entries, bookmarks, source histories, and pending preparation. Removing an attachment cascades only its text bindings.
+- `ebook_editions` retains every attached document, while `book_text` identifies the active edition. `text_bindings` stores chapter choices and anchors by `(bookId, editionId, sourceId, partId)` and checks document identity. Private `files/follow-along/<hashed recording id>/` stores the original and normalized copy. Writes are atomic and attachment/anchor mutations are serialized.
+- Migration 3 → 4 adds the text tables while retaining shelf entries, bookmarks, source histories, and pending preparation. Migration 4 to 5 preserves those attachments, original files, anchors, bookmarks, listening history, and preparation state. Removing an edition clears its bindings, annotations, and alignment jobs; other editions keep theirs. Removing all book text preserves audio bookmarks and listening history.
 
 - `TextAnchor` carries a word offset within its passage and whether it was recognized (`auto`). Both default for anchors saved before narration sync, so existing bindings load unchanged.
 

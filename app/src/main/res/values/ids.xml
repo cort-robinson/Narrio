@@ -1,0 +1,4 @@
+<resources>
+    <!-- Container for the reader's Readium navigator fragment. -->
+    <item name="narrio_reader_navigator" type="id" />
+</resources>

@@ -1,0 +1,261 @@
+<!doctype html>
+<!-- Layout and interaction plan for the reader chrome. A planning sketch, not shipped UI. -->
+<html><head><meta charset="utf-8"><title>Narrio reader chrome plan</title>
+<style>
+@font-face { font-family: Newsreader; src: url("../../app/src/main/res/font/newsreader.ttf"); font-weight: 200 800; }
+@font-face { font-family: Manrope; src: url("../../app/src/main/res/font/manrope.ttf"); font-weight: 200 800; }
+:root { --gap: 36px; }
+.night { --ground:#101B1A; --text:#F4EDDE; --low:#15221F; --surface:#1B2A27; --high:#263832; --muted:#B9C8BD; --outline:#809087; --outline-muted:#36483F; --copper:#E8AF79; --on-copper:#342312; --sage:#B1C9AC; --selected:#304739; --on-selected:#D3E7CA; }
+.day { --ground:#F6F0E5; --text:#20332C; --low:#F3EBDC; --surface:#EEE5D5; --high:#E7DCCA; --muted:#536359; --outline:#727C71; --outline-muted:#D0D1C3; --copper:#805031; --on-copper:#FFFFFF; --sage:#476447; --selected:#D4E5C9; --on-selected:#223B24; }
+body { margin:0; padding: 40px; background:#d9d6cf; font-family: Manrope, sans-serif; color:#1b1b1b; }
+h1 { font: 400 34px/40px Newsreader, serif; margin: 0 0 6px; letter-spacing:-.4px }
+.lead { font: 400 15px/24px Manrope; max-width: 1400px; margin: 0 0 28px; color:#3b3b3b }
+.row { display:flex; gap: var(--gap); margin-bottom: 18px; align-items:flex-start }
+.cap { width:360px; font: 600 13px/19px Manrope; color:#333; margin: 10px 0 0 }
+.cap span { display:block; font-weight:400; color:#555 }
+.phone { width:360px; height:780px; position:relative; overflow:hidden; border-radius: 28px; background: var(--ground); color: var(--text); box-shadow: 0 1px 0 rgba(0,0,0,.08), 0 18px 40px rgba(0,0,0,.18); }
+.status { height: 28px; display:flex; justify-content:space-between; align-items:center; padding: 0 20px; font: 600 12px Manrope; color: var(--text); opacity:.85 }
+.page { position:absolute; inset: 0; padding: 54px 28px 0; }
+.runhead { position:absolute; top: 18px; left:0; right:0; text-align:center; font: 500 11px/16px Manrope; color: var(--muted); letter-spacing: .1px }
+.text { font: 400 17.5px/1.58 Newsreader, serif; text-align: justify; hyphens: auto; -webkit-hyphens:auto; letter-spacing: -.1px }
+.text p { margin: 0; text-indent: 1.4em }
+.text p.first { text-indent: 0 }
+.text h2 { font: 400 26px/32px Newsreader; letter-spacing:-.4px; margin: 6px 0 18px; text-align:left }
+
+.folio { position:absolute; bottom: 16px; left: 28px; right: 28px; display:flex; justify-content:space-between; font: 500 11px/16px Manrope; color: var(--muted) }
+.scrim { position:absolute; inset:0; background: rgba(0,0,0,.32) }
+.topbar { position:absolute; top:0; left:0; right:0; background: var(--surface); padding: 28px 4px 8px 4px; display:flex; align-items:center; gap: 2px }
+.icon { width:48px; height:48px; display:grid; place-items:center; flex: none; color: var(--text); }
+.icon svg { width:24px; height:24px; fill: currentColor }
+.titleblock { flex:1; min-width:0; padding-left: 2px }
+.titleblock b { display:block; font: 600 16px/23px Manrope; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.titleblock i { display:block; font: 400 12px/19px Manrope; font-style:normal; color: var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.aa { font: 600 18px Newsreader; letter-spacing:-.4px }
+.bottombar { position:absolute; bottom:0; left:0; right:0; background: var(--surface); padding: 14px 20px 26px }
+.chap { display:flex; justify-content:space-between; align-items:baseline; font: 600 14px/20px Manrope }
+.chap span { font: 600 12px/18px Manrope; color: var(--muted) }
+.track { position:relative; height: 44px; margin: 6px 0 2px }
+.track .rail { position:absolute; left:0; right:0; top: 20px; height: 4px; border-radius: 2px; background: var(--outline-muted) }
+.track .fill { position:absolute; left:0; top: 20px; height: 4px; border-radius: 2px; background: var(--copper) }
+.track .tick { position:absolute; top: 18px; width: 2px; height: 8px; border-radius:1px; background: var(--outline) ; opacity:.7 }
+.track .thumb { position:absolute; top: 10px; width: 4px; height: 24px; border-radius: 2px; background: var(--copper) }
+.bubble { position:absolute; bottom: 124px; left: 104px; background: var(--high); color: var(--text); border-radius: 14px; padding: 10px 14px; box-shadow: 0 6px 18px rgba(0,0,0,.25); width: 190px }
+.bubble b { display:block; font: 500 18px/22px Newsreader; letter-spacing:-.3px }
+.bubble span { font: 600 12px/18px Manrope; color: var(--muted) }
+.bubble:after { content:""; position:absolute; bottom:-6px; left: 40px; width: 12px; height:12px; background: var(--high); transform: rotate(45deg) }
+.navrow { display:flex; justify-content:space-between; align-items:center; margin-top: 2px; font: 600 14px/20px Manrope; color: var(--copper) }
+.navrow .mid { color: var(--muted); font: 600 12px Manrope }
+.chip { position:absolute; left: 50%; transform: translateX(-50%); bottom: 168px; background: var(--selected); color: var(--on-selected); border-radius: 8px; padding: 0 16px; height: 40px; display:flex; align-items:center; gap:8px; font: 600 14px Manrope; box-shadow: 0 4px 12px rgba(0,0,0,.18) }
+.sheet { position:absolute; left:0; right:0; bottom:0; background: var(--surface); border-radius: 28px 28px 0 0; padding: 10px 24px 26px }
+.handle { width: 32px; height: 4px; border-radius: 2px; background: var(--outline); opacity:.6; margin: 8px auto 18px }
+.sheet h3 { font: 400 24px/28px Newsreader; letter-spacing:-.4px; margin: 0 0 14px }
+.label { font: 600 12px/18px Manrope; color: var(--muted); margin: 14px 0 8px }
+.fonts { display:flex; gap: 8px; overflow:hidden; margin-right:-24px }
+.font { flex:none; width: 76px; height: 70px; border-radius: 12px; border: 1px solid var(--outline-muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap: 2px }
+.font b { font-size: 24px; font-weight:400; line-height: 30px }
+.font span { font: 500 11px/16px Manrope; color: var(--muted) }
+.font.sel { background: var(--selected); border-color: var(--selected); color: var(--on-selected) }
+.font.sel span { color: var(--on-selected) }
+.stepper { display:flex; align-items:center; justify-content:space-between; border: 1px solid var(--outline-muted); border-radius: 14px; height: 48px }
+.stepper .v { font: 600 14px Manrope }
+.stepper .s { width: 64px; text-align:center; font: 500 16px Newsreader }
+.stepper .s.big { font-size: 24px }
+.seg { display:flex; border: 1px solid var(--outline); border-radius: 20px; overflow:hidden; height: 40px }
+.seg div { flex:1; display:flex; align-items:center; justify-content:center; font: 600 13px Manrope; border-left: 1px solid var(--outline); gap: 6px }
+.seg div:first-child { border-left: 0 }
+.seg .on { background: var(--selected); color: var(--on-selected) }
+.switchrow { display:flex; justify-content:space-between; align-items:center; min-height: 48px }
+.switchrow b { display:block; font: 600 14px/20px Manrope }
+.switchrow i { display:block; font-style: normal; font: 400 12px/18px Manrope; color: var(--muted) }
+.sw { width: 52px; height: 32px; border-radius: 16px; background: var(--high); border: 2px solid var(--outline); box-sizing:border-box; position:relative; flex: none }
+.sw:after { content:""; position:absolute; width: 16px; height:16px; border-radius:50%; background: var(--outline); top: 6px; left: 6px }
+.sw.on { background: var(--copper); border-color: var(--copper) }
+.sw.on:after { width: 24px; height: 24px; top: 2px; left: 22px; background: var(--on-copper) }
+.swatches { display:flex; gap: 10px; align-items:center }
+.sw2 { width: 40px; height: 40px; border-radius: 50%; position:relative; border: 1px solid var(--outline-muted); overflow:hidden }
+.sw2.sel { outline: 2px solid var(--copper); outline-offset: 3px }
+.toc { margin: 0 -8px }
+.toc div { display:flex; justify-content:space-between; align-items:center; min-height: 48px; padding: 0 12px; border-radius: 12px; font: 400 16px/22px Newsreader; letter-spacing:-.2px }
+.toc div span { font: 600 12px Manrope; color: var(--muted) }
+.toc div.sub { padding-left: 30px; font-size: 15px }
+.toc div.cur { background: var(--selected); color: var(--on-selected) }
+.toc div.cur span { color: var(--on-selected) }
+.tabs { display:flex; gap: 22px; border-bottom: 1px solid var(--outline-muted); margin: 0 -24px 10px; padding: 0 24px }
+.tabs div { font: 600 14px Manrope; padding: 10px 0; color: var(--muted) }
+.tabs .on { color: var(--copper); border-bottom: 3px solid var(--copper) }
+.note { background: var(--high); border-radius: 14px; padding: 16px 18px; font: 400 16px/25px Newsreader }
+.spread { width: 1100px; height: 640px; border-radius: 26px; overflow:hidden; position:relative; background: var(--ground); color: var(--text); box-shadow: 0 18px 40px rgba(0,0,0,.18) }
+.cols { position:absolute; top: 56px; left: 64px; right: 64px; bottom: 56px; display:flex; gap: 96px }
+.cols .text { flex:1; font-size: 17px }
+.legend { font: 400 13px/20px Manrope; color:#333; max-width: 1100px }
+.legend b { font-weight:600 }
+</style></head>
+<body>
+<h1>Reader chrome — layout and interaction plan</h1>
+<p class="lead">Listening room materials applied to reading: the page is the room, chrome is a quiet tonal surface that appears on a centre tap and leaves again. Newsreader carries book text and titles; Manrope carries controls, progress, and metadata. Copper marks actions and progress; sage marks the current selection. Night (top) and Day (bottom) use the authored schemes; other palettes map through the same roles.</p>
+
+<!-- ============ NIGHT ============ -->
+<div class="row night">
+  <!-- A. Reading -->
+  <div><div class="phone night"><div class="page">
+    <div class="runhead">III · The Walled Garden</div>
+    <div class="text">
+      <p class="first drop">It was the sweetest, most mysterious-looking place any one could imagine. The high walls which shut it in were covered with the leafless stems of climbing roses which were so thick that they were matted together.</p>
+      <p>Mary Lennox knew they were roses because she had seen a great many roses in India. All the ground was covered with grass of a wintry brown and out of it grew clumps of bushes which were surely rosebushes if they were alive.</p>
+      <p>There were numbers of standard roses which had so spread their branches that they were like little trees. There were other trees in the garden, and one of the things which made the place look strangest and loveliest was that climbing roses had run all over them and swung down long tendrils which made light swaying curtains.</p>
+    </div>
+    <div class="folio"><span>p. 118 · 41%</span><span>12 min left in chapter</span></div>
+  </div></div>
+  <p class="cap">A · Reading<span>Immersive: system bars hide. Running head = chapter; folio = print page when the EPUB has a page list, otherwise percent; time left uses pace measured on this phone. Taps: left/right 30% turn pages, centre shows chrome. Swipe and volume keys also turn.</span></p></div>
+
+  <!-- B. Chrome + scrubbing -->
+  <div><div class="phone night"><div class="page">
+    <div class="runhead">III · The Walled Garden</div>
+    <div class="text">
+      <p class="first drop">It was the sweetest, most mysterious-looking place any one could imagine. The high walls which shut it in were covered with the leafless stems of climbing roses which were so thick that they were matted together.</p>
+      <p>Mary Lennox knew they were roses because she had seen a great many roses in India. All the ground was covered with grass of a wintry brown and out of it grew clumps of bushes which were surely rosebushes if they were alive.</p>
+    </div></div>
+    <div class="topbar">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></div>
+      <div class="titleblock"><b>The Secret Garden</b><i>Frances Hodgson Burnett</i></div>
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M3 9h14V7H3v2zm0 4h14v-2H3v2zm0 4h14v-2H3v2zm16 0h2v-2h-2v2zm0-10v2h2V7h-2zm0 6h2v-2h-2v2z"/></svg></div>
+      <div class="icon aa">Aa</div>
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zM2 13h2a1 1 0 000-2H2a1 1 0 000 2zm18 0h2a1 1 0 000-2h-2a1 1 0 000 2zM11 2v2a1 1 0 002 0V2a1 1 0 00-2 0zm0 18v2a1 1 0 002 0v-2a1 1 0 00-2 0zM5.99 4.58a1 1 0 00-1.41 1.41l1.06 1.06a1 1 0 001.41-1.41L5.99 4.58zm12.37 12.37a1 1 0 00-1.41 1.41l1.06 1.06a1 1 0 001.41-1.41l-1.06-1.06zm1.06-10.96a1 1 0 00-1.41-1.41l-1.06 1.06a1 1 0 001.41 1.41l1.06-1.06zM7.05 18.36a1 1 0 00-1.41-1.41l-1.06 1.06a1 1 0 001.41 1.41l1.06-1.06z"/></svg></div>
+    </div>
+    <div class="bubble"><b>VII · The Orchard</b><span>p. 164 · 58%</span></div>
+    <div class="bottombar">
+      <div class="chap">III · The Walled Garden <span>p. 118 of 284</span></div>
+      <div class="track"><div class="rail"></div><div class="fill" style="width:58%"></div>
+        <div class="tick" style="left:8%"></div><div class="tick" style="left:19%"></div><div class="tick" style="left:31%"></div><div class="tick" style="left:44%"></div><div class="tick" style="left:56%"></div><div class="tick" style="left:69%"></div><div class="tick" style="left:83%"></div>
+        <div class="thumb" style="left:calc(58% - 2px)"></div></div>
+      <div class="navrow"><span>‹ Previous</span><span class="mid">12 min left in chapter</span><span>Next ›</span></div>
+    </div>
+  </div>
+  <p class="cap">B · Controls and scrubber<span>Centre tap slides a tonal top bar (back, title, Contents, Aa, Night/Day) and bottom bar. The scrubber shows chapter ticks; dragging floats the target chapter and page, release jumps. A “Back to p. 118” chip then offers the way home.</span></p></div>
+
+  <!-- C. Typography -->
+  <div><div class="phone night"><div class="page">
+    <div class="runhead">III · The Walled Garden</div>
+    <div class="text"><p class="first drop">It was the sweetest, most mysterious-looking place any one could imagine. The high walls which shut it in were covered with the leafless stems of climbing roses.</p></div></div>
+    <div class="sheet"><div class="handle"></div>
+      <h3>Text</h3>
+      <div class="fonts">
+        <div class="font"><b style="font-family:Georgia">Aa</b><span>Publisher</span></div>
+        <div class="font sel"><b style="font-family:Newsreader">Aa</b><span>Newsreader</span></div>
+        <div class="font"><b style="font-family:Manrope">Aa</b><span>Manrope</span></div>
+        <div class="font"><b style="font-family:Newsreader">A<span style="font-family:Manrope;font-size:22px;color:inherit">a</span></b><span>Narrio</span></div>
+        <div class="font"><b style="font-family:Roboto, sans-serif">Aa</b><span>Android</span></div>
+      </div>
+      <div class="label">Size</div>
+      <div class="stepper"><div class="s">A</div><div class="v">110%</div><div class="s big">A</div></div>
+      <div class="label">Line spacing · Margins</div>
+      <div style="display:flex; gap:8px"><div class="seg" style="flex:1"><div>Tight</div><div class="on">Normal</div><div>Loose</div></div></div>
+      <div style="display:flex; gap:8px; margin-top:8px"><div class="seg" style="flex:1"><div>Narrow</div><div class="on">Normal</div><div>Wide</div></div></div>
+      <div class="label">Layout</div>
+      <div class="seg"><div class="on">Pages</div><div>Scroll</div></div>
+      <div class="switchrow" style="margin-top:6px"><div><b>Justify text</b><i>Even edges with hyphenation</i></div><div class="sw on"></div></div>
+    </div>
+  </div>
+  <p class="cap">C · Typography sheet<span>Half-height native sheet over the live page, so every change is previewed in place. Fonts: Publisher, the four Appearance fonts, OpenDyslexic. Size stepper, spacing, margins, Pages/Scroll, justification, hyphenation, publisher styles, volume keys, and the palette row continue below.</span></p></div>
+
+  <!-- D. Contents -->
+  <div><div class="phone night"><div class="page" style="opacity:.0"></div>
+    <div class="sheet" style="top: 70px"><div class="handle"></div>
+      <h3>The Secret Garden</h3>
+      <div class="tabs"><div class="on">Contents</div><div>Bookmarks</div><div>Notes</div></div>
+      <div class="toc">
+        <div>I · There Is No One Left <span>p. 1</span></div>
+        <div>II · Mistress Mary Quite Contrary <span>p. 24</span></div>
+        <div class="cur">III · The Walled Garden <span>Reading · p. 118</span></div>
+        <div class="sub">The Robin <span>p. 131</span></div>
+        <div>IV · Martha <span>p. 140</span></div>
+        <div>V · The Cry in the Corridor <span>p. 151</span></div>
+        <div>VI · “There Was Some One Crying” <span>p. 157</span></div>
+        <div>VII · The Orchard <span>p. 164</span></div>
+        <div>VIII · The Robin Who Showed the Way <span>p. 176</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap">D · Contents<span>Tall sheet that opens scrolled to the current chapter (sage row). Tabs are reserved: Bookmarks and Notes belong to workstream F and appear only when it lands. Footnotes use the same sheet with the note in Newsreader and “Go to note”.</span></p></div>
+</div>
+
+<!-- ============ DAY ============ -->
+<div class="row day">
+  <div><div class="phone day"><div class="page">
+    <div class="runhead">III · The Walled Garden</div>
+    <div class="text">
+      <p class="first drop">It was the sweetest, most mysterious-looking place any one could imagine. The high walls which shut it in were covered with the leafless stems of climbing roses which were so thick that they were matted together.</p>
+      <p>Mary Lennox knew they were roses because she had seen a great many roses in India. All the ground was covered with grass of a wintry brown and out of it grew clumps of bushes which were surely rosebushes if they were alive.</p>
+      <p>There were numbers of standard roses which had so spread their branches that they were like little trees. There were other trees in the garden, and one of the things which made the place look strangest and loveliest was that climbing roses had run all over them.</p>
+    </div>
+    <div class="folio"><span>41%</span><span>About 12 min left in chapter</span></div>
+  </div></div>
+  <p class="cap">A · Day, no page list<span>Percent replaces the page. “About” marks a default pace until enough page turns have been measured on this phone.</span></p></div>
+
+  <div><div class="phone day"><div class="page">
+    <div class="runhead">VII · The Orchard</div>
+    <div class="text"><p class="first drop">The robin flew from his swinging spray of ivy on to the top of the wall and he opened his beak and sang a loud, lovely trill, merely to show off.</p></div></div>
+    <div class="topbar">
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></div>
+      <div class="titleblock"><b>The Secret Garden</b><i>Frances Hodgson Burnett</i></div>
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M3 9h14V7H3v2zm0 4h14v-2H3v2zm0 4h14v-2H3v2zm16 0h2v-2h-2v2zm0-10v2h2V7h-2zm0 6h2v-2h-2v2z"/></svg></div>
+      <div class="icon aa">Aa</div>
+      <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 01-4.4 2.26 5.4 5.4 0 01-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg></div>
+    </div>
+    <div class="chip">↩ Back to p. 118</div>
+    <div class="bottombar">
+      <div class="chap">VII · The Orchard <span>p. 164 of 284</span></div>
+      <div class="track"><div class="rail"></div><div class="fill" style="width:58%"></div>
+        <div class="tick" style="left:8%"></div><div class="tick" style="left:19%"></div><div class="tick" style="left:31%"></div><div class="tick" style="left:44%"></div><div class="tick" style="left:56%"></div><div class="tick" style="left:69%"></div><div class="tick" style="left:83%"></div>
+        <div class="thumb" style="left:calc(58% - 2px)"></div></div>
+      <div class="navrow"><span>‹ Previous</span><span class="mid">9 min left in chapter</span><span>Next ›</span></div>
+    </div>
+  </div>
+  <p class="cap">B · After a jump<span>A jump through Contents, the scrubber, or a link shows a tonal chip back to the previous place until the reader turns two pages or taps it.</span></p></div>
+
+  <div><div class="phone day"><div class="page">
+    <div class="runhead">III · The Walled Garden</div>
+    <div class="text"><p class="first drop">It was the sweetest, most mysterious-looking place any one could imagine.</p></div></div>
+    <div class="sheet" style="top: 250px"><div class="handle"></div>
+      <div class="switchrow"><div><b>Hyphenation</b><i>Break long words at line ends</i></div><div class="sw on"></div></div>
+      <div class="switchrow"><div><b>Publisher styles</b><i>Use the book’s own fonts and spacing</i></div><div class="sw"></div></div>
+      <div class="switchrow"><div><b>Volume keys turn pages</b><i>Only while nothing is playing</i></div><div class="sw on"></div></div>
+      <div class="label">Colours · Listening room</div>
+      <div class="swatches">
+        <div class="sw2 sel" style="background:linear-gradient(135deg,#F6F0E5 50%,#805031 50%)"></div>
+        <div class="sw2" style="background:linear-gradient(135deg,#F0F5F7 50%,#226875 50%)"></div>
+        <div class="sw2" style="background:linear-gradient(135deg,#F2F4EA 50%,#4C6838 50%)"></div>
+        <div class="sw2" style="background:linear-gradient(135deg,#FAF1F3 50%,#914D64 50%)"></div>
+        <div class="sw2" style="background:linear-gradient(135deg,#F3F4F6 50%,#454C56 50%)"></div>
+      </div>
+      <div class="label">Mode</div>
+      <div class="seg"><div>Night</div><div class="on">Day</div><div>System</div></div>
+    </div>
+  </div>
+  <p class="cap">C · Typography, continued<span>Palette and mode are the app’s Appearance settings, so the reader and the Listening room never disagree. Changes dissolve over 450 ms like the rest of the app.</span></p></div>
+
+  <div><div class="phone day"><div class="page">
+    <div class="runhead">III · The Walled Garden</div>
+    <div class="text"><p class="first drop">“Where is the garden?” Mary asked.<sup style="color:var(--copper); font: 600 11px Manrope">12</sup> The robin had flown away and the gardener was digging again.</p></div></div>
+    <div class="sheet"><div class="handle"></div>
+      <div class="label" style="margin-top:0">Note 12</div>
+      <div class="note">Misselthwaite Manor stands on the edge of the Yorkshire moor; the walled gardens were common features of such estates.</div>
+      <div class="navrow" style="margin-top:14px; justify-content:flex-end; gap: 24px"><span>Go to note</span><span>Done</span></div>
+    </div>
+  </div>
+  <p class="cap">D · Footnote<span>Note references open a sheet instead of jumping away. Tapping an image opens a full-screen, pinch-to-zoom view. Long-press selection keeps Android’s own Copy, Share, Translate, and dictionary actions.</span></p></div>
+</div>
+
+<!-- ============ SPREAD ============ -->
+<div class="row night"><div>
+  <div class="spread night">
+    <div class="runhead" style="top:22px">The Secret Garden · III · The Walled Garden</div>
+    <div class="cols">
+      <div class="text"><p class="first drop">It was the sweetest, most mysterious-looking place any one could imagine. The high walls which shut it in were covered with the leafless stems of climbing roses which were so thick that they were matted together. Mary Lennox knew they were roses because she had seen a great many roses in India.</p><p>All the ground was covered with grass of a wintry brown and out of it grew clumps of bushes which were surely rosebushes if they were alive. There were numbers of standard roses which had so spread their branches that they were like little trees.</p></div>
+      <div class="text"><p>There were other trees in the garden, and one of the things which made the place look strangest and loveliest was that climbing roses had run all over them and swung down long tendrils which made light swaying curtains, and here and there they had caught at each other or at a far-reaching branch and had crept from one tree to another.</p><p>There were neither leaves nor roses on them now and Mary did not know whether they were dead or alive, but their thin gray or brown branches and sprays looked like a sort of hazy mantle spreading over everything.</p></div>
+    </div>
+    <div class="folio" style="left:64px; right:64px"><span>p. 118 · 41%</span><span>12 min left in chapter</span></div>
+  </div>
+  <p class="cap" style="width:1100px">E · Unfolded landscape: two-page spread<span>Chosen from the current window (width ≥ 840 dp and wider than tall), never from the device name. A separating vertical hinge keeps the centre gutter clear. Rotation, folding, and font changes restore the same content cursor rather than the same percentage.</span></p>
+</div></div>
+</body></html>

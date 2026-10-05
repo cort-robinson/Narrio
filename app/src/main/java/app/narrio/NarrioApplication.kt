@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 class NarrioApplication : Application() {
     lateinit var graph: AppGraph
         private set
-    override fun onCreate() { super.onCreate(); graph = AppGraph(this) }
+    override fun onCreate() { super.onCreate(); graph = AppGraph(this); graph.bookAlignment.start() }
 }
 
 class AppGraph(application: Application) {
@@ -26,7 +26,7 @@ class AppGraph(application: Application) {
         }
     }, object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE shelf ADD COLUMN pendingFormat TEXT NOT NULL DEFAULT ''") }
-    }, LibraryMigration3To4).build()
+    }, LibraryMigration3To4, LibraryMigration4To5).build()
     val library = database.library()
     val credentials = CredentialStore(application)
     val catalog = ArchiveDiscovery(http)
@@ -39,11 +39,19 @@ class AppGraph(application: Application) {
     val bookSources = BookSourceDiscovery(catalog, listOf(addons, TorBoxSearchDiscovery(http, credentials::read)), torbox::library, torbox::checkCached, torrentFiles::recording)
     val textDiscovery = GutenbergTextDiscovery(http)
     val followAlong = FollowAlongStore(application, library, http, torbox)
+    val editionFiles: app.narrio.domain.EditionFiles = followAlong
+    val ebookImporter = LocalEbookImporter(application, library, followAlong, metadata::enrich)
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()
     val offline = OfflineStore(application, http, torbox)
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks)
     val speechModels = SpeechModelStore(application, http)
     val narrationSync = app.narrio.playback.NarrationSync(application, http, offline, torbox, speechModels)
+    val sharedPositions = app.narrio.domain.AudioOwnedPositionStore(RoomSharedPositionStore(library))
+    val mappingRepository = RoomPositionMappingRepository(database, followAlong)
+    val positionMapper: app.narrio.domain.PositionMapper = app.narrio.domain.NarrationPositionMapper(mappingRepository)
+    val alignmentJobs: app.narrio.domain.AlignmentJobRepository = RoomAlignmentJobs(database)
+    val readingSync = app.narrio.playback.ReadingSync(sharedPositions, positionMapper, mappingRepository, alignmentJobs)
+    val bookAlignment = app.narrio.playback.BookAlignmentScheduler(application)
     val updates = app.narrio.updates.AppUpdates(application, playback)
 }
