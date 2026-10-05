@@ -46,4 +46,7 @@ class AppGraph(application: Application) {
     val speechModels = SpeechModelStore(application, http)
     val narrationSync = app.narrio.playback.NarrationSync(application, http, offline, torbox, speechModels)
     val updates = app.narrio.updates.AppUpdates(application, playback)
+    // Temporary reading adapters until the Room-backed stores from workstream A land.
+    val editionFiles: app.narrio.domain.EditionFiles = app.narrio.reader.TemporaryFollowAlongEditionFiles(application, library)
+    val sharedPositions: app.narrio.domain.SharedPositionStore = app.narrio.reader.TemporaryInMemoryPositionStore()
 }

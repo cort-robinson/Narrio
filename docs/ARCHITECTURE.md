@@ -68,6 +68,16 @@ Android Keystore AES/GCM protects the TorBox key. SharedPreferences stores ciphe
 
 The supplied release is R8 optimized and locally signed. The ignored signing identity is retained for subsequent app updates. The repository contains no TorBox account credential.
 
+## Reader
+
+The ebook reader (`app.narrio.reader`) renders EPUB with the Readium Kotlin Toolkit; plain text is converted once by `TxtEpub` into a minimal EPUB in the cache and shown by the same reader. `ReaderBook` opens an edition with network access refused and wraps Readium's container so every resource passes through `ReaderDocuments` before the navigator's WebView sees it: `EpubSanitizer` removes publication scripts, event handlers, script URLs, frames, plugins, and remote references in markup, SVG, and CSS. Readium injects its own scripts afterwards (`WebViewServer` serves `publication.get()` output, then `injectHtml`), so they keep working. A hostile fixture EPUB proves the filter in JVM and emulator tests.
+
+Positions use the follow-along `(resource, offset)` space. The served XHTML is parsed as XML (faithful to the WebView); its blocks are aligned with `BookTextParser`'s HTML parse and marked with `data-narrio-o` offsets, and a reproduction of jsoup 1.21.2 `Element.text()` maps raw page characters to parser offsets. jsoup is pinned at 1.21.2 because 1.23 changes `text()` separators and would shift stored offsets. A page probe reports the first visible character; `CursorMapping` turns it into a `ContentCursor` and back into a Readium text-quote locator that lands on the same character. Plain-text EPUB files carry the parser's `"text"` offsets directly.
+
+`ReaderController` is the reusable component (cursor, visible range, programmatic moves, decorations and selection by content range, follow hooks for together mode). Its cursor changes only with the reader's own navigation; rotation, folding, font, and layout changes restore it. `ReaderSession` commits reading through `SharedPositionStore` after a 3 s dwell or the second page turn, never on open, and not while the same book's audio plays, and keeps a reading pace on the device for "minutes left in chapter". Until the Room-backed stores land, `TemporaryFollowAlongEditionFiles` reads follow-along attachments and `TemporaryInMemoryPositionStore` keeps positions for the app process.
+
+`MainActivity` is a `FragmentActivity` so Compose can host the navigator fragment; navigator fragments restored after recreation are replaced at the saved cursor. Readium 3.4 requires AGP 9.1+, compileSdk 37, core library desugaring, and its AndroidX (lifecycle 2.11, Compose 1.11) and media3 1.11 lines.
+
 ## Primary references
 
 - [TorBox Main API](https://api-docs.torbox.app/) and [official SDK torrent contract](https://github.com/TorBox-App/torbox-sdk-py/blob/main/documentation/services/TorrentsService.md).

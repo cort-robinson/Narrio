@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -105,6 +106,10 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 if (catalogBook) CatalogListenButton(vm, book, sourceSearch, busy, Modifier.weight(1f)) { showResults = true }
                 else Button({ sourcePicker = true }, Modifier.weight(1f), enabled = !selected.loading && book.sources.isNotEmpty() && !busy) {
                     Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Listen")
+                }
+                val readable by remember(book.id) { vm.canRead(book.id) }.collectAsStateWithLifecycle(false)
+                if (!catalogBook && readable) FilledTonalButton({ vm.read(book.id) }) {
+                    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Read")
                 }
                 OutlinedButton({ vm.save(book) }, enabled = !saved) {
                     AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->

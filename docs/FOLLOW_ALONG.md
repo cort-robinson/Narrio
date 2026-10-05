@@ -19,7 +19,7 @@ Summaries, study guides, collections, box sets, sequels, and releases naming ano
 
 **Manage book text → Find and sync automatically** turns automatic lookup and narration sync off or on.
 
-Files are limited to 20 MB. DRM, Kindle formats, PDFs, pagination, annotations, text search, images, layout styling, and standalone reader navigation are outside this increment. EPUB parsing follows the declared spine order. Scripts and remote resources never execute. Original file bytes, provenance, resource names, normalized text offsets, and a normalization version are retained for a later reader.
+Files are limited to 20 MB. DRM, Kindle formats, and PDFs are unsupported. Attached EPUB and text also open in the full reader (**Read** in book details, or the book icon beside the Follow along heading), which positions by the same `(resource, offset)` locators; see [EREADER.md](EREADER.md). Annotations and text search belong to later reader work. EPUB parsing follows the declared spine order. Scripts and remote resources never execute. Original file bytes, provenance, resource names, normalized text offsets, and a normalization version are retained for a later reader.
 
 **Manage book text** replaces or removes text. Replacing a document clears its timing matches. Removing text keeps audio, bookmarks, and listening progress. Removing a shelf recording removes its attached text too. Saved text and adjustments work without connectivity; lookup and downloads need a connection.
 
