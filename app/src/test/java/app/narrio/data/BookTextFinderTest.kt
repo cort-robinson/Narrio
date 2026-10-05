@@ -74,4 +74,25 @@ class BookTextFinderTest {
         ))
         assertEquals(listOf("epub", "txt"), BookTextFinder.companions(source).map { it.id })
     }
+
+    /** Find ebook lists every match in evidence order; one failing provider marks the list incomplete, not empty. */
+    @Test fun candidatesListEveryMatchAndReportAFailedProvider() = runTest {
+        val gutenberg = MockWebServer().apply { start() }
+        val torbox = MockWebServer().apply { start() }
+        try {
+            gutenberg.enqueue(MockResponse().setBody("""{"results":[
+                {"id":1342,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["en"],"copyright":false,"media_type":"Text","formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1342.epub3.images"}},
+                {"id":35688,"title":"Pride and Prejudice and Zombies","authors":[{"name":"Grahame-Smith, Seth"}],"languages":["en"],"copyright":false,"media_type":"Text","formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/35688.epub"}}]}"""))
+            torbox.enqueue(MockResponse().setResponseCode(500))
+            val delivery = TorBoxDelivery(OkHttpClient(), { "test-secret" }, torbox.url("/").toString())
+            val finder = BookTextFinder(GutenbergTextDiscovery(OkHttpClient(), gutenberg.url("/").toString()), KnabenDiscovery(OkHttpClient(), gutenberg.url("/").toString()), delivery,
+                ebookSearch = { emptyList() })
+            val source = AudioSource("s", "Parts", "MP3", emptyList(), textFiles = listOf(BookTextSource("companion", "Pride and Prejudice.epub", format = "EPUB", provider = "archive")))
+            val steps = mutableListOf<String>()
+            val found = finder.candidates(book, listOf(source), connected = true) { steps += it }
+            assertEquals(listOf("companion", "gutenberg:1342"), found.results.map { it.id })
+            assertTrue(found.incomplete)
+            assertEquals(listOf("Checking this recording's files", "Checking your TorBox ebooks", "Checking TorBox for a cached ebook", "Checking Project Gutenberg"), steps)
+        } finally { gutenberg.shutdown(); torbox.shutdown() }
+    }
 }

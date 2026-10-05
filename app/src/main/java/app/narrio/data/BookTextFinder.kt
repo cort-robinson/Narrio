@@ -31,13 +31,45 @@ class BookTextFinder(
         if (attempt(companions(source).sortedBy { !EbookMatch.matches(book, it.title) })) return true
         if (connected && !BookMetadata.unknown(book.author)) {
             step("Checking your TorBox ebooks")
-            if (attempt(read { torbox.accountText().filter { (release, file) -> EbookMatch.matches(book, release) || EbookMatch.matches(book, file.title) }.map { it.second }.preferEpub() })) return true
+            if (attempt(read { accountMatches(book) })) return true
             step("Checking TorBox for a cached ebook")
             if (attempt(read { cachedReleases(book) })) return true
         }
         step("Checking Project Gutenberg")
-        return attempt(read { gutenberg.search("${BookIdentity.title(book.title)} ${book.author}".trim()).filter { EbookMatch.matches(book, "${it.title.substringBefore(';')} - ${it.author}") } })
+        return attempt(read { publicMatches(book) })
     }
+
+    /** Matching ebooks found by a lookup, and whether a provider failed so the list may be incomplete. */
+    data class Candidates(val results: List<BookTextSource>, val incomplete: Boolean)
+
+    /**
+     * Every candidate [find] would consider, in the same evidence order and with the same matching, for the
+     * listener to choose from instead of attaching the first that parses.
+     */
+    suspend fun candidates(book: Audiobook, sources: List<AudioSource>, connected: Boolean, step: (String) -> Unit): Candidates {
+        var incomplete = false
+        suspend fun read(block: suspend () -> List<BookTextSource>) = try { block() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { incomplete = true; emptyList() }
+        val results = mutableListOf<BookTextSource>()
+        step("Checking this recording's files")
+        results += sources.flatMap { companions(it) }.sortedBy { !EbookMatch.matches(book, it.title) }
+        if (connected && !BookMetadata.unknown(book.author)) {
+            step("Checking your TorBox ebooks")
+            results += read { accountMatches(book) }
+            step("Checking TorBox for a cached ebook")
+            results += read { cachedReleases(book) }
+        }
+        step("Checking Project Gutenberg")
+        results += read { publicMatches(book) }
+        return Candidates(results.distinctBy { it.id }, incomplete)
+    }
+
+    private suspend fun accountMatches(book: Audiobook) =
+        torbox.accountText().filter { (release, file) -> EbookMatch.matches(book, release) || EbookMatch.matches(book, file.title) }.map { it.second }.preferEpub()
+
+    private suspend fun publicMatches(book: Audiobook) =
+        gutenberg.search("${BookIdentity.title(book.title)} ${book.author}".trim()).filter { EbookMatch.matches(book, "${it.title.substringBefore(';')} - ${it.author}") }
 
     suspend fun cachedReleases(book: Audiobook): List<BookTextSource> {
         val releases = SourceQuality.searchTitles(book).flatMap { ebookSearch("$it ${book.author}") }
