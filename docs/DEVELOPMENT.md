@@ -7,7 +7,7 @@
 1. Update `dev`, then create `feature/<name>` or `fix/<name>` from it.
 2. Open a pull request targeting `dev`. Use a Conventional Commit title describing the resulting behavior, such as `feat(metadata): show audiobook descriptions`.
 3. Fill in the release-note and validation sections. Keep credentials, account data, audio files, signing keys, and generated APKs out of Git.
-4. Wait for **CI** and **PR policy** to pass, then **squash merge**. The PR title and body become one release commit. Delete only the completed feature branch; retain `dev`.
+4. Wait for **PR CI** and **PR policy** to pass, then **squash merge**. The PR title and body become one release commit. Delete only the completed feature branch; retain `dev`.
 
 ```powershell
 git switch dev
@@ -58,9 +58,17 @@ The full required suite still runs in CI for code-related changes against the cu
 
 The build/lint/unit-test and Android smoke jobs run in parallel. The smoke job restores a clean API 35 Pixel 6 emulator snapshot when available. Only trusted branch pushes save snapshots, before installing the app or test APK; test runs do not save their device state. The cache key includes the runner platform and workflow configuration. On a cache miss, a trusted branch push boots a clean device, saves its snapshot, then runs the tests; that first run can take longer. PRs and manual runs with no matching cache boot a fresh device directly for testing. After SDK/emulator compatibility changes, increment the cache-key generation to invalidate old snapshots.
 
-PRs targeting `dev` that change only `README.md`, `AGENTS.md`, or Markdown files under `docs/` skip Android setup, compilation, lint, and emulator tests. Release-tooling and CI path-selection tests still run, and the required **CI** check explicitly verifies the intentional skip. Unknown files, empty/failed comparisons, workflow/build/tooling changes, PRs to `master`, branch pushes, and manual runs execute the full Android suite. The workflow itself always runs, so documentation PRs do not leave required checks pending. No smoke tests are removed.
+PRs targeting `dev` that change only `README.md`, `AGENTS.md`, or Markdown files under `docs/` skip Android setup, compilation, lint, and emulator tests. Release-tooling and CI path-selection tests still run, and the required **PR CI** check explicitly verifies the intentional skip. Unknown files, empty/failed comparisons, workflow/build/tooling changes, PRs to `master`, branch pushes, and manual runs execute the full Android suite. The workflow itself always runs, so documentation PRs do not leave required checks pending. No smoke tests are removed.
 
-To inspect runtime, open the linked Actions run and expand **Android smoke tests**. **Restore clean emulator snapshot** shows whether the cache was found; **Run Android smoke tests** contains emulator boot, build/install, and test timings. Compare cache-hit runs separately from cold runs, and use the overall **CI** completion time when judging PR wait time.
+To inspect runtime, open the linked Actions run and expand **Android smoke tests**. **Restore clean emulator snapshot** shows whether the cache was found; **Run Android smoke tests** contains emulator boot, build/install, and test timings. Compare cache-hit runs separately from cold runs, and use the overall **PR CI** completion time when judging PR wait time.
+
+### CI monitoring
+
+The aggregate gate is named **PR CI** for pull request workflows and **Branch CI** for branch pushes and manual runs. Both gates keep the same dependencies and fail-closed Android coverage. Branch rules require **PR CI** and **PR policy**, so a green Dev push cannot satisfy the PR gate by name.
+
+Before merging, verify the current PR head, the latest applicable PR workflow run, and its aggregate **PR CI** result. A passing branch run on the same head does not establish that the PR merge candidate passed. New commits or a changed merge candidate require checking the new run. Stable publication remains dependent on the branch workflow's aggregate gate.
+
+Before ending a turn to wait, register a monitor and confirm that its wake conditions cover the exact remaining checks or workflow run. T3's standard PR watcher reports required-check success; do not assume that optional checks or release publication finishing will produce another wake. After any notification, inspect the current results and continue all authorized work. Only say that work is being watched when a confirmed monitor covers it; if it does not, keep the turn active for the applicable workflow wait or clearly report the monitoring limitation. A registered watch is not evidence that a build, merge, or release completed.
 
 ## Test a development build
 
@@ -154,7 +162,7 @@ Published versions and assets are never replaced. For a bad published release, s
 
 ## Repository configuration
 
-- Both persistent branches require **CI** and **PR policy**, an up-to-date PR, and resolved conversations. Force pushes, branch deletion, and direct pushes are blocked, including for the owner. No additional reviewer is required for this solo-owner repository; merging the promotion is the release approval.
+- Both persistent branches require **PR CI** and **PR policy**, an up-to-date PR, and resolved conversations. Force pushes, branch deletion, and direct pushes are blocked, including for the owner. No additional reviewer is required for this solo-owner repository; merging the promotion is the release approval.
 - `master` allows merge commits; `dev` permits squash merges for features and merge commits for history synchronization. PR policy allows only `dev` or same-repository `hotfix/*` promotions to `master`.
 - The **release** environment allows only branch `master`; **preview** allows only `dev`. Each stores its own `SIGNING_KEYSTORE_BASE64`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS`, and `SIGNING_KEY_PASSWORD` secrets, plus public variable `SIGNING_CERT_SHA256`.
 - The stable environment contains the original Narrio signing identity, preserving in-place upgrades and local app data. Keep a private backup of the ignored `.signing/` directory and `signing.properties`. The preview identity is independent.
