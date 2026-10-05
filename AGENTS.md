@@ -9,11 +9,12 @@ These instructions apply only to work on Narrio. Keep Narrio workflow rules in t
 - Inspect the working tree and current branch first. Preserve unrelated changes and other worktrees; use an isolated branch/worktree when needed.
 - Start ordinary work from updated `dev` on a dedicated feature, fix, docs, or chore branch. Do not implement changes directly on `dev` or `master`.
 - Use Conventional Commits for commits and PR titles. Describe user-facing changes under `## Release notes` and actual checks under `## Validation`.
-- Target ordinary change PRs at `dev`. Wait for **CI** and **PR policy**, then squash merge when merging is within the user's authorized scope.
+- Target ordinary change PRs at `dev`. Wait for **PR CI** and **PR policy** from the current PR candidate, then squash merge when merging is within the user's authorized scope.
 - Promote `dev` to `master` with a **merge commit**, preserving feature commits for versioning and release notes. A `master` merge triggers stable release automation; perform it only within the user's authorized promotion/release scope. Do not request approval again when already authorized.
 - After a promotion or hotfix, sync `master` back into `dev` through a checked PR with a **merge commit**. Never squash this history sync.
 - Urgent stable hotfixes start from `master` on `hotfix/*`, use Conventional Commits, and target `master`; sync them back to `dev` afterward.
 - Before merging, re-check the actual PR head and required checks. Use that verified head as the merge guard; new commits require renewed verification.
+- Before ending a turn to wait, register a monitor and verify that it covers the exact remaining checks or workflow run. A successful branch build on the same head does not establish that the fresh PR workflow passed. After a monitor wake, re-check the current candidate and outstanding work; only claim to be watching when a confirmed monitor covers it. See [CI monitoring](docs/DEVELOPMENT.md#ci-monitoring).
 - Preserve persistent branches and release tags. Do not bypass or weaken branch/tag rules or required checks to get a change merged.
 
 ## Local development verification
