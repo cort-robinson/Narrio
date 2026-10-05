@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -34,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.domain.*
 import app.narrio.BuildConfig
 import app.narrio.data.OfflineBook
+import app.narrio.data.SourceQuality
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -52,6 +54,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val context = LocalContext.current
     var sourcePicker by remember(book.id) { mutableStateOf(false) }
     var expandedDescription by remember(book.id) { mutableStateOf(false) }
+    var showVersions by remember(book.id) { mutableStateOf(false) }
+    var showResults by remember(book.id) { mutableStateOf(false) }
     // A page that is leaving (or being reused mid-exit) never carries its source sheet with it.
     LaunchedEffect(currentSelection.book?.id) { if (currentSelection.book?.id != book.id) sourcePicker = false }
     val catalogBook = book.provider == "catalog"
@@ -65,7 +69,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         navigationIcon = { if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") } },
         windowInsets = WindowInsets(0), scrollBehavior = scroll,
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer))
-    LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection), listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection).testTag("book-details"), listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item {
             val identity: @Composable ColumnScope.() -> Unit = {
                 Text(book.title, style = MaterialTheme.typography.headlineLarge)
@@ -98,8 +102,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         selected.error?.let { item { RecoveryState("Couldn't load this edition", it) { vm.open(book) } } }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                Button({ if (catalogBook) vm.findSources(book) else sourcePicker = true }, Modifier.weight(1f), enabled = if (catalogBook) !sourceSearch.loading else !selected.loading && book.sources.isNotEmpty() && !busy) {
-                    Icon(if (catalogBook) Icons.Rounded.Search else Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(if (catalogBook) "Find sources" else "Listen")
+                if (catalogBook) CatalogListenButton(vm, book, sourceSearch, busy, Modifier.weight(1f)) { showResults = true }
+                else Button({ sourcePicker = true }, Modifier.weight(1f), enabled = !selected.loading && book.sources.isNotEmpty() && !busy) {
+                    Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Listen")
                 }
                 OutlinedButton({ vm.save(book) }, enabled = !saved) {
                     AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
@@ -111,8 +116,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             }
             if (catalogBook) {
                 Spacer(Modifier.height(12.dp))
-                Text("Find sources checks for matching recordings with usable audio.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (!connected) TextButton({ vm.navigate(2) }) { Text("Connect TorBox for more sources") }
+                SourceStatus(vm, book, sourceSearch.takeIf { it.book?.id == book.id } ?: SourceSearchState(book), connected,
+                    showVersions = { showVersions = !showVersions; showResults = false }, showResults = { showResults = !showResults; showVersions = false })
             } else if (book.detailsLoaded && book.sources.isEmpty()) {
                 Spacer(Modifier.height(12.dp)); Text(if (book.provider == "knaben") "No cached audio files found for this release. Try another ready source. File formats appear once a source is available in TorBox." else "This edition has no compatible audio files. Try another recording.", style = MaterialTheme.typography.bodyMedium)
                 if (book.provider == "knaben" && connected && preparation == null) OutlinedButton({ vm.prepareUncached(book, "") }, enabled = !busy) { Text("Prepare this release in TorBox") }
@@ -123,35 +128,23 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             }
             if (!catalogBook && sourceSearch.book?.provider == "catalog") TextButton({ vm.back() }) { Text("Choose another recording") }
         }
-        if (catalogBook && sourceSearch.book?.id == book.id && sourceSearch.searched) {
-            item {
-                Text("Listening sources", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(8.dp))
-                Text("Matching books with verified audio files · Cached sources first", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (sourceSearch.loading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth()) }
-            }
-            sourceSearch.error?.let { message -> item { RecoveryState("Some sources couldn't be checked", message) { vm.findSources(book) } } }
-            items(sourceSearch.recordings, key = { it.id }) { recording ->
-                Column(Modifier.animateItem().fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.chooseRecording(recording) }.padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(recording.releaseTitle.ifBlank { recording.title }, style = MaterialTheme.typography.titleSmall)
-                            Text(narrationLabel(recording), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                            Text("${providerLabel(recording)} · ${recording.language} · ${recording.sources.joinToString(" / ") { it.format }}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Icon(when { recording.cacheState == "cached" -> Icons.Rounded.Bolt; recording.provider == "archive" -> Icons.Rounded.Headphones; else -> Icons.Rounded.CloudDownload }, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                                Text(when { recording.cacheState == "cached" -> "Ready in TorBox"; recording.provider == "archive" -> "Public audio · Ready to stream"; else -> "Requires TorBox preparation" }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                        Icon(Icons.Rounded.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        if (catalogBook && sourceSearch.book?.id == book.id && !sourceSearch.loading) {
+            val choice = sourceSearch.choice
+            if (showVersions && sourceSearch.versions.size > 1) {
+                item { Text("Versions", style = MaterialTheme.typography.titleMedium) }
+                items(sourceSearch.versions, key = { "version:${it.id}" }) { recording ->
+                    SourceRow(recording, book, Modifier.animateItem(), selected = recording.id == choice?.id) { vm.chooseVersion(recording); showVersions = false }
                 }
             }
-            if (!sourceSearch.loading && sourceSearch.recordings.isEmpty()) item {
-                EmptyState("No suitable sources found", "Try again later. Sources need a title and author match, verified audio files, and public, cached, or seeded availability.", Icons.Rounded.Headphones)
+            if (showResults && sourceSearch.results.isNotEmpty()) {
+                item {
+                    Text("Search results", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Closest matches first. Check the release name and narrator before listening.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                items(sourceSearch.results, key = { "result:${it.id}" }) { recording ->
+                    SourceRow(recording, book, Modifier.animateItem(), possible = recording in sourceSearch.possible) { vm.chooseRecording(recording) }
+                }
             }
         }
         downloads.filter { it.book.id == book.id }.forEach { download -> item { OfflineStatus(vm, download) } }
@@ -203,6 +196,99 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     }
     }
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
+}
+
+@Composable
+private fun CatalogListenButton(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, busy: Boolean, modifier: Modifier, review: () -> Unit) {
+    val current = search.takeIf { it.book?.id == book.id }
+    val choice = current?.choice
+    when {
+        current == null || current.loading -> Button({}, modifier, enabled = false) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text("Finding audio…")
+        }
+        choice != null -> Button({ vm.listenToChoice() }, modifier, enabled = !busy) {
+            val ready = SourceQuality.ready(choice)
+            Icon(if (ready) Icons.Rounded.PlayArrow else Icons.Rounded.CloudDownload, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp))
+            Text(if (ready) "Listen" else "Review and prepare")
+        }
+        current.results.isNotEmpty() -> Button(review, modifier) {
+            Icon(Icons.Rounded.Search, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Choose a recording")
+        }
+        else -> Button({ vm.findSources(book, force = true) }, modifier) {
+            Icon(Icons.Rounded.Refresh, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Search again")
+        }
+    }
+}
+
+/** Explains what was chosen automatically, or why nothing was, with only the next useful actions. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SourceStatus(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, connected: Boolean, showVersions: () -> Unit, showResults: () -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val choice = search.choice
+    when {
+        search.loading || !search.searched -> Text(if (connected) "Checking LibriVox, your TorBox library, and indexed releases for this title and author." else "Checking LibriVox for a free public recording of this title and author.",
+            style = MaterialTheme.typography.bodySmall, color = muted)
+        choice != null -> {
+            Text(listOf(availabilityLabel(choice), choice.sources.joinToString(" / ") { it.format }, versionLabel(choice, book)).filter(String::isNotBlank).joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
+            Text(choice.releaseTitle.ifBlank { choice.title }, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (search.versions.size > 1) TextButton(showVersions) { Text("${search.versions.size} versions") }
+                TextButton({ vm.chooseRecording(choice) }) { Text("Listening options") }
+                if (search.results.size > 1) TextButton(showResults) { Text("Not the right recording?") }
+            }
+        }
+        else -> {
+            Text(when {
+                search.results.isNotEmpty() -> "No recording matched this title and author closely enough to choose automatically. Review ${search.results.size} search ${if (search.results.size == 1) "result" else "results"} to pick one."
+                connected -> "No recording of this title and author was found in LibriVox, your TorBox library, or indexed releases."
+                else -> "No free public recording of this title and author was found."
+            }, style = MaterialTheme.typography.bodyMedium)
+            search.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp)) }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (search.results.isNotEmpty() || search.error != null) TextButton({ vm.findSources(book, force = true) }) { Text("Search again") }
+                if (!connected) TextButton({ vm.navigate(2) }) { Text("Connect TorBox for more sources") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceRow(recording: Audiobook, book: Audiobook, modifier: Modifier, selected: Boolean = false, possible: Boolean = false, action: () -> Unit) {
+    Column(modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
+            .clickable(onClick = action).padding(vertical = 8.dp, horizontal = if (selected) 8.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(recording.releaseTitle.ifBlank { recording.title }, style = MaterialTheme.typography.titleSmall)
+                Text(versionLabel(recording, book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                Text(listOf(providerLabel(recording), recording.sources.joinToString(" / ") { it.format }).filter(String::isNotBlank).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(when { recording.cacheState == "cached" -> Icons.Rounded.Bolt; recording.provider == "archive" -> Icons.Rounded.Headphones; else -> Icons.Rounded.CloudDownload }, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(availabilityLabel(recording) + if (possible) " · Possible match" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            Icon(if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.ChevronRight, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(8.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+}
+
+private fun availabilityLabel(recording: Audiobook) = when {
+    recording.cacheState == "cached" -> "Ready in TorBox"
+    recording.provider == "archive" -> "Free public recording"
+    recording.filesVerified -> "Needs TorBox preparation"
+    else -> "Audio files not checked"
+}
+
+/** Narrator, dramatization/abridgment, and language: what distinguishes one version from another. */
+private fun versionLabel(recording: Audiobook, book: Audiobook): String {
+    val edition = SourceQuality.edition(recording)
+    return listOf(edition.narrator.takeIf(String::isNotBlank)?.let { "Read by $it" } ?: "Narrator not listed", edition.kind,
+        edition.language.takeUnless { it.isBlank() || it.equals(book.language, true) }.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -298,19 +384,26 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val wifiOnly by vm.wifiOnly.collectAsStateWithLifecycle()
     var key by remember { mutableStateOf("") }
     var appearanceOpen by rememberSaveable { mutableStateOf(false) }
+    var addonsOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(connected) { if (connected) key = "" }
     AnimatedContent(appearanceOpen, modifier, transitionSpec = { Motion.sharedAxisX(targetState) }, label = "settings page") { open ->
-        if (open) AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
-        else SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }) { appearanceOpen = true }
+        if (addonsOpen) AddonSettings(vm.graph.addons, vm::addonsChanged, { addonsOpen = false })
+        else if (open) AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
+        else SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }, { addonsOpen = true }) { appearanceOpen = true }
     }
 }
 
 @Composable
-private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, key: String, setKey: (String) -> Unit, openAppearance: () -> Unit) {
+private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, key: String, setKey: (String) -> Unit, openAddons: () -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
-    LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item { AppearanceEntry(appearance, openAppearance) }
+        item {
+            OutlinedButton(openAddons, Modifier.fillMaxWidth()) {
+                Text("Add-ons · Book metadata, audio & ebooks")
+            }
+        }
         item { UpdateSettings(vm.graph.updates) }
         item {
             Text("TorBox", style = MaterialTheme.typography.headlineSmall)
@@ -345,9 +438,9 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
             Text("About Narrio", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
-            Text("Narrio ${BuildConfig.VERSION_NAME} · Native Android\n\nSearch identifies books from catalog metadata. Find sources from a book's details to check Knaben releases, public-domain LibriVox recordings, and your TorBox library. Cached sources appear first. Matching releases with verified audio files and available seeders can be explicitly prepared in TorBox. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Narrio ${BuildConfig.VERSION_NAME} · Native Android\n\nSearch identifies books from catalog metadata. Opening a book looks for public-domain LibriVox recordings and, with TorBox connected, your TorBox library and enabled source add-ons and TorBox search. The best match with ready audio is chosen automatically. Other versions appear only when the narrator, language, or edition differs. When no recording matches confidently, you can review the search results yourself. Matching releases with verified audio files and available seeders can be explicitly prepared in TorBox. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
-            Text("Matched book details and cover art come from Audible or Open Library. Catalog narrator information does not verify the release's recording. Book names go directly to these metadata providers; your TorBox key and listening history stay private.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Matched book details and cover art come from enabled catalog add-ons, with Google Books as a built-in fallback. Manage providers in Add-ons. Catalog narrator information does not verify the release's recording. Book names go directly to these metadata providers; your TorBox key and listening history stay private.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
             TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://librivox.org/pages/about-librivox/"))) }) { Text("About the LibriVox recordings") }
             Text("Retrieved covers belong to their respective rights holders. Fallbacks use original garden artwork created with ImageGen and Narrio's graphic designs. Typography: Newsreader and Manrope, SIL Open Font License.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

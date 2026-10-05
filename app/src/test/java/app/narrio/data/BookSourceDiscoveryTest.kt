@@ -40,7 +40,7 @@ class BookSourceDiscoveryTest {
         val bundle = release("Eragon, Eldest, Brisingr - Christopher Paolini")
         val cachedSource = release().sources.single().copy(parts = listOf(AudioPart("part", "Christopher Paolini/Eragon/Eragon.m4b", "Eragon")))
         val accountBook = titleOnly.copy(provider = "torbox", id = "torbox:42", sources = listOf(cachedSource), cacheState = "cached")
-        val discovery = BookSourceDiscovery(provider(emptyList()), provider(listOf(series, surname, titleOnly, bundle)), { query ->
+        val discovery = BookSourceDiscovery(provider(emptyList()), listOf(provider(listOf(series, surname, titleOnly, bundle))), { query ->
             assertEquals("", query)
             listOf(accountBook)
         }, { candidates ->
@@ -60,7 +60,7 @@ class BookSourceDiscoveryTest {
         val files = listOf("Brisingr/Brisingr Part 1.m4b", "Brisingr/Brisingr Part 2.m4b",
             "Eldest/Eldest Part 2.m4b", "Eldest/Eldest Part1.m4b", "Eragon/Eragon.m4b")
         val cached = collection.copy(cacheState = "cached", sources = listOf(release().sources.single().copy(parts = files.mapIndexed { i, path -> AudioPart("file:$i", path, path) })))
-        val discovery = BookSourceDiscovery(provider(emptyList()), provider(listOf(collection)), { emptyList() }, { candidates ->
+        val discovery = BookSourceDiscovery(provider(emptyList()), listOf(provider(listOf(collection))), { emptyList() }, { candidates ->
             assertEquals(listOf(collection.id), candidates.map { it.id })
             listOf(cached)
         })
@@ -95,7 +95,7 @@ class BookSourceDiscoveryTest {
             }
             override suspend fun recording(id: String) = recording
         }
-        val result = BookSourceDiscovery(archive, provider(emptyList()), { error("Disconnected") }, { error("Disconnected") }).search(detailed, false)
+        val result = BookSourceDiscovery(archive, listOf(provider(emptyList())), { error("Disconnected") }, { error("Disconnected") }).search(detailed, false)
         assertEquals(listOf("Project Hail Mary: A Novel", "Project Hail Mary"), queries)
         assertEquals(recording.id, result.recordings.single().id)
         assertNotNull(result.error)
@@ -124,7 +124,7 @@ class BookSourceDiscoveryTest {
             }
             override suspend fun recording(id: String) = recording
         }
-        val results = BookSourceDiscovery(archive, provider(emptyList()), { emptyList() }, { it }).search(suffixed, false)
+        val results = BookSourceDiscovery(archive, listOf(provider(emptyList())), { emptyList() }, { it }).search(suffixed, false)
         assertEquals(recording.id, results.recordings.single().id)
         assertTrue(SourceQuality.matches(book, release("Project Hail Mary (Special Edition)", "Andy Weir", "archive")))
     }
@@ -139,11 +139,31 @@ class BookSourceDiscoveryTest {
         assertEquals(listOf(valid.id, public.id), filtered.map { it.id })
     }
 
-    @Test fun providerFailuresKeepMatchingPublicAudioAndNeverShowUncheckedIndexedSources() = runBlocking {
+    @Test fun cacheFailureKeepsMatchingReleasesForReviewWithoutClaimingPlayableAudio() = runBlocking {
+        val candidate = release().copy(cacheState = "unchecked", cachedFormats = emptyList(), sources = emptyList(), seeders = 3)
+        val wrong = candidate.copy(id = "wrong", title = "Andy Weir - Project Hail Mary 2", torrentHash = "b".repeat(40))
+        var inspected = false
+        val discovery = BookSourceDiscovery(provider(emptyList()), listOf(provider(listOf(candidate, wrong))), { emptyList() },
+            { throw ProviderException("Unavailable") }, { inspected = true; error("Availability was not checked") })
+        val results = discovery.search(book, true)
+        assertTrue(results.recordings.isEmpty())
+        assertEquals(listOf(candidate), results.possible)
+        assertEquals("TorBox availability could not be checked. Retry to check which releases have audio.", results.error)
+        assertFalse(inspected)
+    }
+
+    @Test fun providerFailuresKeepMatchingPublicAudioAndNeverMakeUncheckedIndexedSourcesPlayable() = runBlocking {
         val public = release("Project Hail Mary", "Andy Weir", "archive")
-        val discovery = BookSourceDiscovery(provider(listOf(public)), provider(listOf(release())), { emptyList() }, { throw ProviderException("Unavailable") })
+        val stale = release().copy(torrentHash = "b".repeat(40), seeders = 2, filesVerified = true)
+        val discovery = BookSourceDiscovery(provider(listOf(public)), listOf(provider(listOf(stale))), { emptyList() }, { throw ProviderException("Unavailable") })
         val results = discovery.search(book, true)
         assertEquals(listOf(public.id), results.recordings.map { it.id }); assertNotNull(results.error)
+        val unchecked = results.possible.single()
+        assertEquals(stale.id, unchecked.id)
+        assertEquals("unchecked", unchecked.cacheState)
+        assertTrue(unchecked.sources.isEmpty())
+        assertTrue(unchecked.cachedFormats.isEmpty())
+        assertFalse(unchecked.filesVerified)
     }
 
     @Test fun disconnectedDiscoveryUsesOnlyPublicRecordingsAndRechecksHydratedIdentity() = runBlocking {
@@ -153,7 +173,7 @@ class BookSourceDiscoveryTest {
             override suspend fun search(query: String, category: String): List<Audiobook> = error("Must not search indexed sources without delivery")
             override suspend fun recording(id: String): Audiobook = error("Unused")
         }
-        val discovery = BookSourceDiscovery(provider(listOf(partial), wrong), indexed, { error("Must not read an account") }, { error("Must not check cache") })
+        val discovery = BookSourceDiscovery(provider(listOf(partial), wrong), listOf(indexed), { error("Must not read an account") }, { error("Must not check cache") })
         assertTrue(discovery.search(book, false).recordings.isEmpty())
     }
 

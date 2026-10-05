@@ -28,7 +28,9 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,12 +53,28 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val lift = remember { Animatable(0f) }
     val open = { vm.playerOpen.value = true }
+    var armed by remember { mutableStateOf(false) }
     val progress by animateFloatAsState(if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f, tween(1000, easing = LinearEasing), label = "mini progress")
     // A short upward flick opens the listening room, the same way the player can be pulled back down.
+    // Pulling it down past the threshold closes Now playing; the shell offers Undo.
     Surface(open, modifier.fillMaxWidth().pressScale(interaction, .985f)
-        .draggable(rememberDraggableState { delta -> scope.launch { lift.snapTo((lift.value + delta).coerceIn(-160f, 0f)) } }, Orientation.Vertical,
-            onDragStopped = { velocity -> if (lift.value < -72f || velocity < -1400f) open(); lift.animateTo(0f, Motion.responsive()) })
-        .graphicsLayer { translationY = lift.value * .35f },
+        .semantics { customActions = listOf(CustomAccessibilityAction("Close player") { vm.dismissPlayback(); true }) }
+        .draggable(rememberDraggableState { delta ->
+            scope.launch {
+                lift.snapTo((lift.value + delta).coerceIn(-160f, 160f))
+                val past = lift.value > 96f
+                if (past != armed) { armed = past; if (past) haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate) }
+            }
+        }, Orientation.Vertical,
+            onDragStopped = { velocity ->
+                armed = false
+                when {
+                    lift.value > 96f || (lift.value > 24f && velocity > 1800f) -> { vm.dismissPlayback(); lift.snapTo(0f) }
+                    lift.value < -72f || velocity < -1400f -> { open(); lift.animateTo(0f, Motion.responsive()) }
+                    else -> lift.animateTo(0f, Motion.responsive())
+                }
+            })
+        .graphicsLayer { translationY = lift.value * .35f; alpha = 1f - (lift.value / 160f).coerceIn(0f, 1f) * .6f },
         color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, interactionSource = interaction) {
         Column {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -110,6 +128,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
             Box(Modifier.weight(1f)) { PlayerMode(followOpen) { followOpen = it } }
             BookmarkNow(vm)
+            ClosePlayback(vm)
         } else Column(pullDown) {
             PlayerHeading(vm, compact)
             PlayerMode(followOpen) { followOpen = it }
@@ -339,7 +358,15 @@ private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean) {
         Text("Now playing", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
         BookmarkNow(vm)
+        ClosePlayback(vm)
     }
+}
+
+/** Stops listening and clears Now playing; the shelf keeps the book and its place. */
+@Composable
+private fun ClosePlayback(vm: NarrioViewModel) {
+    val haptics = LocalHapticFeedback.current
+    IconButton({ haptics.performHapticFeedback(HapticFeedbackType.Reject); vm.dismissPlayback() }) { Icon(Icons.Rounded.Close, "Close player") }
 }
 
 /** Bookmarking gives a small pop and a confirming tick: the moment has been kept. */

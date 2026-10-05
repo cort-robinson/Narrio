@@ -18,7 +18,41 @@ git push -u origin feature/my-feature
 gh pr create --base dev
 ```
 
-PR policy checks Conventional Commit titles and meaningful release-note summaries. CI runs JVM tests, Android lint/build checks, release-tooling tests, and emulator smoke tests for persistence, encrypted credential removal, link renewal, metadata-only book details and source selection, source choices, offline settings, follow-along interaction/source binding, and the text-schema migration. These required tests use controlled fixtures; live provider and listening checks remain separate because provider availability should not decide whether a release can build.
+PR policy checks Conventional Commit titles and meaningful release-note summaries. CI runs JVM tests, Android lint/build checks, release-tooling tests, and emulator smoke tests for persistence, encrypted credential removal, link renewal, metadata-only book details and source selection, source choices, closing Now playing, offline settings, follow-along interaction/source binding, and the text-schema migration. These required tests use controlled fixtures; live provider and listening checks remain separate because provider availability should not decide whether a release can build.
+
+### Local development verification
+
+This policy applies to agents working on Narrio. Keep it in this repository; it does not belong in user-wide agent instructions, skills, settings, or memory.
+
+During development, batch edits that address one behavior, then choose the smallest checks that can establish whether that behavior works. Use focused local checks during iteration; CI runs the complete required suite. Select checks from this table according to the changed behavior:
+
+| Changed behavior | Local verification |
+| --- | --- |
+| Documentation or agent instructions | Review the diff, links, and whitespace. Validate affected commands/examples when they change; no Android setup for prose-only edits. |
+| App wording or resources | Compile/build the affected variant and inspect the changed screen when layout or behavior could be affected. |
+| Parsing, matching, or provider logic | Run the affected JVM tests. Add a targeted Android check when SDK behavior can differ from the desktop JVM, such as Android regex handling. |
+| UI, layout, or interaction | Build/compile the affected variant, inspect the changed screen, and run the relevant UI test or user flow on a reused test device. |
+| Playback, storage, migrations, permissions, or updates | Run the related JVM tests and selected Android regression cases on a controlled test device. |
+| Dependencies, build configuration, or packaging | Verify the affected build and related tests/lint once the change is coherent. Broaden local checks for shared effects; verify optimized release behavior when shrinking, signing, or packaging is affected. |
+| CI or release tooling | Run the relevant tooling tests and workflow validation. Use Android checks when the changed tooling affects the Android build or device behavior. |
+
+Prefer incremental builds and the Gradle wrapper's default local daemon. Reserve `clean`, `--no-daemon`, and optimized release builds for a demonstrated need or the relevant release checks. Choose the appropriate command rather than running every example below:
+
+```powershell
+# A focused JVM regression; no emulator is needed.
+.\gradlew.bat :app:testDebugUnitTest --tests "app.narrio.data.BookSourceDiscoveryTest"
+
+# Compile Kotlin changes for Narrio Local without installing or running it.
+.\gradlew.bat :app:compileDebugKotlin -PnarrioLocal=true
+```
+
+For instrumentation, select the affected class or method with `-Pandroid.testInstrumentationRunnerArguments.class=<class>` or `<class>#<method>`, as the CI smoke job does. For example, Android source matching uses `app.narrio.BookSourceDiscoveryAndroidTest`. Bind the run to an explicitly selected, isolated project test device; keep synthetic fixture data separate from the user's stable and signed Dev installs.
+
+Reuse a booted project test emulator across iterations. Reset fixture/app state only when the test requires isolation, and use a fresh-device boot for startup, installation, or clean-state checks. Preserve devices and sessions used by other agents. Do not start a new emulator or run the full device suite merely because another file was edited or a task is finishing. Scripted and AI-driven UI testing use the same policy: exercise the affected flow or a planned QA milestone.
+
+Before marking a PR ready, inspect the completed diff and ensure the checks selected above have passed, including screen inspection for UI changes. Reuse passing results while their relevant inputs are unchanged. A passing result applies to the source, dependencies, fixtures, and configuration it covered; later changes invalidate the affected results. Repeat or broaden checks when those inputs change, failures remain unexplained, or shared behavior could be affected. Report the commands, selected cases/device, and actual results; distinguish focused checks from a full suite.
+
+The full required suite still runs in CI for code-related changes against the current PR candidate. Broader local suites are appropriate for changes with shared effects or unresolved concerns. Required CI, the verified-head merge guard, and the release, phone, and live-provider checks documented below still apply.
 
 ### CI runtime
 

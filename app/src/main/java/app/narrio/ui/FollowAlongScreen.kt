@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -24,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.domain.*
 import app.narrio.playback.ListeningState
+import app.narrio.playback.SyncPhase
 
 /** A listening surface, not a paginated ebook reader. Audio remains owned by the service. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,6 +62,10 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
     val dragged by list.interactionSource.collectIsDraggedAsState()
     val context = LocalContext.current
     val animations = animationsEnabled()
+    val sync by vm.narrationSync.collectAsStateWithLifecycle()
+    DisposableEffect(Unit) { vm.followAlongVisible(true); onDispose { vm.followAlongVisible(false) } }
+    val automatic by vm.followAlongAuto.collectAsStateWithLifecycle()
+    LaunchedEffect(book.id, document == null, textState.loading, automatic) { if (document == null && !textState.loading && automatic) vm.autoFindBookText() }
     LaunchedEffect(dragged) { if (dragged) following = false }
     LaunchedEffect(active, following, adjusting, binding?.chapterId) {
         if (active != null && following && !adjusting) {
@@ -75,15 +81,26 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                 item {
                     Text("Read as you listen", style = MaterialTheme.typography.headlineMedium)
                     Spacer(Modifier.height(12.dp))
-                    Text("Add the same edition of the book to follow the narration passage by passage.", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(when {
+                        textState.finding -> "Looking for this book's ebook. It syncs with the narration once found."
+                        textState.autoMissed -> "No matching ebook was found automatically. Search by another title, or choose your own EPUB or text file."
+                        else -> "Add the same edition of the book to follow the narration passage by passage."
+                    }, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                item { Button(lookup, enabled = !textState.working) { Icon(Icons.Rounded.Search, null); Spacer(Modifier.width(8.dp)); Text("Find book text") } }
-                item { OutlinedButton(import, enabled = !textState.working) { Icon(Icons.Rounded.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Choose a text file") } }
+                if (textState.finding) item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Text(textState.findingStep.ifBlank { "Finding the ebook" } + "…", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                item { Button(lookup, enabled = !textState.working && !textState.finding) { Icon(Icons.Rounded.Search, null); Spacer(Modifier.width(8.dp)); Text("Find book text") } }
+                item { OutlinedButton(import, enabled = !textState.working && !textState.finding) { Icon(Icons.Rounded.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Choose a text file") } }
                 item { Text("EPUB or UTF-8 text · saved on this device\nWebVTT timing tracks work with the current audio part.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 if (state.source?.textFiles?.isNotEmpty() == true) item {
                     Text("This audio source includes book text", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(8.dp))
-                    state.source.textFiles.forEach { candidate -> TextSourceRow(candidate, !textState.working) { vm.fetchBookText(candidate) } }
+                    state.source.textFiles.forEach { candidate -> TextSourceRow(candidate, !textState.working && !textState.finding) { vm.fetchBookText(candidate) } }
                 }
                 textState.error?.let { message -> item { TextError(message, vm::clearTextError) } }
             }
@@ -94,10 +111,17 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                         Text(document.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(when {
                             document.timedSourceId.isNotBlank() -> if (binding == null) "Timing track for another audio part" else "Supplied timestamps · this audio part"
+                            binding == null && sync.phase == SyncPhase.LISTENING -> "Finding this part in the book…"
                             binding == null -> "Choose a chapter for this audio part"
                             timeline == null -> "Waiting for audio length"
+                            timeline.aligned && FollowAlongTiming.synced(binding, state.positionMs) -> "Synced with narration"
+                            sync.phase == SyncPhase.LISTENING -> "Syncing with narration…"
+                            sync.phase == SyncPhase.DOWNLOADING_MODEL -> "Preparing narration sync · ${(sync.progress * 100).toInt()}%"
+                            sync.phase == SyncPhase.UNSUPPORTED -> "Estimated timing · narration sync supports English"
+                            timeline.aligned -> "Estimated between synced passages"
                             else -> "Estimated timing"
-                        }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                        }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
                     }
                     IconButton({ sourcesOpen = true; vm.clearTextError() }) { Icon(Icons.Rounded.MoreHoriz, "Manage book text") }
                 }
@@ -112,7 +136,18 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
                             Icon(Icons.Rounded.Tune, if (adjusting) "Cancel timing adjustment" else "Adjust timing", tint = MaterialTheme.colorScheme.primary)
                         }
                     }
-                    Text(if (adjusting) "Tap the line you hear, then match it to the current audio." else "Highlighting follows the chapter's pace. Adjust timing if it drifts.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(when {
+                        adjusting -> "Tap the line you hear, then match it to the current audio."
+                        timeline?.aligned == true -> "Highlighting follows the recognized narration. Adjust timing if a line is off."
+                        else -> "Highlighting follows the chapter's pace until the narration is recognized. Adjust timing if it drifts."
+                    }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (sync.phase == SyncPhase.NEEDS_MODEL) {
+                        sync.message.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                        TextButton(vm::allowSyncModelDownload) {
+                            Icon(Icons.Rounded.GraphicEq, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                            Text("Sync with narration · ${sizeLabel(sync.modelBytes)} download")
+                        }
+                    }
                 }
                 textState.error?.let { TextError(it, vm::clearTextError) }
             }
@@ -125,7 +160,8 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
             } else if (binding == null) {
                 Column(Modifier.weight(1f).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Match this part to its chapter", style = MaterialTheme.typography.headlineSmall)
-                    Text("The audio parts and ebook chapters have different layouts. Choose the text narrated in this part to begin estimated follow along.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (sync.phase == SyncPhase.LISTENING || sync.phase == SyncPhase.DOWNLOADING_MODEL) "Listening to this part to find where it begins in the book. You can also choose its chapter."
+                        else "The audio parts and ebook chapters have different layouts. Choose the text narrated in this part to begin estimated follow along.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button({ chaptersOpen = true }) { Text("Choose chapter") }
                 }
             } else {
@@ -216,6 +252,17 @@ private fun TextSourcesSheet(vm: NarrioViewModel, state: ListeningState, textSta
             Text("Choose the same language and edition as your recording. A matching title alone doesn't guarantee matching narration.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item { OutlinedButton(import, Modifier.fillMaxWidth(), enabled = !textState.working) { Icon(Icons.Rounded.UploadFile, null); Spacer(Modifier.width(8.dp)); Text("Choose EPUB, text, or VTT") } }
+        item {
+            val auto by vm.followAlongAuto.collectAsStateWithLifecycle()
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(auto, role = Role.Switch, onValueChange = vm::setFollowAlongAuto), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                    Text("Find and sync automatically", style = MaterialTheme.typography.titleSmall)
+                    Text("Looks for a matching ebook in this recording, TorBox, and Project Gutenberg, then recognizes the narration on this phone to keep the text in step. Audio isn't uploaded.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(auto, null)
+            }
+        }
         if (state.source?.textFiles?.isNotEmpty() == true) {
             item { Text("From this audio source", style = MaterialTheme.typography.titleMedium) }
             items(state.source.textFiles, key = { it.id }) { TextSourceRow(it, !textState.working) { select(it) } }

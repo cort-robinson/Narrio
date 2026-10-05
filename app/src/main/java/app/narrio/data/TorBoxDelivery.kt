@@ -39,11 +39,49 @@ class TorBoxDelivery(
         }
         form.addFormDataPart("file", "recording.torrent", torrent.toRequestBody("application/x-bittorrent".toMediaType()))
         }
+        val id = create(form)
+        if (id > 0) list().firstOrNull { it.number("id") == id }?.let(::preparation) ?: Preparation(id, false, 0f, "Preparing in TorBox") else Preparation(0, false, 0f, "Queued in TorBox")
+    }
+
+    private fun create(form: MultipartBody.Builder): Long {
         val body = form.addFormDataPart("seed", "1").addFormDataPart("allow_zip", "false").addFormDataPart("as_queued", "false").build()
         val data = request("torrents/createtorrent", body = body)["data"] as? JsonObject
             ?: throw ProviderException("TorBox did not return a preparation identifier. Check your TorBox dashboard.")
-        val id = data.number("torrent_id")
-        if (id > 0) list().firstOrNull { it.number("id") == id }?.let(::preparation) ?: Preparation(id, false, 0f, "Preparing in TorBox") else Preparation(0, false, 0f, "Queued in TorBox")
+        return data.number("torrent_id")
+    }
+
+    /** Book-text files (EPUB/TXT) in already-cached releases, by hash. Nothing is added to the account. */
+    suspend fun cachedTextFiles(hashes: List<String>): Map<String, List<String>> = withContext(Dispatchers.IO) {
+        hashes.map { it.lowercase() }.filter { it.matches(Regex("[a-f0-9]{40}")) }.distinct().chunked(100).flatMap { batch ->
+            parseCached(request("torrents/checkcached", mapOf("hash" to batch.joinToString(","), "format" to "object", "list_files" to "true"))["data"], ::isBookTextFile)
+                .map { (hash, item) -> hash to item.objects("files").map { it.text("name") } }
+        }.filter { it.second.isNotEmpty() }.toMap()
+    }
+
+    /** Ebook files already present in the account, labelled with their release name for matching. */
+    suspend fun accountText(): List<Pair<String, BookTextSource>> = withContext(Dispatchers.IO) {
+        list().filter { preparation(it).ready }.flatMap { item ->
+            textSources(item).map { item.text("name") to it.copy(attribution = "Ebook in your TorBox account") }
+        }
+    }
+
+    /**
+     * Resolves a file in a cached ebook release. The release is added to the account only after TorBox
+     * confirms it's cached, so this never starts an uncached download.
+     */
+    suspend fun cachedTextLink(hash: String, magnet: String, fileName: String): String = withContext(Dispatchers.IO) {
+        var item = list().firstOrNull { it.text("hash").equals(hash, true) }
+        if (item == null) {
+            if (cachedTextFiles(listOf(hash))[hash.lowercase()].isNullOrEmpty()) throw ProviderException("This ebook is no longer cached in TorBox.")
+            if (!magnet.startsWith("magnet:?")) throw ProviderException("This ebook release has no magnet link.")
+            val id = create(MultipartBody.Builder().setType(MultipartBody.FORM).addFormDataPart("magnet", magnet))
+            item = list().firstOrNull { (id > 0 && it.number("id") == id) || it.text("hash").equals(hash, true) }
+                ?: throw ProviderException("TorBox is still adding this ebook. Try again shortly.")
+        }
+        if (!preparation(item).ready) throw ProviderException("TorBox is still preparing this ebook. Try again shortly.")
+        val file = item.objects("files").firstOrNull { sameFile(it.text("name"), fileName) || sameFile(fileName, it.text("name")) }
+            ?: throw ProviderException("The ebook file is missing from this TorBox release.")
+        resolve(AudioPart(fileName, fileName, fileName, torrentId = item.number("id"), fileId = file.number("id")))
     }
 
     /** Playback's default path must pass this check before adding any new torrent. */
@@ -148,7 +186,7 @@ class TorBoxDelivery(
     companion object {
         private fun sameFile(a: String, b: String) = a == b || a.endsWith("/$b")
         private fun audioFormat(name: String) = when (val ext = name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" }
-        internal fun parseCached(data: JsonElement?): Map<String, JsonObject> {
+        internal fun parseCached(data: JsonElement?, keep: (String) -> Boolean = ::isBookAudioFile): Map<String, JsonObject> {
             val values = when (data) {
                 is JsonObject -> data.mapNotNull { (hash, value) -> (value as? JsonObject)?.let { hash to it } }
                 is JsonArray -> data.mapNotNull { (it as? JsonObject)?.let { item -> item.text("hash") to item } }
@@ -160,21 +198,29 @@ class TorBoxDelivery(
                 val files = (item["files"] as? JsonArray).orEmpty().mapIndexedNotNull { index, file ->
                     val obj = file as? JsonObject
                     val name = obj?.text("name")?.ifBlank { obj.text("path") } ?: file.stringValue()
-                    if (!isBookAudioFile(name)) null else buildJsonObject {
+                    if (!keep(name)) null else buildJsonObject {
                         put("id", index); put("name", name); put("size", obj?.number("size") ?: 0)
                     }
                 }
                 hash to buildJsonObject { put("files", JsonArray(files)); put("id", 0) }
             }.toMap()
         }
-        fun mapSources(item: JsonObject, book: Audiobook): List<AudioSource> {
+        private fun isBookTextFile(name: String) = textFileFormat(name).let { it == "EPUB" || it == "TXT" } &&
+            !Regex("(?i)(^|[/ _-])(readme|license|info|credits|sample|nfo)([. _-]|$)").containsMatchIn(name)
+
+        internal fun textSources(item: JsonObject): List<BookTextSource> {
             val torrentId = item.number("id")
-            val textFiles = item.objects("files").mapNotNull { file ->
+            return item.objects("files").mapNotNull { file ->
                 val name = file.text("name")
                 val format = textFileFormat(name) ?: return@mapNotNull null
                 if (Regex("(?i)(^|[/ _-])(readme|license|info|credits)([. _-]|$)").containsMatchIn(name)) return@mapNotNull null
                 BookTextSource("torbox:$torrentId:${file.number("id")}", name.substringAfterLast('/'), format = format, provider = "torbox", torrentId = torrentId, fileId = file.number("id"), attribution = "Companion file from your TorBox audio source")
             }
+        }
+
+        fun mapSources(item: JsonObject, book: Audiobook): List<AudioSource> {
+            val torrentId = item.number("id")
+            val textFiles = textSources(item)
             val files = item.objects("files").filter { isBookAudioFile(it.text("name")) }
             fun toPart(f: JsonObject): AudioPart {
                 val original = book.sources.flatMap { it.parts }.firstOrNull { it.name == f.text("name") || f.text("name").endsWith("/${it.name}") }
