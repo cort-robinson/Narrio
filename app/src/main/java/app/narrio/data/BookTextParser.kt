@@ -2,6 +2,8 @@ package app.narrio.data
 
 import app.narrio.domain.*
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
 import org.jsoup.parser.Parser
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -54,7 +56,15 @@ object BookTextParser {
 
     private val heading = Regex("^(?:chapter|part|book)[ \\t]+(?:[\\p{L}]+|[0-9]+)(?:[.: \\t–—-].*)?$", RegexOption.IGNORE_CASE)
 
-    private fun plain(bytes: ByteArray, title: String, author: String, attribution: String): BookText {
+    /** One plain-text block: a chapter heading line or a paragraph, with its whitespace-collapsed [text] at [offset]. */
+    class PlainBlock(val heading: Boolean, val offset: Int, val text: String, val lineOffset: Int)
+
+    /**
+     * Splits UTF-8 text into headings and paragraphs in the `"text"` offset space: character offsets after Project
+     * Gutenberg boilerplate is removed and line endings are normalized. A paragraph's passages start at [PlainBlock.offset]
+     * plus their index in [PlainBlock.text].
+     */
+    fun plainBlocks(bytes: ByteArray): List<PlainBlock> {
         var text = utf8(bytes).replace("\r\n", "\n").replace('\r', '\n')
         if (text.indexOf('\u0000') >= 0 || Regex("(?is)^\\s*(?:<!doctype\\s+html|<html\\b)").containsMatchIn(text))
             throw ProviderException("This isn't a plain-text book. Choose a UTF-8 .txt file or an EPUB.")
@@ -62,25 +72,19 @@ object BookTextParser {
         if (start != null) text = text.substring(start.range.last + 1)
         val end = Regex("(?im)^\\*\\*\\* END OF (?:THE|THIS) PROJECT GUTENBERG.*").find(text)
         if (end != null) text = text.substring(0, end.range.first)
-        val chapters = mutableListOf<TextChapter>()
-        var chapterTitle = title
-        var chapterStart = 0
-        val lines = mutableListOf<TextPassage>()
-        fun finish() {
-            if (lines.isNotEmpty()) chapters += TextChapter("text@$chapterStart", chapterTitle, lines.toList())
-            lines.clear()
-        }
+        val blocks = mutableListOf<PlainBlock>()
         val paragraph = StringBuilder()
         var paragraphOffset = 0
         var offset = 0
         fun finishParagraph() {
-            if (paragraph.isNotEmpty()) lines += splitPassages(paragraph.toString(), "text", paragraphOffset)
+            if (paragraph.isNotEmpty()) paragraph.toString().replace(Regex("\\s+"), " ").trim().takeIf { it.isNotEmpty() }
+                ?.let { blocks += PlainBlock(false, paragraphOffset, it, paragraphOffset) }
             paragraph.clear()
         }
         for (raw in text.split('\n')) {
             val value = raw.trim()
             when {
-                heading.matches(value) -> { finishParagraph(); finish(); chapterTitle = value; chapterStart = offset }
+                heading.matches(value) -> { finishParagraph(); blocks += PlainBlock(true, offset + raw.indexOf(value), value, offset) }
                 value.isBlank() -> finishParagraph()
                 else -> {
                     if (paragraph.isEmpty()) paragraphOffset = offset
@@ -91,6 +95,22 @@ object BookTextParser {
             offset += raw.length + 1
         }
         finishParagraph()
+        return blocks
+    }
+
+    private fun plain(bytes: ByteArray, title: String, author: String, attribution: String): BookText {
+        val chapters = mutableListOf<TextChapter>()
+        var chapterTitle = title
+        var chapterStart = 0
+        val lines = mutableListOf<TextPassage>()
+        fun finish() {
+            if (lines.isNotEmpty()) chapters += TextChapter("text@$chapterStart", chapterTitle, lines.toList())
+            lines.clear()
+        }
+        for (block in plainBlocks(bytes)) {
+            if (block.heading) { finish(); chapterTitle = block.text; chapterStart = block.lineOffset }
+            else lines += splitPassages(block.text, "text", block.offset)
+        }
         finish()
         return BookText(fingerprint(bytes), title, author, "TXT", attribution, chapters)
     }
@@ -125,7 +145,7 @@ object BookTextParser {
         files["META-INF/encryption.xml"]?.let { data ->
             val encryption = Jsoup.parse(data.toString(Charsets.UTF_8), "", Parser.xmlParser())
             if (encryption.getAllElements().filter { it.tagName().substringAfter(':') == "EncryptionMethod" }.any { it.attr("Algorithm") !in setOf("http://www.idpf.org/2008/embedding", "http://ns.adobe.com/pdf/enc#RC") })
-                throw ProviderException("Encrypted or DRM-protected ebooks aren't supported. Choose a DRM-free EPUB or text file.")
+                throw EbookImportException(EbookImportFailure.DRM_PROTECTED, "Encrypted or DRM-protected ebooks aren't supported. Choose a DRM-free EPUB or text file.")
         }
         val packagePath = xml("META-INF/container.xml").getElementsByTag("rootfile").firstOrNull()?.attr("full-path")?.let(::safePath)
             ?: throw ProviderException("This isn't a readable EPUB. Choose another file.")
@@ -142,13 +162,9 @@ object BookTextParser {
             val path = resolvePath(packagePath, item.attr("href"))
             val html = files[path]?.let { Jsoup.parse(ByteArrayInputStream(it), null, "") }
                 ?: throw ProviderException("This EPUB is missing a chapter. Choose another edition.")
-            html.select("script,style,nav,svg,#pg-header,#pg-footer,#pg-start-separator,#pg-end-separator,.pg-boilerplate").remove()
+            val blocks = EpubTextBlocks.extract(html)
             if (html.body().attr("epub:type").split(' ').any { it in setOf("toc", "cover", "titlepage", "copyright-page") }) continue
-            val blocks = html.body().select("h1,h2,h3,h4,p,li,blockquote,pre,td,th").filter { node ->
-                node.parents().none { it.tagName() in setOf("p", "li", "blockquote", "pre", "td", "th") }
-            }
             var chapterTitle = html.selectFirst("h1,h2,h3")?.text()?.take(200)?.ifBlank { "Chapter ${chapters.size + 1}" } ?: "Chapter ${chapters.size + 1}"
-            var offset = 0
             var section = 0
             var hasBody = false
             val lines = mutableListOf<TextPassage>()
@@ -156,30 +172,27 @@ object BookTextParser {
                 if (lines.isNotEmpty()) chapters += TextChapter("$path#$section", chapterTitle, lines.toList())
                 lines.clear(); section++; hasBody = false
             }
-            for (node in blocks) {
-                val value = node.text().trim()
-                if (value.isBlank()) continue
-                val isHeading = node.tagName() in setOf("h1", "h2") || heading.matches(value)
-                if (isHeading && hasBody) { finish(); chapterTitle = value.take(200) }
-                lines += splitPassages(value, path, offset)
-                offset += value.length + 1
+            for (block in blocks) {
+                val node = block.element
+                val isHeading = node.tagName() in setOf("h1", "h2") || heading.matches(block.text)
+                if (isHeading && hasBody) { finish(); chapterTitle = block.text.take(200) }
+                lines += splitPassages(block.text, path, block.offset)
                 if (!node.tagName().startsWith("h")) hasBody = true
                 if (++totalPassages > MAX_PASSAGES) throw ProviderException("This EPUB contains too many text blocks.")
             }
-            if (blocks.isEmpty()) lines += splitPassages(html.body().text(), path, 0)
             finish()
         }
         val language = opf.getElementsByTag("dc:language").firstOrNull()?.text()?.trim()?.take(35).orEmpty()
         return BookText(fingerprint(bytes), title, author, "EPUB", attribution, chapters, language = language)
     }
 
-    private fun safePath(path: String): String {
+    internal fun safePath(path: String): String {
         if (path.isBlank() || path.startsWith('/') || path.contains('\\') || path.contains(':') || path.split('/').any { it == ".." })
             throw ProviderException("This EPUB contains an unsafe file path. Choose another edition.")
         return path.removePrefix("./").trimEnd('/')
     }
 
-    private fun resolvePath(packagePath: String, href: String): String {
+    internal fun resolvePath(packagePath: String, href: String): String {
         val uri = runCatching { URI(packagePath).resolve(href).normalize() }.getOrElse { throw ProviderException("This EPUB has an unreadable chapter link.") }
         if (uri.isAbsolute || uri.rawAuthority != null || uri.rawQuery != null) throw ProviderException("This EPUB links to external chapters. Choose an EPUB with its text included.")
         return safePath(URLDecoder.decode(uri.rawPath.replace("+", "%2B"), "UTF-8"))
@@ -230,5 +243,30 @@ object BookTextParser {
             while (offset < text.length && text[offset].isWhitespace()) offset++
         }
         return output
+    }
+}
+
+/**
+ * The readable blocks of one EPUB chapter and their offsets: the `(resource, offset)` space of [TextPassage] for
+ * EPUB text. Offsets are cumulative over block text (each block plus one separator), so the reader can map any
+ * position in a chapter to the same space. Removes non-text and boilerplate elements from [html] first.
+ */
+object EpubTextBlocks {
+    class Block(val element: Element, val text: String, val offset: Int)
+
+    const val REMOVED = "script,style,nav,svg,#pg-header,#pg-footer,#pg-start-separator,#pg-end-separator,.pg-boilerplate"
+    const val CANDIDATES = "h1,h2,h3,h4,p,li,blockquote,pre,td,th"
+    val CONTAINERS = setOf("p", "li", "blockquote", "pre", "td", "th")
+
+    fun extract(html: Document): List<Block> {
+        html.select(REMOVED).remove()
+        val candidates = html.body().select(CANDIDATES).filter { node -> node.parents().none { it.tagName() in CONTAINERS } }
+        // A chapter without block elements is one block: its whole body text.
+        if (candidates.isEmpty()) return html.body().text().takeIf { it.isNotBlank() }?.let { listOf(Block(html.body(), it, 0)) }.orEmpty()
+        var offset = 0
+        return candidates.mapNotNull { node ->
+            val text = node.text().trim()
+            if (text.isBlank()) null else Block(node, text, offset).also { offset += text.length + 1 }
+        }
     }
 }

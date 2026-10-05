@@ -47,7 +47,19 @@ data class BookTextState(
     val findingStep: String = "",
     val autoMissed: Boolean = false,
 )
+/** Find ebook for one book: every matching candidate, the provider being checked, and what's being added. */
+data class EbookSearchState(
+    val bookId: String = "", val searching: Boolean = false, val step: String = "", val searched: Boolean = false,
+    val results: List<BookTextSource> = emptyList(), val incomplete: Boolean = false, val error: String? = null,
+    /** Candidate id, or [FILE], while an edition is being added; [added] is set once it is. */
+    val adding: String? = null, val added: String? = null,
+) { companion object { const val FILE = "file" } }
+/** Adding an ebook file from the shelf as a new book. */
+data class EbookImportState(val working: Boolean = false, val error: String? = null)
+/** The book, edition, and place Read opens. */
+data class ReaderRequest(val book: Audiobook, val edition: EbookEdition, val place: PlaceSummary? = null)
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class NarrioViewModel(application: Application) : AndroidViewModel(application) {
     val graph = (application as NarrioApplication).graph
     val catalog = MutableStateFlow(CatalogState())
@@ -70,9 +82,44 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     /** Emitted after Now playing is dismissed, so the shell can offer Undo. */
     val dismissedPlayback = MutableSharedFlow<ListeningState>(extraBufferCapacity = 1)
     val shelf = graph.library.observeShelf().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val shelfState = graph.library.observeShelfState().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun editions(bookId: String): Flow<List<EbookEdition>> = combine(graph.library.observeEditions(bookId), graph.library.observeBookText(bookId)) { editions, active ->
+        editions.map { it.edition(it.editionId == active?.documentId) }
+    }
+    fun sharedPosition(bookId: String) = graph.sharedPositions.observe(bookId)
+    suspend fun activateEdition(bookId: String, editionId: String) = graph.followAlong.activateEdition(bookId, editionId)
+    suspend fun removeEdition(bookId: String, editionId: String) = graph.followAlong.removeEdition(bookId, editionId)
     val playback = graph.playback.state
     val bookText = MutableStateFlow(BookTextState())
+    /** Library data and sync seen by the shelf and details; replaceable so tests and integration can supply their own. */
+    val readingLibrary = MutableStateFlow<ReadingLibrary>(RoomReadingLibrary(graph))
+    val shelfFormats: StateFlow<Map<String, BookFormats>> = readingLibrary.flatMapLatest { it.observeShelf() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    val detailFormats: StateFlow<BookFormats?> = combine(readingLibrary, selection.map { it.book }.distinctUntilChanged { a, b -> a?.id == b?.id && a?.sources == b?.sources }, ::Pair)
+        .flatMapLatest { (library, book) -> if (book == null) flowOf(null) else library.observeBook(book) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val shelfFilter = MutableStateFlow(ShelfFilter.ALL)
+    val ebookSearch = MutableStateFlow(EbookSearchState())
+    val ebookImport = MutableStateFlow(EbookImportState())
+    val reader = MutableStateFlow<ReaderRequest?>(null)
+    /** Moves to the shared place large enough to offer Undo; the shell shows them with [showJump]. */
+    val positionJumps = MutableSharedFlow<PositionJump>(extraBufferCapacity = 1)
+    private var ebookJob: Job? = null
+    /** The book an ebook file is being added to; null adds the file as a new book. */
+    private var ebookImportTarget: Audiobook? = null
     val narrationSync = graph.narrationSync.status
+    val readingSync = graph.readingSync.state
+    val backgroundAlignment = MutableStateFlow(graph.bookAlignment.enabled())
+    fun setBackgroundAlignment(value: Boolean) { graph.bookAlignment.setEnabled(value); backgroundAlignment.value = value }
+    fun undoSyncJump() = graph.playback.service?.undoSyncJump()
+    fun undoReadingJump(session: app.narrio.reader.ReaderSession, previous: ContentCursor, navigationVersion: Long) = viewModelScope.launch {
+        if (reader.value?.book?.id != session.book.bookId || session.navigationVersion != navigationVersion) return@launch
+        session.undo(previous); clearSyncJump()
+    }
+    fun clearSyncJump() = graph.readingSync.clearJump()
+    suspend fun resolveReadingStart(bookId: String, editionId: String, previous: ContentCursor?, pagesMoved: Int? = null) =
+        graph.readingSync.readingStart(bookId, editionId, previous, pagesMoved)
+    fun seekFromText(cursor: ContentCursor) = viewModelScope.launch { graph.playback.service?.seekFromText(cursor) }
     /** Finds ebooks and syncs them with narration without being asked. */
     val followAlongAuto = MutableStateFlow(graph.preferences.getBoolean("followAlongAuto", true))
     private val autoFindText get() = followAlongAuto.value
@@ -95,6 +142,17 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         controllerFuture.addListener({ runCatching { controller = controllerFuture.get() } }, ContextCompat.getMainExecutor(application))
         search()
         viewModelScope.launch {
+            readingSync.map { it.audioJump }.distinctUntilChanged().collect { jump ->
+                val target = jump?.destination
+                if (jump?.offerUndo == true && target != null) {
+                    val state = readingSync.value
+                    val source = graph.mappingRepository.snapshot(state.bookId, target.sourceId)?.source
+                    announceJump(PositionJump(state.bookId, jump.from ?: PositionOrigin.READING,
+                        listeningPlace(target, source).label, jump.confidence, ::undoSyncJump))
+                }
+            }
+        }
+        viewModelScope.launch {
             playback.map { it.book?.id }.distinctUntilChanged().collectLatest { id ->
                 textSearchJob?.cancel()
                 bookText.value = BookTextState(bookId = id.orEmpty(), loading = id != null)
@@ -111,6 +169,12 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
+
+    /** The book open in the full reader, if any. */
+    fun read(bookId: String) = viewModelScope.launch { graph.library.find(bookId)?.book()?.let(::read) }
+    /** True when the book has an attached EPUB or text edition the reader can open (timing tracks aren't readable). */
+    fun canRead(bookId: String): Flow<Boolean> = graph.library.observeBookText(bookId)
+        .map { entry -> entry != null && graph.editionFiles.original(bookId, entry.documentId) != null }
 
     fun search(value: String = query.value, cat: String = category.value) {
         val browseCategory = if (value.isBlank()) cat else "All"
@@ -153,7 +217,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     fun chooseRecording(recording: Audiobook) {
         val book = sourceSearch.value.book ?: return
         if (recording !in sourceSearch.value.results) return
-        open(SourceQuality.describe(recording, book), keepSources = true)
+        viewModelScope.launch { open(graph.followAlong.adoptRecording(SourceQuality.describe(recording, book), book), keepSources = true) }
     }
 
     fun chooseVersion(recording: Audiobook) {
@@ -161,13 +225,13 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /** Plays the chosen recording directly when it is ready; otherwise its page offers explicit TorBox preparation. */
-    fun listenToChoice() {
+    fun listenToChoice() = viewModelScope.launch {
         val search = sourceSearch.value
-        val book = search.book ?: return
-        val recording = search.choice ?: return
-        val described = SourceQuality.describe(recording, book)
+        val book = search.book ?: return@launch
+        val recording = search.choice ?: return@launch
+        val described = graph.followAlong.adoptRecording(SourceQuality.describe(recording, book), book)
         val formats = if (recording.provider == "archive") recording.sources else recording.sources.filter { it.format in recording.cachedFormats }
-        if (!SourceQuality.ready(recording) || formats.isEmpty()) return open(described, keepSources = true)
+        if (!SourceQuality.ready(recording) || formats.isEmpty()) return@launch open(described, keepSources = true)
         val saved = graph.preferences.getString("format:${described.id}", "")
         val source = formats.firstOrNull { it.format == saved } ?: formats.firstOrNull { it.format == "M4B" } ?: formats.first()
         start(described, source, if (recording.provider == "archive") "archive" else "torbox")
@@ -175,6 +239,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun open(book: Audiobook, keepSources: Boolean = false) {
         playerOpen.value = false
+        reader.value = null
         preparation.value = null
         preferredFormat.value = ""
         detailJob?.cancel()
@@ -184,12 +249,14 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         selection.value = SelectionState(book, !book.detailsLoaded)
         detailJob = viewModelScope.launch {
             try {
-                var full = if (book.detailsLoaded) book else graph.catalog.recording(book.id)
+                var full = if (book.detailsLoaded) book else graph.catalog.recording(book.recordingId.ifBlank { book.id }).forBook(book)
                 if (!connected.value) full = full.copy(cacheState = "unchecked", cachedFormats = emptyList())
                 selection.value = SelectionState(full)
                 if (full.provider == "catalog") {
                     val search = sourceSearch.value
-                    if (search.book?.id != full.id || !search.searched || search.loading) findSources(full)
+                    // An ebook-only book looks for a recording only when asked: Find audiobook.
+                    val ebookOnly = readingLibrary.value.observeBook(full).first().let { it.ebook && !it.audio }
+                    if (!ebookOnly && (search.book?.id != full.id || !search.searched || search.loading)) findSources(full)
                     return@launch
                 }
                 val saved = graph.library.find(full.id)
@@ -235,17 +302,105 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun refreshMetadata(book: Audiobook) = loadMetadata(book, true)
-    fun back() { if (playerOpen.value) playerOpen.value = false else if (sourceSearch.value.book?.provider == "catalog" && selection.value.book?.provider != "catalog") open(sourceSearch.value.book!!, keepSources = true) else { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); selection.value = SelectionState(); sourceSearch.value = SourceSearchState() } }
-    fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); sourceSearch.value = SourceSearchState(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false }
+    fun back() { if (reader.value != null) reader.value = null else if (playerOpen.value) playerOpen.value = false else if (sourceSearch.value.book != null && selection.value.book?.recordingId?.isNotBlank() == true && selection.value.book?.recordingId != sourceSearch.value.book?.recordingId) open(sourceSearch.value.book!!, keepSources = true) else { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); selection.value = SelectionState(); sourceSearch.value = SourceSearchState() } }
+    fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); sourceSearch.value = SourceSearchState(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false; reader.value = null }
     fun save(book: Audiobook) = viewModelScope.launch { graph.library.save(book); messages.emit("Saved to your shelf") }
     fun remove(book: Audiobook) = viewModelScope.launch {
         textJobs[book.id]?.cancel(); autoTextJobs[book.id]?.cancel()
+        if (reader.value?.book?.id == book.id) reader.value = null
         if (playback.value.book?.id == book.id) graph.playback.service?.forget()
         downloads.value.filter { it.book.id == book.id }.forEach { graph.offline.remove(it.source) }
         graph.followAlong.remove(book.id)
         graph.library.remove(book.id); messages.emit("Removed from your shelf and phone downloads")
     }
     fun resume(entry: ShelfEntry) { entry.source()?.let { start(entry.book(), it, it.delivery) } ?: open(entry.book()) }
+
+    /** Continue reopens whichever mode last moved the book's shared place. */
+    fun continueBook(entry: ShelfEntry) {
+        if (shelfFormats.value[entry.bookId]?.let { it.lastMode ?: it.leadingMode } == PositionOrigin.READING) read(entry.book()) else resume(entry)
+    }
+
+    /** Opens the active edition at the shared place: the reading place itself, or its mapped counterpart. */
+    fun read(book: Audiobook) = viewModelScope.launch {
+        val formats = readingLibrary.value.observeBook(book).first()
+        val edition = formats.activeEdition ?: return@launch open(book)
+        if (!edition.active) readingLibrary.value.activate(book.id, edition.id)
+        val place = if (formats.position?.origin == PositionOrigin.READING) placeSummary(formats) else counterpartPlace(formats)
+        playerOpen.value = false
+        reader.value = ReaderRequest(book, edition, place)
+    }
+    fun closeReader() { reader.value = null }
+    fun setShelfFilter(filter: ShelfFilter) { shelfFilter.value = filter }
+    private var announcedJump: PositionJump? = null
+    fun announceJump(jump: PositionJump) { announcedJump = jump; positionJumps.tryEmit(jump) }
+    fun finishJump(jump: PositionJump) { if (announcedJump === jump) { announcedJump = null; clearSyncJump() } }
+
+    /** Lists matching ebooks from the recording's files, TorBox, cached ebook releases, and Project Gutenberg. */
+    fun findEbooks(book: Audiobook) {
+        ebookJob?.cancel()
+        ebookSearch.value = EbookSearchState(book.id, searching = true, searched = true)
+        fun update(change: (EbookSearchState) -> EbookSearchState) = ebookSearch.update { if (it.bookId == book.id) change(it) else it }
+        ebookJob = viewModelScope.launch {
+            try {
+                val found = readingLibrary.value.findEditions(book, connected.value) { step -> update { it.copy(step = step) } }
+                update { it.copy(results = found.results, incomplete = found.incomplete) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { update { it.copy(error = friendly(error)) } }
+            finally { update { it.copy(searching = false, step = "") } }
+        }
+    }
+
+    /** Opening Find ebook again reuses a complete lookup for the same book. */
+    fun openEbookSearch(book: Audiobook) {
+        val state = ebookSearch.value
+        if (state.bookId != book.id || !state.searched || state.error != null || state.incomplete) findEbooks(book)
+        else ebookSearch.update { it.copy(added = null) }
+    }
+
+    fun addEbook(book: Audiobook, candidate: BookTextSource) = editionWork(book, candidate.id) { readingLibrary.value.addEdition(book, candidate) }
+
+    fun chooseEdition(book: Audiobook, editionId: String) = viewModelScope.launch {
+        try { readingLibrary.value.activate(book.id, editionId) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { messages.emit(textError(error)) }
+    }
+
+    /** [target] receives the chosen file as an edition; without one, the file becomes a new ebook-only book. */
+    fun beginEbookImport(target: Audiobook?) {
+        ebookImportTarget = target
+        if (target == null) ebookImport.value = EbookImportState()
+    }
+
+    fun importEbook(uri: Uri?) {
+        val target = ebookImportTarget
+        ebookImportTarget = null
+        if (uri == null) return
+        if (target != null) { editionWork(target, EbookSearchState.FILE) { readingLibrary.value.importEdition(target, uri) }; return }
+        viewModelScope.launch {
+            ebookImport.value = EbookImportState(working = true)
+            try {
+                val book = readingLibrary.value.importBook(uri)
+                ebookImport.value = EbookImportState()
+                open(book)
+                messages.emit("${book.title} is on your shelf, ready to read.")
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) { ebookImport.value = EbookImportState(error = textError(error)) }
+        }
+    }
+    fun dismissEbookImport() { ebookImport.value = EbookImportState() }
+
+    private fun editionWork(book: Audiobook, adding: String, action: suspend () -> EbookEdition) = viewModelScope.launch {
+        if (ebookSearch.value.adding != null) return@launch
+        if (ebookSearch.value.bookId != book.id) ebookSearch.value = EbookSearchState(book.id)
+        ebookSearch.update { it.copy(adding = adding, added = null, error = null) }
+        try {
+            val edition = action()
+            ebookSearch.update { if (it.bookId == book.id) it.copy(added = edition.id) else it }
+            messages.emit("Ebook added. Read opens it.")
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { ebookSearch.update { if (it.bookId == book.id) it.copy(error = textError(error)) else it } }
+        finally { ebookSearch.update { if (it.bookId == book.id) it.copy(adding = null) else it } }
+    }
 
     fun start(book: Audiobook, source: AudioSource, delivery: String) = viewModelScope.launch {
         if (busy.value) return@launch
@@ -454,7 +609,10 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     fun followAlongVisible(visible: Boolean) {
         syncJob?.cancel()
         syncJob = if (!visible) null else viewModelScope.launch {
-            graph.narrationSync.run({ syncTarget() }) { bookId, binding -> graph.followAlong.bind(bookId, binding) }
+            graph.narrationSync.run({ syncTarget() }) { bookId, binding ->
+                graph.followAlong.mergeNarration(bookId, binding, binding.anchors.filter { it.auto }, playback.value.durationMs)
+                graph.mappingRepository.snapshot(bookId, binding.sourceId)?.let { graph.readingSync.refreshPairing(bookId, it) }
+            }
         }
     }
 
@@ -528,6 +686,12 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         val part = state.part ?: return@launch
         val binding = bookText.value.bindings.firstOrNull { it.sourceId == source.id && it.partId == part.id }
         if (binding != null) graph.followAlong.bind(state.book!!.id, binding.copy(anchors = emptyList()))
+        val snapshot = state.book?.let { graph.mappingRepository.snapshot(it.id, source.id) }
+        if (snapshot != null) {
+            val key = alignmentKey(state.book!!.id, snapshot, part.id)
+            graph.alignmentJobs.save(AlignmentProgress(key))
+            graph.bookAlignment.enqueue(key, graph.offline.complete(part))
+        }
         graph.narrationSync.retry(part.id)
         bookText.value = bookText.value.copy(error = null)
     }
