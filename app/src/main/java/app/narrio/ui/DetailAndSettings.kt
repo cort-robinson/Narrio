@@ -401,6 +401,7 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 @Composable
 private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, key: String, setKey: (String) -> Unit, openAddons: () -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
+    val backgroundAlignment by vm.backgroundAlignment.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item { AppearanceEntry(appearance, openAppearance) }
@@ -410,6 +411,15 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
             }
         }
         item { UpdateSettings(vm.graph.updates) }
+        item {
+            Text("Reading & listening", style = MaterialTheme.typography.headlineSmall)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Sync narration in the background", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                Switch(backgroundAlignment, vm::setBackgroundAlignment, Modifier.testTag("background-alignment"))
+            }
+            Text("Align downloaded audio on this phone. Streaming alignment waits for Wi-Fi and charging. The English narration model downloads once over Wi-Fi.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         item {
             Text("TorBox", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
