@@ -168,13 +168,14 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
             CustomAccessibilityAction("Previous page") { controller.previous(); true },
         )
     }) {
-        // Unfolded in landscape (or any wide, tall window), pages sit side by side like an open book.
-        val spread = maxWidth >= 840.dp && maxHeight >= 480.dp && maxWidth > maxHeight
+        // Unfolded in landscape (or any similarly wide and tall window), pages sit side by side like an open book.
+        // Height separates an unfolded inner display (about 830 x 690 dp) from a phone on its side (about 915 x 410 dp).
+        val spread = maxWidth > maxHeight && maxWidth >= 720.dp && maxHeight >= 560.dp
         val preferences = remember(settings, colors, spread) { settings.toEpubPreferences(colors, spread) }
         val top = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
         val bottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
         val margin = if (spread) 40.dp else 0.dp
-        EpubReaderView(controller, preferences, Modifier.fillMaxSize()
+        EpubReaderView(controller, preferences, spread, Modifier.fillMaxSize()
             .padding(top = top + 36.dp, bottom = bottom + 34.dp, start = margin, end = margin)
             .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
             .testTag("reader-page"))

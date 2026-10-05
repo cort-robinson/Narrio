@@ -13,7 +13,7 @@ import org.readium.r2.navigator.epub.EpubNavigatorFragment
 
 /** A FragmentActivity so the reader can host Readium's navigator fragment inside Compose. */
 class MainActivity : FragmentActivity() {
-    /** Consulted before the window handles a key; the reader uses it for volume-key page turns. */
+    /** Consulted for keys no view handled; the reader uses it for volume-key page turns. */
     var keyInterceptor: ((KeyEvent) -> Boolean)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,7 +33,9 @@ class MainActivity : FragmentActivity() {
         setIntent(intent)
         openUpdates(intent)
     }
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean = keyInterceptor?.invoke(event) == true || super.dispatchKeyEvent(event)
+    // Volume keys reach the activity because no view consumes them; the reader can claim them before the system does.
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = keyInterceptor?.invoke(event) == true || super.onKeyDown(keyCode, event)
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = keyInterceptor?.invoke(event) == true || super.onKeyUp(keyCode, event)
     private fun openUpdates(intent: Intent?) {
         if (intent?.getBooleanExtra("showUpdates", false) == true) {
             ViewModelProvider(this)[app.narrio.ui.NarrioViewModel::class.java].navigate(2)

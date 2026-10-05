@@ -105,7 +105,8 @@ class ReaderSession(
     /** "p. 118" when the edition has a page list, otherwise a percentage; null until the edition is measured. */
     fun label(place: BookPlace): String? {
         val pages = book.pages.value
-        if (pages.isNotEmpty()) pages.lastOrNull { (book.compare(it.place, place) ?: 1) <= 0 }?.let { return "p. ${it.label}" }
+        // A printed edition has no page before its first page mark; don't mix percentages into its page numbers.
+        if (pages.isNotEmpty()) return pages.lastOrNull { (book.compare(it.place, place) ?: 1) <= 0 }?.let { "p. ${it.label}" }
         val layout = book.layout.value ?: return null
         return "${(layout.progression(place.resource, place.offset) * 100).toInt()}%"
     }

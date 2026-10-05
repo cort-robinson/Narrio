@@ -58,7 +58,7 @@ object ReaderDocuments {
         return serialize(document, xml = true)
     }
 
-    fun prepareCss(bytes: ByteArray): ByteArray = EpubSanitizer.sanitizeCss(bytes.toString(Charsets.UTF_8).removePrefix("﻿")).toByteArray(Charsets.UTF_8)
+    fun prepareCss(bytes: ByteArray): ByteArray = EpubSanitizer.sanitizeCss(bytes.toString(Charsets.UTF_8).removePrefix("\uFEFF")).toByteArray(Charsets.UTF_8)
 
     private fun serialize(document: Document, xml: Boolean): ByteArray {
         document.outputSettings().prettyPrint(false).charset(Charsets.UTF_8).escapeMode(Entities.EscapeMode.xhtml)

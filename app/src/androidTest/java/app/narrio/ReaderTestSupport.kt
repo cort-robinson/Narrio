@@ -34,6 +34,9 @@ class ReaderSeeds(private val compose: ReaderRule) {
 
     /** Opens [book] in the reader and waits for its first laid-out page. */
     fun open(book: Audiobook, appearance: AppearanceSettings = AppearanceSettings()): ReaderController {
+        // Android's one-time "Viewing full screen" hint would otherwise take focus (and key events) on first use.
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("settings put secure immersive_mode_confirmations confirmed").close()
         compose.runOnIdle {
             graph.preferences.edit().putBoolean("notificationAsked", true).remove("readerSettings").apply()
             vm.updateAppearance(appearance)

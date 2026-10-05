@@ -50,6 +50,11 @@ class ReaderExperienceTest {
         compose.onNodeWithText("IV · Martha").performClick()
         compose.waitUntil(10_000) { controller.cursor.value?.resource == "OEBPS/text/chapter4.xhtml" }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("reader-return").fetchSemanticsNodes().isNotEmpty() }
+
+        // Going back is a backward jump: it must land on the earlier page, not the end of that chapter.
+        val before = controller.returnPoint.value!!
+        compose.onNodeWithTag("reader-return").performClick()
+        compose.waitUntil(10_000) { controller.visible.value?.contains(before) == true }
     }
 
     @Test fun hostileEpubRunsNoScriptsAndLoadsNothingRemote() {
@@ -133,6 +138,16 @@ class ReaderExperienceTest {
         val passage = app.narrio.data.BookTextParser.parse(text, "TXT", "A Plain Book").chapters.flatMap { it.passages }
             .last { it.offset <= controller.visible.value!!.first.offset }
         assertEquals("text", passage.resource)
+    }
+
+    @Test fun volumeKeysTurnPagesWhileNothingPlays() {
+        val book = seed("reader-volume-test", ReaderFixtures.sampleEpub(), "EPUB", "The Secret Garden")
+        val controller = seeds.open(book)
+        val first = controller.visible.value!!.first
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent KEYCODE_VOLUME_DOWN").close()
+        compose.waitUntil(10_000) { (controller.visible.value?.first?.offset ?: 0) > first.offset }
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent KEYCODE_VOLUME_UP").close()
+        compose.waitUntil(10_000) { controller.visible.value?.first?.offset == first.offset }
     }
 
     private fun settled(controller: ReaderController): Boolean { Thread.sleep(400); return controller.visible.value != null }

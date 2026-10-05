@@ -90,6 +90,9 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
     private var restoreJob: Job? = null
     private var turnsSinceJump = 0
     private var restoreAttempts = 0
+    /** Where the last [goTo] should land; re-sent if the navigator settles elsewhere (its pager can override a jump). */
+    private var target: ContentCursor? = null
+    private var targetAttempts = 0
     private var opening = false
     private val decorationGroups = mutableMapOf<String, List<TextDecoration>>()
 
@@ -104,6 +107,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         val navigator = navigator ?: run { if (asReader) _cursor.value = cursor; return false }
         if (asReader) { _cursor.value?.let { if (it != cursor) _returnPoint.value = it }; jumpPending = true; turnsSinceJump = 0 }
         else markProgrammatic()
+        target = cursor; targetAttempts = 2
         return navigator.go(locator, animated)
     }
 
@@ -247,7 +251,18 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             val first = book.cursor(index.resource, if (firstPosition.blockOffset == null) index.blocks.firstOrNull()?.offset ?: 0 else CursorMapping.offset(index, firstPosition))
             val end = obj.optJSONObject("last")?.position()?.let { book.cursor(index.resource, CursorMapping.offset(index, it)) }
             val previous = _visible.value?.first
-            _visible.value = VisibleRange(first, end)
+            val range = VisibleRange(first, end)
+            _visible.value = range
+            target?.let { wanted ->
+                if (!range.contains(wanted) && targetAttempts > 0) {
+                    targetAttempts--
+                    if (System.currentTimeMillis() < programmaticUntil) markProgrammatic()
+                    book.locator(wanted)?.let { navigator.go(it) }
+                    scheduleProbe(350)
+                    return@launch
+                }
+                target = null
+            }
             if (_cursor.value == null) _cursor.value = first
             _ready.value = true
             if (opening) { opening = false; programmaticUntil = System.currentTimeMillis() + 700 }

@@ -18,6 +18,9 @@ import kotlinx.coroutines.launch
 import org.readium.r2.navigator.epub.EpubNavigatorFactory
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 import org.readium.r2.navigator.epub.EpubPreferences
+import org.readium.r2.navigator.epub.css.ColCount
+import org.readium.r2.navigator.epub.css.Length
+import org.readium.r2.navigator.epub.css.RsProperties
 import org.readium.r2.navigator.preferences.Color
 import org.readium.r2.navigator.preferences.ColumnCount
 import org.readium.r2.navigator.preferences.FontFamily
@@ -55,8 +58,11 @@ fun ReaderSettings.toEpubPreferences(colors: ReaderColors, spread: Boolean) = Ep
 )
 
 @OptIn(ExperimentalReadiumApi::class)
-private fun navigatorConfiguration(selection: ActionMode.Callback?) = EpubNavigatorFragment.Configuration {
+private fun navigatorConfiguration(selection: ActionMode.Callback?, spread: Boolean) = EpubNavigatorFragment.Configuration {
     servedAssets += "fonts/.*"
+    // ReadiumCSS only lays out two columns above 60em of width; an unfolded phone in landscape is narrower, so a
+    // spread sets the reading-system column count directly. These properties are fixed when the navigator is created.
+    if (spread) readiumCssRsProperties = RsProperties(colCount = ColCount.TWO, colWidth = Length.Rem(12.0))
     selectionActionModeCallback = selection
     for ((family, file) in listOf("Newsreader" to "newsreader.ttf", "Manrope" to "manrope.ttf", ReaderDocuments.NARRIO_PAIRING to "manrope.ttf")) {
         addFontFamilyDeclaration(FontFamily(family)) {
@@ -67,13 +73,13 @@ private fun navigatorConfiguration(selection: ActionMode.Callback?) = EpubNaviga
 
 /**
  * Hosts Readium's EPUB navigator for [controller]. The navigator opens at the controller's cursor, follows
- * [preferences] as they change, and restores the reader's place whenever its size changes (rotation, folding,
+ * [preferences] as they change, is recreated at the same cursor when [spread] (two pages side by side) changes, and restores the reader's place whenever its size changes (rotation, folding,
  * window resizing). [selectionActionMode] can extend the text-selection menu; by default Android's own
  * actions (copy, share, translate, dictionary apps) appear.
  */
 @OptIn(ExperimentalReadiumApi::class)
 @Composable
-fun EpubReaderView(controller: ReaderController, preferences: EpubPreferences, modifier: Modifier = Modifier, selectionActionMode: ActionMode.Callback? = null) {
+fun EpubReaderView(controller: ReaderController, preferences: EpubPreferences, spread: Boolean, modifier: Modifier = Modifier, selectionActionMode: ActionMode.Callback? = null) {
     val activity = LocalActivity.current as FragmentActivity
     val scope = rememberCoroutineScope()
     val currentPreferences = rememberUpdatedState(preferences)
@@ -81,7 +87,7 @@ fun EpubReaderView(controller: ReaderController, preferences: EpubPreferences, m
         factory = { context -> FragmentContainerView(context).apply { id = R.id.narrio_reader_navigator } },
         modifier = modifier.onSizeChanged { controller.relayout() },
     )
-    DisposableEffect(controller) {
+    DisposableEffect(controller, spread) {
         val manager = activity.supportFragmentManager
         var fragment: EpubNavigatorFragment? = null
         // Fragment transactions must run on the main thread, whatever dispatcher resumes this effect.
@@ -89,7 +95,7 @@ fun EpubReaderView(controller: ReaderController, preferences: EpubPreferences, m
             val initial = controller.cursor.value?.let { controller.book.locator(it) }
             val factory = EpubNavigatorFactory(controller.book.publication).createFragmentFactory(
                 initialLocator = initial, initialPreferences = currentPreferences.value, listener = controller,
-                configuration = navigatorConfiguration(selectionActionMode),
+                configuration = navigatorConfiguration(selectionActionMode, spread),
             )
             val created = factory.instantiate(activity.classLoader, EpubNavigatorFragment::class.java.name) as EpubNavigatorFragment
             if (manager.isDestroyed) return@launch
