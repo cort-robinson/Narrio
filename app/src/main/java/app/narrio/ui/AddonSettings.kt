@@ -1,6 +1,7 @@
 package app.narrio.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -64,6 +65,8 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
         }
     }
     fun say(text: String) { message = text; error = false }
+    // Confirmations fade after a moment; errors stay until the next action.
+    LaunchedEffect(message, error) { if (message != null && !error) { kotlinx.coroutines.delay(6_000); message = null } }
     // Reordering moves a local copy while the finger is down; the order is saved once, when it lifts.
     var dragging by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -83,6 +86,13 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
     BackHandler(onBack = back)
     Column(Modifier.fillMaxSize()) {
         TopAppBar(title = { Text("Sources & add-ons") }, navigationIcon = { IconButton(back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to settings") } })
+        // Results of an action stay in view (and are announced) wherever the list is scrolled.
+        Box(Modifier.fillMaxWidth().height(2.dp)) { if (working != null) LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        AnimatedVisibility(message != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            Text(message.orEmpty(), Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).padding(horizontal = 24.dp, vertical = 10.dp)
+                .semantics { liveRegion = LiveRegionMode.Polite }.testTag("addon-message"), style = MaterialTheme.typography.bodySmall,
+                color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary)
+        }
         LazyColumn(Modifier.fillMaxSize().imePadding().testTag("addon-options"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp)) {
             item(key = "intro") {
                 Text("Choose where Narrio looks for recordings, ebooks, and book details.", style = MaterialTheme.typography.titleMedium)
@@ -97,10 +107,6 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp, end = 8.dp))
                         TextButton(connectTorBox, Modifier.offset(x = (-12).dp)) { Text("Connect TorBox") }
                     }
-                }
-                message?.let {
-                    Text(it, Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite }.testTag("addon-message"), style = MaterialTheme.typography.bodySmall,
-                        color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary)
                 }
             }
             item(key = "audiobook-heading") {
@@ -170,7 +176,6 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
                 OutlinedTextField(url, { url = it }, Modifier.fillMaxWidth(), label = { Text("Add-on manifest URL") }, singleLine = true, enabled = working == null)
                 Spacer(Modifier.height(8.dp))
                 Button({ run("import add-on") { val addon = manager.install(url); url = ""; "${addon.name} imported." } }, enabled = url.isNotBlank() && working == null) { Text("Import add-on") }
-                if (working != null) { LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp)); Text("Working…", style = MaterialTheme.typography.bodySmall) }
             }
         }
     }
@@ -195,7 +200,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.addonSection(
         SourceRow(
             name = addon.name,
             subtitle = listOf("Add-on", addon.manifest.text("version").takeIf(String::isNotBlank)?.let { "Version $it" }).filterNotNull().joinToString(" · "),
-            status = if (!addon.enabled) "Off" else if (addon.ebookSearch) "Opens inside Narrio" else statuses[addon.id] ?: "Not checked yet",
+            status = if (!addon.enabled) "Off" else if (addon.ebookSearch) "Opens inside Narrio" else statuses[addon.id],
             warning = if (addon.source && addon.contentType == "ebook" && !connected) "Needs TorBox" else null,
             enabled = addon.enabled, toggleEnabled = working == null, onToggle = { toggle(addon, it) }, tag = "addon:${addon.id}",
             refresh = { refresh(addon) }, remove = { remove(addon) }, busy = working != null,
@@ -215,7 +220,7 @@ private fun providerSubtitle(provider: SourceProvider, addon: InstalledAddon?): 
 private fun providerStatus(provider: SourceProvider, addon: InstalledAddon?, statuses: Map<String, String>): String? = when {
     !provider.enabled -> "Off"
     provider.lastStatus != null -> provider.lastStatus
-    addon != null -> statuses[addon.id] ?: "Not checked yet"
+    addon != null -> statuses[addon.id]
     else -> null
 }
 

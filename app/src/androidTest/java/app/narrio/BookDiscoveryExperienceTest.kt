@@ -238,7 +238,7 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { vm.connected.value = true; vm.selection.value = SelectionState(eragon)
             vm.sourceSearch.value = snapshot(eragon, listOf(recording), reasons = listOf(BestMatchReason.NEEDS_PREPARING, BestMatchReason.WELL_SEEDED), provider = "torbox-search") }
         compose.onNodeWithText("Needs preparing in TorBox", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Needs TorBox preparation", substring = true).performScrollTo().assertIsDisplayed()
+        reveal(hasText("Needs TorBox preparation", substring = true)); compose.onNodeWithText("Needs TorBox preparation", substring = true).assertIsDisplayed()
         // Prepare opens Listening options with this release chosen, where TorBox preparation stays explicit.
         compose.onNodeWithTag("book-details").performScrollToIndex(0)
         compose.onNodeWithTag("listen-action").performScrollTo().assertTextContains("Prepare in TorBox").performClick()
@@ -264,7 +264,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
         compose.onNodeWithText("Read by Fixture Reader", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Other choices · 1 found").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(book.description).performScrollTo().assertIsDisplayed()
+        reveal(hasText(book.description)); compose.onNodeWithText(book.description).assertIsDisplayed()
 
         // Listening options is one sheet: the recording, its format, and the recording's own page for its files.
         compose.onNodeWithTag("listening-options-action").performScrollTo().performClick()

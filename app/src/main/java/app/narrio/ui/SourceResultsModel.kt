@@ -46,8 +46,9 @@ fun bestMatchCopy(best: BestMatch, book: Audiobook): BestMatchCopy {
     val narrator = SourceQuality.edition(recording).narrator.ifBlank { recording.narrator.takeUnless { BookMetadata.unknown(it) || it.contains("depends on source") }.orEmpty() }
     val availability = when {
         BestMatchReason.ON_PHONE in reasons -> "On this phone"
-        BestMatchReason.READY_TO_STREAM in reasons -> "Ready to stream"
+        // A public recording is also ready to stream; "free" is the more useful thing to say.
         BestMatchReason.FREE_PUBLIC_RECORDING in reasons -> "Free public recording"
+        BestMatchReason.READY_TO_STREAM in reasons -> "Ready to stream"
         BestMatchReason.NEEDS_PREPARING in reasons -> "Needs preparing in TorBox"
         else -> availabilityLabel(recording)
     }
@@ -58,7 +59,8 @@ fun bestMatchCopy(best: BestMatch, book: Audiobook): BestMatchCopy {
         if (BestMatchReason.STRONG_MATCH in reasons) add("Matches this title and author")
         if (BestMatchReason.UNABRIDGED in reasons) add("Unabridged")
         if (BestMatchReason.LANGUAGE_MATCH in reasons && language.isNotBlank()) add(language)
-        if (BestMatchReason.WELL_SEEDED in reasons && recording.seeders > 0) add("${recording.seeders} ${if (recording.seeders == 1L) "seeder" else "seeders"}")
+        // Seeders only matter while TorBox still has to fetch the release.
+        if (BestMatchReason.WELL_SEEDED in reasons && BestMatchReason.NEEDS_PREPARING in reasons && recording.seeders > 0) add("${recording.seeders} ${if (recording.seeders == 1L) "seeder" else "seeders"}")
     }
     return BestMatchCopy(headline.joinToString(" · "), detail.joinToString(" · "))
 }

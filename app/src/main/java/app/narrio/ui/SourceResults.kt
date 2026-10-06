@@ -70,18 +70,19 @@ fun BestMatchCard(
         val picked = chosen?.takeIf { it.id != pinned.shown?.recording?.id }
         val shown = picked?.let { recording -> BestMatch(recording, emptyList(), search.groups.firstOrNull { group -> group.recordings.any { it.id == recording.id } || group.possible.any { it.id == recording.id } }?.providerId.orEmpty()) }
             ?: pinned.shown
-        Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // The eyebrow names a match only when there is (or is about to be) one; an empty result leads with its title.
+        if (shown != null || !search.complete) Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
             Text(if (picked != null) "Your choice" else "Best match", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
             AnimatedVisibility(!search.complete && tally.active > 0, enter = fadeIn(), exit = fadeOut()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Working(Modifier.size(14.dp))
                     val left = tally.active - tally.answered
-                    Text(if (shown == null) "Checking ${tally.active} ${plural(tally.active, "source")}" else "Still checking $left", style = MaterialTheme.typography.labelMedium, color = muted)
+                    Text(if (shown == null) "Checking ${tally.active} ${plural(tally.active, "source")}" else "Checking $left more", style = MaterialTheme.typography.labelMedium, color = muted)
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        if (shown != null || !search.complete) Spacer(Modifier.height(8.dp))
         when {
             shown != null -> AnimatedContent(shown, transitionSpec = { fadeIn(tween(Motion.MEDIUM, 90, Motion.EmphasizedDecelerate)).togetherWith(fadeOut(tween(90))) },
                 contentKey = { it.recording.id }, label = "best match") { best ->
@@ -120,7 +121,9 @@ fun BestMatchCard(
             }
         }
         // The secondary row keeps its height while searching, so the page below never shifts when results land.
-        FlowRow(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
+        val secondary = shown != null || !search.complete || noMatchCopy(search, tally).kind == NoMatchKind.NEEDS_TORBOX && tally.active > 0
+        if (!secondary) Spacer(Modifier.height(14.dp))
+        else FlowRow(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
             val count = tally.found + tally.possible
             when {
                 picked != null && pinned.shown != null -> {
@@ -203,16 +206,16 @@ fun LazyListScope.listeningSources(
             Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = announcement })
         }
     }
-    val groups = search.groups
-    if (wide) groups.chunked(2).forEach { pair ->
-        item(key = "sources:" + pair.joinToString("|") { it.providerId }) {
-            Row(Modifier.animateItem().fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                pair.forEach { group -> SourceSection(group, search, providers, book, bestId, connected, actions, Modifier.weight(1f)) }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
-            }
+    // Sections share one item so their rhythm is their own, not the page's wider spacing between blocks.
+    item(key = "sources") {
+        Column(Modifier.animateItem().fillMaxWidth().animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
+            if (wide) search.groups.chunked(2).forEach { pair ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    pair.forEach { group -> key(group.providerId) { SourceSection(group, search, providers, book, bestId, connected, actions, Modifier.weight(1f)) } }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            } else search.groups.forEach { group -> key(group.providerId) { SourceSection(group, search, providers, book, bestId, connected, actions) } }
         }
-    } else groups.forEach { group ->
-        item(key = "source:${group.providerId}") { SourceSection(group, search, providers, book, bestId, connected, actions, Modifier.animateItem()) }
     }
 }
 
@@ -226,7 +229,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
     var showAll by rememberSaveable(group.providerId) { mutableStateOf(false) }
     var showPossible by rememberSaveable(group.providerId) { mutableStateOf(false) }
     val checking = group.status == SourceGroupStatus.CHECKING
-    Column(modifier.fillMaxWidth().animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized)).testTag("source-section:${group.providerId}")) {
+    Column(modifier.fillMaxWidth().testTag("source-section:${group.providerId}")) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         val status = groupStatusLabel(group, provider, connected)
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically,
@@ -243,8 +246,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
                     Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Retry")
                 }
             }
-            SourceGroupStatus.SKIPPED -> if (provider?.requiresTorBox == true && !connected && provider.enabled)
-                Text("Connect TorBox to search ${group.name}.", style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(bottom = 12.dp))
+            SourceGroupStatus.SKIPPED -> Unit
             SourceGroupStatus.DONE -> Unit
         }
         val shown = if (showAll) group.recordings else group.recordings.take(SHOWN_RELEASES)
@@ -271,7 +273,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
+        if (group.recordings.isNotEmpty() || group.possible.isNotEmpty() || group.status == SourceGroupStatus.FAILED) Spacer(Modifier.height(8.dp))
     }
 }
 

@@ -63,7 +63,8 @@ class AddonSettingsExperienceTest {
         try {
             compose.runOnIdle { vm.navigate(2) }
             compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
-            compose.onNodeWithText("Add-on manifest URL").assertIsDisplayed()
+            // Importing is the rarer task; it sits after the source lists.
+            reveal(hasText("Add-on manifest URL")); compose.onNodeWithText("Add-on manifest URL").assertIsDisplayed()
             compose.onNodeWithText("Import add-on").assertIsNotEnabled()
             reveal(hasText("Audible Audiobooks")); compose.onNodeWithText("Audible Audiobooks").assertIsDisplayed()
             reveal(hasText("Open Library")); compose.onNodeWithText("Open Library").assertIsDisplayed()

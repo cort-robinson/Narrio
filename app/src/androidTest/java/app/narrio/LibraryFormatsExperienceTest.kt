@@ -279,7 +279,8 @@ class LibraryFormatsExperienceTest {
         capture("import-working-night")
         compose.waitUntil(10_000) { vm.selection.value.book?.id == fake.importable.id }
         compose.onNodeWithTag("read-action").assertIsEnabled()
-        compose.onNodeWithTag("find-audiobook-action").assertIsDisplayed()
+        // Since #56 a book with an ebook looks for its recording right away; the listening slot shows that search.
+        compose.onNodeWithTag("best-match").assertIsDisplayed()
         capture("import-opened-night")
     }
 

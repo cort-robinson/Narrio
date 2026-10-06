@@ -123,6 +123,7 @@ class SourceSearchExperienceTest {
         reveal(hasTestTag("source-section:addon:knaben"))
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Waiting its turn").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(compose.onAllNodesWithText("Searching").fetchSemanticsNodes().size >= 3)
+        top()
 
         // The public source answers first and becomes the best match; the failing add-on reports alone.
         compose.runOnIdle { archive.answer(); library.answer(); addon.answer() }
@@ -152,6 +153,7 @@ class SourceSearchExperienceTest {
         compose.waitUntil(5_000) { fixture.sourceSearch.value.streamed?.groups?.first { it.providerId == "addon:audiobookbay" }?.status == SourceGroupStatus.SEARCHING }
         compose.runOnIdle { addon.answer(); waiting.answer() }
         compose.waitUntil(10_000) { fixture.sourceSearch.value.streamed?.complete == true }
+        reveal(hasTestTag("sources-summary"))
         compose.onNodeWithTag("sources-summary").assertTextEquals("All 5 sources answered · 4 found")
         // The release both sources found stays in the higher-priority section, credited to the other.
         reveal(hasText("Also found by AudiobookBay"))
@@ -221,10 +223,14 @@ class SourceSearchExperienceTest {
 
             // Drag by the handle: My TorBox library moves below the next source.
             val start = settings.providers.value.indexOfFirst { it.id == "torbox-library" }
-            compose.onNodeWithTag("addon-options").performScrollToNode(hasTestTag("source-row:torbox-library"))
+            val next = settings.providers.value[start + 1].id
+            compose.onNodeWithTag("addon-options").performScrollToNode(hasTestTag("source-row:$next"))
+            // A row swaps once it passes half of its neighbour, whatever height wrapping gives that neighbour.
+            val neighbour = compose.onNodeWithTag("source-row:$next").fetchSemanticsNode().size.height
             compose.onNodeWithTag("source-row:torbox-library").performTouchInput {
                 down(Offset(24f * density, centerY))
-                repeat(12) { moveBy(Offset(0f, height * 0.1f)) }
+                val distance = neighbour * 0.7f + 16f * density
+                repeat(10) { moveBy(Offset(0f, distance / 10)) }
                 up()
             }
             compose.waitUntil(5_000) { settings.providers.value.indexOfFirst { it.id == "torbox-library" } == start + 1 }
