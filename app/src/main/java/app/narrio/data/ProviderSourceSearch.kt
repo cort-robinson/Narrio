@@ -157,7 +157,12 @@ class ProviderSourceSearch(
                 mutex.withLock {
                     if (generation != epoch) return@withLock
                     raw.replaceAll { _, recordings -> recordings.map { verified[identity(it)] ?: it } }
-                    affected.forEach { id -> if (groups.getValue(id).status == SourceGroupStatus.CHECKING) groups[id] = groups.getValue(id).copy(status = SourceGroupStatus.DONE) }
+                    affected.forEach { id ->
+                        if (groups.getValue(id).status == SourceGroupStatus.CHECKING) {
+                            groups[id] = groups.getValue(id).copy(status = SourceGroupStatus.DONE)
+                            recordStatus(id, "Done · ${SourceQuality.filter(book, raw[id].orEmpty()).size} matches")
+                        }
+                    }
                     inspecting = false
                     publish()
                 }

@@ -162,6 +162,8 @@ class BookDiscoveryExperienceTest {
         compose.waitUntil(5_000) { fixture.sourceSearch.value.choice != null }
         assertEquals(1, calls.get())
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
+    }
+
     @Test fun automaticStreamDoesNotWaitForEbookFormatsAndSettingsInvalidateCachedResults() {
         val calls = java.util.concurrent.atomic.AtomicInteger()
         val recording = recording("automatic-stream", "Project Hail Mary", "Fixture Reader")
