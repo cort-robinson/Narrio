@@ -141,7 +141,7 @@ fun BestMatchCard(
 }
 
 @Composable
-private fun BetterMatchFound(show: () -> Unit, modifier: Modifier = Modifier) {
+internal fun BetterMatchFound(show: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.secondaryContainer)
         .clickable(onClickLabel = "Show the better match", role = Role.Button, onClick = show).heightIn(min = 48.dp).padding(horizontal = 12.dp)
         .semantics { liveRegion = LiveRegionMode.Polite }.testTag("better-match"),
@@ -155,14 +155,14 @@ private fun BetterMatchFound(show: () -> Unit, modifier: Modifier = Modifier) {
 
 /** Roughly the height of a found best match, so the card doesn't grow when the first one arrives. */
 @Composable
-private fun CardSkeleton() {
+internal fun CardSkeleton() {
     Column(Modifier.clearAndSetSemantics { }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SkeletonLine(.78f, 18.dp); SkeletonLine(.92f, 12.dp); SkeletonLine(.5f, 12.dp)
     }
 }
 
 @Composable
-private fun SkeletonLine(fraction: Float, height: androidx.compose.ui.unit.Dp) {
+internal fun SkeletonLine(fraction: Float, height: androidx.compose.ui.unit.Dp) {
     val pulse = if (animationsEnabled()) {
         val transition = rememberInfiniteTransition(label = "skeleton")
         transition.animateFloat(.06f, .14f, infiniteRepeatable(tween(900, easing = Motion.Emphasized), RepeatMode.Reverse), label = "skeleton").value
@@ -172,7 +172,7 @@ private fun SkeletonLine(fraction: Float, height: androidx.compose.ui.unit.Dp) {
 
 /** A spinner, or a still glyph when animations are removed. */
 @Composable
-private fun Working(modifier: Modifier) {
+internal fun Working(modifier: Modifier) {
     if (animationsEnabled()) CircularProgressIndicator(modifier, strokeWidth = 2.dp)
     else Icon(Icons.Rounded.HourglassTop, null, modifier, tint = MaterialTheme.colorScheme.onSurfaceVariant)
 }
@@ -279,7 +279,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
 
 /** Status at the section's edge; it crossfades in place, so a section changing state never reflows its heading. */
 @Composable
-private fun SectionStatus(status: SourceGroupStatus, label: String, found: Boolean) {
+internal fun SectionStatus(status: SourceGroupStatus, label: String, found: Boolean) {
     AnimatedContent(status to label, transitionSpec = { fadeIn(tween(Motion.MEDIUM)).togetherWith(fadeOut(tween(Motion.SHORT))) }, label = "section status") { (state, text) ->
         val color = when {
             state == SourceGroupStatus.FAILED -> MaterialTheme.colorScheme.error
@@ -303,7 +303,7 @@ private fun SectionStatus(status: SourceGroupStatus, label: String, found: Boole
 
 /** One release-row-sized placeholder while a source searches. */
 @Composable
-private fun ReleaseSkeleton() {
+internal fun ReleaseSkeleton() {
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp).clearAndSetSemantics { }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SkeletonLine(.85f, 14.dp); SkeletonLine(.55f, 12.dp)
     }

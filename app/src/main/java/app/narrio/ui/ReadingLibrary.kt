@@ -5,6 +5,7 @@ import app.narrio.AppGraph
 import app.narrio.data.*
 import app.narrio.domain.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 
@@ -26,8 +27,8 @@ interface ReadingLibrary {
         throw ProviderException("Website ebook downloads are unavailable.")
     /** Makes [editionId] the edition used for reading and sync. */
     suspend fun activate(bookId: String, editionId: String)
-    /** Matching ebooks from the existing providers, reporting each provider as it's checked. */
-    suspend fun findEditions(book: Audiobook, connected: Boolean, step: (String) -> Unit): BookTextFinder.Candidates
+    /** Every enabled ebook source looks for [book] at once; each one's section fills in as it answers. */
+    suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession
 }
 
 /** Room editions and positions, with pairing evidence from the sync engine. */
@@ -104,9 +105,9 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
         return graph.editionFiles.editions(book.id).first { it.id == document.id }
     }
     override suspend fun activate(bookId: String, editionId: String) = graph.followAlong.activateEdition(bookId, editionId)
-    override suspend fun findEditions(book: Audiobook, connected: Boolean, step: (String) -> Unit): BookTextFinder.Candidates {
+    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession {
         val saved = library.find(book.id)?.book()
-        return graph.textFinder.candidates(book, (book.sources + saved?.sources.orEmpty()).distinctBy { it.id }, connected, step)
+        return graph.streamingEbookSearch.start(book, (book.sources + saved?.sources.orEmpty()).distinctBy { it.id }, connected, scope)
     }
 }
 

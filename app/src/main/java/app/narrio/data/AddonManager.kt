@@ -80,11 +80,20 @@ class AddonManager(
 
     /** One audio add-on, with its existing lock/rate limit and independently reported outcome. */
     suspend fun searchAddon(id: String, book: Audiobook, title: String, budget: SourceSearchBudget,
-                            status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> {
-        val addon = installed.value.firstOrNull { it.id == id && it.enabled && it.source && it.contentType == "audiobook" }
+                            status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> =
+        searchOne(id, "audiobook", title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), budget, status)
+
+    /** One ebook add-on, queried with title and author together as [ebooks] always has. */
+    suspend fun searchEbookAddon(id: String, book: Audiobook, title: String, budget: SourceSearchBudget,
+                                 status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> =
+        searchOne(id, "ebook", "$title ${book.author.takeUnless(BookMetadata::unknown).orEmpty()}".trim(), "", budget, status)
+
+    private suspend fun searchOne(id: String, type: String, title: String, author: String, budget: SourceSearchBudget,
+                                  status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> {
+        val addon = installed.value.firstOrNull { it.id == id && it.enabled && it.source && it.contentType == type }
             ?: throw ProviderException("This source is disabled or removed.")
         return try {
-            source(addon, title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), budget, status)
+            source(addon, title, author, budget, status)
                 .also { statusState.update { previous -> previous + (id to "Available") } }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {

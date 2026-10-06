@@ -1,6 +1,6 @@
 # Add-ons
 
-Settings → Sources & add-ons manages audiobook sources (built in and add-ons, which can be reordered), ebook sources, and book info. Narrio bundles Audible, Open Library, AudiobookBay, The Pirate Bay, Knaben audiobooks, Knaben ebooks, and Anna's Archive. The older JSONKeeper links describe the same AudiobookBay and Knaben IDs and can also be imported; importing an existing ID updates its definition while retaining its enabled state.
+Settings → Sources & add-ons manages audiobook sources and ebook sources (built in and add-ons, each list reorderable), ebook websites, and book info. Narrio bundles Audible, Open Library, AudiobookBay, The Pirate Bay, Knaben audiobooks, Knaben ebooks, and Anna's Archive. The older JSONKeeper links describe the same AudiobookBay and Knaben IDs and can also be imported; importing an existing ID updates its definition while retaining its enabled state.
 
 Enable or disable providers individually, refresh a definition from its saved URL, remove it, or import another HTTPS manifest URL. Settings and definitions persist on this device. Bundled definitions work without first downloading a manifest; refreshes are explicit. Removing a bundled provider persists across restarts. Reimport its URL to restore it. Provider status reflects the last actual lookup, not a guaranteed health check.
 
@@ -12,7 +12,7 @@ Catalog add-ons identify books without checking TorBox or creating playable reco
 
 Audio source add-ons run during book-detail source discovery when TorBox is connected. Mapped torrent hashes enter the existing matching, cache, and file-verification pipeline. Remote `debridCache` hints never establish availability. Narrio verifies availability through the listener's TorBox account. Uncached torrents still require explicit preparation; source discovery does not add them to the account. Narrator/language hints are provider claims, not playback verification.
 
-Ebook source add-ons run in the book's Find ebook lookup. Matching requires the current recording's title and author, and only EPUB/TXT files checked as cached through TorBox are offered. No torrent is prepared automatically. Public Gutenberg lookup, companion files, and local imports remain available.
+Ebook source add-ons run in the book's Find ebook lookup, each in its own section alongside the built-in ebook sources (see [per-source search](SOURCE_SEARCH.md#ebook-sources)). Only EPUB/TXT files checked as cached through TorBox are offered; releases naming the exact title and every author are confirmed, and those naming the title with part or none of the author are listed as possible matches. No torrent is prepared automatically. Companion files, TorBox ebooks, Project Gutenberg, and local imports remain available, and each built-in source can be turned off or reordered.
 
 Anna's Archive uses the `ebook-search` capability. In a book's **Find ebook** sheet, choose **Search Anna's Archive** to open an EPUB search for its title and author inside Narrio. Select an edition, complete any website verification, and tap its final file download. Narrio intercepts the download and asks before adding it to this book. Opening a search never attaches an unverified edition.
 

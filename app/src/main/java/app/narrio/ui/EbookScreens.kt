@@ -1,12 +1,17 @@
 package app.narrio.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -16,14 +21,19 @@ import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -33,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import app.narrio.domain.*
+import kotlinx.coroutines.launch
 
 /*
  * Reading beside listening: the formats a book has, the action for each, and finding or adding the missing one.
@@ -145,21 +156,55 @@ fun PairingLine(status: PairingStatus, copy: PairingCopy, modifier: Modifier = M
     }
 }
 
+/** What the ebook sheet can do; book details and the Listening room bind these to the view model. */
+class EbookActions(
+    /** Adds a found ebook; the sheet closes, revealing Read. */
+    val add: (BookTextSource) -> Unit,
+    /** Adds the best match and opens it, as Listen plays the best recording. */
+    val addAndOpen: (BookTextSource) -> Unit,
+    val retry: (String) -> Unit,
+    val searchAgain: () -> Unit,
+    val chooseFile: () -> Unit,
+    val activate: (EbookEdition) -> Unit,
+    val remove: (EbookEdition) -> Unit,
+    val openSearch: (EbookSearchLink) -> Unit,
+    val sourceSettings: () -> Unit,
+    val connectTorBox: () -> Unit,
+)
+
 /**
- * Find ebook and Choose another edition: editions already on this phone, matching ebooks from the existing
- * providers, and a file from the phone. Adding one keeps the sheet's place; a successful add closes it.
+ * Find ebook and Choose another edition, worked like listening sources: editions already on this phone, one best
+ * match with a single action, every ebook source in its own section as it answers, ebook websites, and a file from
+ * the phone. Adding one keeps the sheet's place; a successful add closes it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, connected: Boolean, retry: () -> Unit, add: (BookTextSource) -> Unit,
-               chooseFile: () -> Unit, activate: (EbookEdition) -> Unit, remove: (EbookEdition) -> Unit, dismiss: () -> Unit,
-               searchLinks: List<EbookSearchLink> = emptyList(), openSearch: (EbookSearchLink) -> Unit = {}) {
+fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, providers: List<SourceProvider>, connected: Boolean,
+               openLabel: String, actions: EbookActions, dismiss: () -> Unit, searchLinks: List<EbookSearchLink> = emptyList()) {
     val state = search.takeIf { it.bookId == book.id } ?: EbookSearchState(book.id)
     var removing by remember { mutableStateOf<EbookEdition?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val close = rememberSheetCloser(sheetState, dismiss)
     // A successful add slides the sheet away, revealing Read in its place.
     LaunchedEffect(state.added) { if (state.added != null) close {} }
+    val providersById = remember(providers) { providers.associateBy { it.id } }
+    val recording = remember(book.sources) { book.sources.isNotEmpty() }
+    val streamed = state.streamed?.takeIf { it.book.id == book.id }
+        ?: remember(state.searching, state.searched, state.searchError, providers, connected, recording) {
+            pendingEbookSearch(book, providers, connected, recording, searching = !state.searched || state.searching, error = state.searchError)
+        }
+    val tally = remember(streamed, providersById, connected) { ebookTally(streamed, providersById, connected) }
+    // As on book details: once the reader touches the sheet (or uses TalkBack), a better match waits instead of moving.
+    val context = LocalContext.current
+    val talkBack = remember(context) { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager).isTouchExplorationEnabled }
+    var interacted by remember(book.id) { mutableStateOf(talkBack) }
+    var pinned by remember(book.id) { mutableStateOf(PinnedEbook()) }
+    LaunchedEffect(streamed.best, interacted, streamed.groups.size) {
+        pinned = pinned.next(streamed.best, interacted) { id -> streamed.groups.any { group -> group.editions.any { it.id == id } } }
+    }
+    val listState = rememberLazyListState()
+    LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) interacted = true }
+    val scope = rememberCoroutineScope()
     ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = sheetState) {
         val view = LocalView.current
         val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
@@ -168,19 +213,23 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
         } }
         val busy = state.adding != null
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
-        LazyColumn(Modifier.fillMaxWidth().testTag("ebook-sheet"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item {
+        // Items before "Ebook sources": the intro, the phone's editions, and the best match.
+        val sourcesIndex = 1 + (if (formats.editions.isNotEmpty()) 1 + formats.editions.size else 0) + 1
+        LazyColumn(Modifier.fillMaxWidth().testTag("ebook-sheet")
+            .pointerInput(book.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); interacted = true } },
+            listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item(key = "intro") {
                 Text(if (formats.ebook) "Choose an edition" else "Find an ebook", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(if (formats.audio) "Pick the same edition as the recording when you can: a matching edition lets reading and listening share one place."
                      else "Pick the edition you want to read. It's saved on this phone with the book.", style = MaterialTheme.typography.bodyMedium, color = muted)
             }
             if (formats.editions.isNotEmpty()) {
-                item { Text("On this phone", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp)) }
+                item(key = "phone-heading") { Text("On this phone", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp)) }
                 items(formats.editions, key = { "edition:${it.id}" }) { edition ->
                     val active = edition.id == formats.activeEdition?.id
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (active) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-                        .selectable(active, enabled = !busy, role = Role.RadioButton) { activate(edition) }.heightIn(min = 48.dp).padding(end = 12.dp, top = 4.dp, bottom = 4.dp),
+                        .selectable(active, enabled = !busy, role = Role.RadioButton) { actions.activate(edition) }.heightIn(min = 48.dp).padding(end = 12.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(active, null, Modifier.padding(horizontal = 12.dp))
                         Column(Modifier.weight(1f)) {
@@ -192,53 +241,43 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                     }
                 }
             }
-            item {
-                Text("Found for this book", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-                Spacer(Modifier.height(4.dp))
-                Text(checkedProviders(book, connected), style = MaterialTheme.typography.bodySmall, color = muted)
+            item(key = "best") {
+                BestEbookCard(streamed, pinned, tally, providersById, book, state.adding, busy, openLabel, actions,
+                    acceptBetter = { pinned = pinned.accept() }, showSources = { scope.launch { listState.animateScrollToItem(sourcesIndex) } },
+                    Modifier.padding(top = 8.dp))
             }
-            when {
-                state.searching -> item {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-                        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Text(state.step.ifBlank { "Looking for matching ebooks" } + "…", style = MaterialTheme.typography.bodyMedium)
-                    }
+            item(key = "sources-heading") {
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp).testTag("ebook-sources")) {
+                    Text("Ebook sources", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+                    Spacer(Modifier.height(4.dp))
+                    Text(searchSummary(streamed.complete, tally), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.testTag("ebook-sources-summary"))
+                    Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = ebookAnnouncement(streamed, pinned.shown, tally, book) })
                 }
-                state.error != null && state.results.isEmpty() -> item {
-                    Text(state.error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    TextButton(retry, enabled = !busy) { Text("Search again") }
-                }
-                state.searched && state.results.isEmpty() -> item {
-                    Text(if (searchLinks.isEmpty()) "No ebook with this exact title and author turned up. Add your own EPUB or text file below."
-                         else "No ebook with this exact title and author turned up here. Try an ebook website or add your own file below.", style = MaterialTheme.typography.bodyMedium)
-                    if (state.incomplete) TextButton(retry, enabled = !busy) { Text("Search again") }
-                }
-                else -> {
-                    items(state.results, key = { "found:${it.id}" }) { candidate -> CandidateRow(candidate, state.adding == candidate.id, enabled = !busy) { add(candidate) } }
-                    if (state.incomplete) item {
-                        Text("Some providers didn't respond, so this list may be incomplete.", style = MaterialTheme.typography.bodySmall, color = muted)
-                        TextButton(retry, enabled = !busy) { Text("Search again") }
+            }
+            item(key = "sources") {
+                Column(Modifier.fillMaxWidth().animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
+                    streamed.groups.forEach { group ->
+                        key(group.providerId) { EbookSection(group, streamed, providersById[group.providerId], pinned.shown?.edition?.id, state.adding, busy, connected, actions) }
                     }
                 }
             }
-            if (state.error != null && state.results.isNotEmpty()) item {
-                Text(state.error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            }
-            if (searchLinks.isNotEmpty()) item {
+            state.error?.let { error -> item(key = "error") {
+                Text(error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            } }
+            if (searchLinks.isNotEmpty()) item(key = "websites") {
                 Text("Search ebook websites", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 Spacer(Modifier.height(4.dp))
                 Text("Choose an EPUB on the website. Narrio tries TorBox first, then saves the website download when needed. Verification stays inside the app.",
                     style = MaterialTheme.typography.bodySmall, color = muted)
                 searchLinks.forEach { link ->
-                    OutlinedButton({ openSearch(link) }, Modifier.fillMaxWidth(), enabled = !busy) {
+                    OutlinedButton({ actions.openSearch(link) }, Modifier.fillMaxWidth(), enabled = !busy) {
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Search ${link.name}")
                     }
                 }
             }
-            item {
+            item(key = "file") {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = 8.dp))
-                OutlinedButton(chooseFile, Modifier.fillMaxWidth(), enabled = !busy) {
+                OutlinedButton(actions.chooseFile, Modifier.fillMaxWidth(), enabled = !busy) {
                     if (state.adding == EbookSearchState.FILE) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp)); Text(if (state.adding == EbookSearchState.FILE) "Adding your file…" else "Choose an EPUB or text file")
                 }
@@ -250,29 +289,147 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
     removing?.let { edition ->
         AlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove this ebook?") },
             text = { Text("${edition.title} and its narration timing are removed from this phone. Audio, bookmarks, and listening progress stay saved.") },
-            confirmButton = { TextButton({ remove(edition); removing = null }) { Text("Remove ebook") } },
+            confirmButton = { TextButton({ actions.remove(edition); removing = null }) { Text("Remove ebook") } },
             dismissButton = { TextButton({ removing = null }) { Text("Keep ebook") } })
     }
 }
 
-private fun checkedProviders(book: Audiobook, connected: Boolean): String {
-    val recording = book.sources.any { source -> source.textFiles.any { it.format != "VTT" } }
-    return when {
-        connected && recording -> "From this recording's files, your TorBox account, cached ebook releases, and Project Gutenberg."
-        connected -> "From your TorBox account, cached ebook releases, and Project Gutenberg."
-        recording -> "From this recording's files and Project Gutenberg. Connect TorBox in Settings to also check your account and cached ebook releases."
-        else -> "From Project Gutenberg's public-domain books. Connect TorBox in Settings to also check your account and cached ebook releases."
+/**
+ * The best ebook, why it was chosen, and one action that adds and opens it. While sources are still answering it may
+ * improve, but once the reader has touched the sheet a better one waits behind "Better match found".
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tally: SearchTally, providers: Map<String, SourceProvider>, book: Audiobook,
+                          adding: String?, busy: Boolean, openLabel: String, actions: EbookActions, acceptBetter: () -> Unit, showSources: () -> Unit,
+                          modifier: Modifier = Modifier) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val shown = pinned.shown
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh)
+        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp).animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized)).testTag("best-ebook")) {
+        AnimatedVisibility(pinned.pending != null, enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+            BetterMatchFound(acceptBetter, Modifier.padding(bottom = 12.dp))
+        }
+        if (shown != null || !search.complete) {
+            Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                Text("Best match", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                AnimatedVisibility(!search.complete && tally.active > 0, enter = fadeIn(), exit = fadeOut()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Working(Modifier.size(14.dp))
+                        Text(if (shown == null) "Checking ${tally.active} ${plural(tally.active, "source")}" else "Checking ${tally.active - tally.answered} more",
+                            style = MaterialTheme.typography.labelMedium, color = muted)
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        when {
+            shown != null -> AnimatedContent(shown, transitionSpec = { fadeIn(tween(Motion.MEDIUM, 90, Motion.EmphasizedDecelerate)).togetherWith(fadeOut(tween(90))) },
+                contentKey = { it.edition.id }, label = "best ebook") { best ->
+                Column {
+                    val copy = bestEbookCopy(best, book)
+                    Text(copy.headline, style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("best-ebook-reasons"))
+                    if (copy.detail.isNotBlank()) Text(copy.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
+                    Text(best.edition.title, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                    val also = ebookAlsoFoundBy(search, best.edition.id)
+                    Text(listOfNotNull("From ${providers[best.providerId]?.name ?: best.edition.attribution}", also.takeIf { it.isNotEmpty() }?.let { "also found by ${it.joinToString()}" }).joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall, color = muted, modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            !search.complete && tally.active > 0 -> CardSkeleton()
+            else -> {
+                val copy = ebookNoMatchCopy(search, tally)
+                Text(copy.title, style = MaterialTheme.typography.titleMedium)
+                Text(copy.message, style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        val button = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+        when {
+            shown != null && adding == shown.edition.id -> Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Adding…") }
+            shown != null -> Button({ actions.addAndOpen(shown.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
+            !search.complete && tally.active > 0 -> Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Finding an ebook…") }
+            else -> when (ebookNoMatchCopy(search, tally).kind) {
+                NoMatchKind.POSSIBLE_ONLY -> FilledTonalButton(showSources, button) { SlotLabel(Icons.Rounded.Search, "Review possible matches") }
+                NoMatchKind.ALL_FAILED -> FilledTonalButton(actions.searchAgain, button) { SlotLabel(Icons.Rounded.Refresh, "Try again") }
+                NoMatchKind.NEEDS_TORBOX -> FilledTonalButton(actions.connectTorBox, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
+                NoMatchKind.ALL_OFF -> FilledTonalButton(actions.sourceSettings, button) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
+                else -> FilledTonalButton(actions.searchAgain, button) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
+            }
+        }
+        // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
+        if (shown == null && search.complete) Spacer(Modifier.height(14.dp))
+        else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            val count = tally.found + tally.possible
+            TextButton(showSources) { Text(if (search.complete) "Other choices · $count found" else "Other choices · $count so far") }
+        }
+    }
+}
+
+private const val SHOWN_EBOOKS = 3
+
+@Composable
+private fun EbookSection(group: EbookGroup, search: StreamedEbookSearch, provider: SourceProvider?, bestId: String?, adding: String?, busy: Boolean,
+                         connected: Boolean, actions: EbookActions) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    var showAll by rememberSaveable(group.providerId) { mutableStateOf(false) }
+    var showPossible by rememberSaveable(group.providerId) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().testTag("ebook-section:${group.providerId}")) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics(mergeDescendants = true) { heading() }, verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(group.name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            SectionStatus(group.status, ebookGroupStatusLabel(group, provider, connected), group.editions.isNotEmpty())
+        }
+        when (group.status) {
+            SourceGroupStatus.SEARCHING, SourceGroupStatus.CHECKING -> if (group.editions.isEmpty() && group.possible.isEmpty()) ReleaseSkeleton()
+            SourceGroupStatus.FAILED -> {
+                Text(group.message?.takeIf(String::isNotBlank) ?: "This source didn't answer.", style = MaterialTheme.typography.bodySmall, color = muted)
+                TextButton({ actions.retry(group.providerId) }, Modifier.semantics { contentDescription = "Retry ${group.name}" }.testTag("ebook-retry:${group.providerId}")) {
+                    Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Retry")
+                }
+            }
+            else -> Unit
+        }
+        val shown = if (showAll) group.editions else group.editions.take(SHOWN_EBOOKS)
+        shown.forEach { candidate ->
+            CandidateRow(candidate, best = candidate.id == bestId, adding = adding == candidate.id, enabled = !busy, also = ebookAlsoFoundBy(search, candidate.id)) { actions.add(candidate) }
+        }
+        if (group.editions.size > SHOWN_EBOOKS) TextButton({ showAll = !showAll }) {
+            Text(if (showAll) "Show fewer" else "Show all ${group.editions.size} from ${group.name}")
+        }
+        if (group.possible.isNotEmpty()) {
+            val turn by animateFloatAsState(if (showPossible) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "possible")
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClickLabel = if (showPossible) "Hide possible matches" else "Show possible matches") { showPossible = !showPossible }
+                .heightIn(min = 48.dp).semantics { stateDescription = if (showPossible) "Expanded" else "Collapsed" }.testTag("ebook-possible:${group.providerId}"),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text("Possible matches · ${group.possible.size}", style = MaterialTheme.typography.labelLarge, color = muted, modifier = Modifier.weight(1f))
+                Icon(Icons.Rounded.ExpandMore, null, Modifier.rotate(turn), tint = muted)
+            }
+            AnimatedVisibility(showPossible, enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeIn(), exit = shrinkVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeOut()) {
+                Column {
+                    Text("These might be this book. Check the title and author before adding one.", style = MaterialTheme.typography.bodySmall, color = muted)
+                    group.possible.forEach { candidate ->
+                        CandidateRow(candidate, best = false, adding = adding == candidate.id, enabled = !busy, also = ebookAlsoFoundBy(search, candidate.id)) { actions.add(candidate) }
+                    }
+                }
+            }
+        }
+        if (group.editions.isNotEmpty() || group.possible.isNotEmpty() || group.status == SourceGroupStatus.FAILED) Spacer(Modifier.height(8.dp))
     }
 }
 
 @Composable
-private fun CandidateRow(candidate: BookTextSource, adding: Boolean, enabled: Boolean, add: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClickLabel = "Add this ebook", onClick = add).heightIn(min = 48.dp).padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun CandidateRow(candidate: BookTextSource, best: Boolean, adding: Boolean, enabled: Boolean, also: List<String>, add: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClickLabel = "Add this ebook", onClick = add).heightIn(min = 48.dp).padding(vertical = 8.dp)
+        .testTag("ebook:${candidate.id}"), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (best) Text("Best match", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             Text(candidate.title, style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(listOf(candidate.author, candidate.language, candidate.format).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(candidate.attribution.ifBlank { "In this recording's files" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            if (also.isNotEmpty()) Text("Also found by ${also.joinToString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (adding) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         else Icon(Icons.Rounded.Add, null, tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
