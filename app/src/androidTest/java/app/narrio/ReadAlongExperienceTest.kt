@@ -115,8 +115,15 @@ class ReadAlongExperienceTest {
         // Past the last anchor, narration is only estimated: a dotted mark and "≈", never a confident wash.
         val estimatedAt = fixture.anchoredUntilMs + 40_000
         assertEquals(app.narrio.domain.MappingConfidence.ESTIMATED, fixture.place(estimatedAt)!!.confidence)
+        // The tap's seek finishes asynchronously (sentence seek, sync bookkeeping); a seek issued mid-way can be lost.
+        compose.waitForIdle(); Thread.sleep(800)
         fixture.seek(estimatedAt)
-        compose.waitUntil(15_000) { marks(controller, ".narrio-estimated") > 0 && marks(controller, ".narrio-said") == 0 }
+        try { compose.waitUntil(15_000) { marks(controller, ".narrio-estimated") > 0 && marks(controller, ".narrio-said") == 0 } }
+        catch (timeout: Throwable) {
+            throw AssertionError("seek to $estimatedAt: estimated=${marks(controller, ".narrio-estimated")} said=${marks(controller, ".narrio-said")} position=${graph.playback.state.value.positionMs} " +
+                "place=${fixture.place(graph.playback.state.value.positionMs)} visible=${controller.visible.value} following=${controller.following.value} " +
+                "reader=${vm.reader.value?.let { "${it.together}/${it.fromListening}" }} playerOpen=${vm.playerOpen.value} playing=${graph.playback.state.value.playing}", timeout)
+        }
         compose.waitUntil(5_000) { compose.onAllNodesWithText("≈ Estimated place").fetchSemanticsNodes().isNotEmpty() }
 
         // Rotation keeps the narrated sentence on screen and leaves playback where it was.
