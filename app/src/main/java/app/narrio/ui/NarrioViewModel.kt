@@ -60,7 +60,11 @@ data class ReaderRequest(val book: Audiobook, val edition: EbookEdition, val pla
                          val opened: Long = System.nanoTime())
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class NarrioViewModel(application: Application) : AndroidViewModel(application) {
+class NarrioViewModel @JvmOverloads constructor(
+    application: Application,
+    private val discoverSources: suspend (Audiobook, Boolean) -> BookSourceResults =
+        (application as NarrioApplication).graph.bookSources::search,
+) : AndroidViewModel(application) {
     val graph = (application as NarrioApplication).graph
     val catalog = MutableStateFlow(CatalogState())
     val selection = MutableStateFlow(SelectionState())
@@ -231,7 +235,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         sourceSearch.value = SourceSearchState(book = book, loading = true, searched = true)
         sourceSearchJob = viewModelScope.launch {
             try {
-                val results = graph.bookSources.search(book, connected.value)
+                val results = discoverSources(book, connected.value)
                 sourceSearch.value = SourceSearchState(book, results.recordings, searched = true, error = results.error, possible = results.possible)
                 if (results.error == null) sourceResults[key] = System.currentTimeMillis() to sourceSearch.value
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -307,9 +311,9 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
                 selection.value = SelectionState(full)
                 if (full.provider == "catalog") {
                     val search = sourceSearch.value
-                    // An ebook-only book looks for a recording only when asked: Find audiobook.
-                    val ebookOnly = readingLibrary.value.observeBook(full).first().let { it.ebook && !it.audio }
-                    if (!ebookOnly && (search.book?.id != full.id || !search.searched || search.loading)) findSources(full)
+                    // Catalog books have no audio until discovery runs. An attached ebook must not suppress it
+                    // or make lookup wait for edition hydration and reading-position mapping.
+                    if (search.book?.id != full.id || !search.searched || search.loading) findSources(full)
                     return@launch
                 }
                 val saved = graph.library.find(full.id)
