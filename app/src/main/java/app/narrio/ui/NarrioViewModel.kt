@@ -65,6 +65,8 @@ data class EbookSearchState(
     val streamed: StreamedEbookSearch? = null, val searchError: String? = null, val error: String? = null,
     /** Candidate id, or [FILE], while an edition is being added; [added] is set once it is. */
     val adding: String? = null, val added: String? = null,
+    /** What a slow add is doing right now, such as waiting for a website's download server. */
+    val step: String = "",
 ) {
     val results: List<BookTextSource> get() = streamed?.groups.orEmpty().flatMap { it.editions + it.possible }
     /** A source couldn't be checked, so the results may be missing something. */
@@ -508,7 +510,14 @@ class NarrioViewModel @JvmOverloads constructor(
 
     /** Adds a found ebook as the book's edition; [then] runs once it's added, such as opening it to read. */
     fun addEbook(book: Audiobook, candidate: BookTextSource, then: () -> Unit = {}) =
-        editionWork(book, candidate.id, then) { readingLibrary.value.addEdition(book, candidate) }
+        editionWork(book, candidate.id, then) {
+            try { readingLibrary.value.addEdition(book, candidate) { step -> ebookSearch.update { if (it.bookId == book.id && it.adding == candidate.id) it.copy(step = step) else it } } }
+            catch (check: BrowserCheckException) {
+                // The website asks the reader to verify; its own page then offers the download Narrio intercepts.
+                openEbookWebsite(book, EbookSearchLink(candidate.attribution.ifBlank { "Ebook website" }, check.url))
+                throw ProviderException(check.message.orEmpty())
+            }
+        }
 
     fun openEbookWebsite(book: Audiobook, link: EbookSearchLink) {
         AddonManifest.secureUrl(link.url)
@@ -517,7 +526,11 @@ class NarrioViewModel @JvmOverloads constructor(
     }
     fun closeEbookWebsite() {
         ebookWebsiteJob?.cancel()
+        val book = ebookWebsite.value.request?.book
         ebookWebsite.value = EbookWebsiteState()
+        // A browser check passed there lets a source that asked for one search by itself again.
+        ebookSearch.value.streamed?.takeIf { it.book.id == book?.id }?.groups
+            ?.filter { it.status == SourceGroupStatus.FAILED && it.checkUrl != null }?.forEach { retryEbookSource(it.providerId) }
     }
     fun downloadWebsiteEbook(target: EbookWebsiteRequest, request: EbookDownloadRequest) {
         if (ebookWebsite.value.request != target || ebookWebsite.value.working) return
@@ -587,7 +600,7 @@ class NarrioViewModel @JvmOverloads constructor(
             then()
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { ebookSearch.update { if (it.bookId == book.id) it.copy(error = textError(error)) else it } }
-        finally { ebookSearch.update { if (it.bookId == book.id) it.copy(adding = null) else it } }
+        finally { ebookSearch.update { if (it.bookId == book.id) it.copy(adding = null, step = "") else it } }
     }
 
     fun start(book: Audiobook, source: AudioSource, delivery: String) = viewModelScope.launch {

@@ -337,7 +337,7 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
         return importable
     }
     override suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition = throw ProviderException("Not used by this fixture.")
-    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition {
+    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource, step: (String) -> Unit): EbookEdition {
         val edition = EbookEdition("ed-added", book.id, candidate.title, candidate.author, candidate.format, attribution = candidate.attribution, active = true)
         formats.update { it + (book.id to it.getValue(book.id).copy(editions = listOf(edition))) }
         return edition

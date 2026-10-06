@@ -49,8 +49,8 @@ class DeviceSourceProviderSettings(
 
     @Synchronized private fun publish() {
         fun builtIns(list: List<SourceProvider>) = list.map { it.copy(enabled = it.id !in saved.disabledBuiltIns) }
-        val installed = addons.installed.value.filter { it.source && it.contentType == catalog.contentType }.map {
-            SourceProvider("addon:${it.id}", it.name, SourceProviderKind.ADDON, it.enabled, 0, true, true,
+        val installed = addons.installed.value.filter { (it.source || it.searchedInApp) && it.contentType == catalog.contentType }.map {
+            SourceProvider("addon:${it.id}", it.name, SourceProviderKind.ADDON, it.enabled, 0, it.source, true,
                 addons.status.value[it.id])
         }
         state.value = (builtIns(catalog.leading) + installed + builtIns(catalog.trailing)).sortedWith(compareBy<SourceProvider> {

@@ -71,6 +71,28 @@ class EbookWebAcquisitionTest {
         } finally { server.shutdown() }
     }
 
+    private fun epub(): ByteArray = java.io.ByteArrayOutputStream().also { output -> java.util.zip.ZipOutputStream(output).use { zip ->
+        mapOf("mimetype" to "application/epub+zip",
+            "META-INF/container.xml" to """<container><rootfiles><rootfile full-path="book.opf"/></rootfiles></container>""",
+            "book.opf" to """<package xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:title>A Book</dc:title></metadata><manifest><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="one"/></spine></package>""",
+            "one.xhtml" to "<html><body><p>$text</p></body></html>").forEach { (path, content) ->
+            zip.putNextEntry(java.util.zip.ZipEntry(path)); zip.write(content.toByteArray()); zip.closeEntry()
+        }
+    } }.toByteArray()
+
+    @Test fun anUnnamedBinDownloadIsKeptWhenItsContentsAreAnEpub() = runBlocking {
+        val server = MockWebServer().apply { start() }
+        try {
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream").setBody(okio.Buffer().write(epub())))
+            val acquisition = EbookWebAcquisition(OkHttpClient(), { _, _ -> error("Disconnected") }, { error("Unused") }, true)
+            val result = acquisition.acquire(EbookDownloadRequest(server.url("/annas-arch-5b55b4d7e34d.epub").toString(), "annas-arch-5b55b4d7e34d.bin", "application/octet-stream"), false) {}
+            assertEquals("EPUB", result.format)
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream").setBody("%PDF-1.7 not an ebook"))
+            assertTrue(runCatching { acquisition.acquire(EbookDownloadRequest(server.url("/file").toString(), "downloadfile.bin", "application/octet-stream"), false) {} }
+                .exceptionOrNull()?.message.orEmpty().contains("isn't an EPUB"))
+        } finally { server.shutdown() }
+    }
+
     @Test fun htmlVerificationAndUnsupportedFormatsNeverBecomeEbookContent() = runBlocking {
         val server = MockWebServer().apply { start() }
         try {
