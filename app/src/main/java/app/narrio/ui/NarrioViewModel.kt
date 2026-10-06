@@ -78,6 +78,14 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     private val appearanceState = MutableStateFlow(appearanceStore.read())
     val appearance = appearanceState.asStateFlow()
     val sourceSearch = MutableStateFlow(SourceSearchState())
+    /** TEMPORARY (workstream U): replace with graph.sourceProviderSettings when the streaming engine lands. */
+    val sourceProviderSettings: SourceProviderSettings = InterimSourceProviderSettings(graph.addons, viewModelScope)
+    /**
+     * TEMPORARY (workstream U): a streaming session shown on book details by source. Until the engine's own
+     * ViewModel state lands, details fall back to today's one-shot [sourceSearch]; tests attach a controlled session.
+     */
+    val sourceSession = MutableStateFlow<SourceSearchSession?>(null)
+    private var sourceSessionJob: Job? = null
     val downloads = graph.offline.books
     val wifiOnly = MutableStateFlow(graph.preferences.getBoolean("downloadWifi", true))
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -225,6 +233,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
 
     /** Runs automatically when a book opens. Complete results are reused briefly so returning to a book is instant. */
     fun findSources(book: Audiobook, force: Boolean = false) {
+        if (sourceSession.value?.state?.value?.book?.id == book.id) { if (!force) return; attachSourceSession(null) }
         sourceSearchJob?.cancel()
         val key = "${book.id}|${connected.value}"
         sourceResults[key]?.takeIf { !force && System.currentTimeMillis() - it.first < SOURCE_RESULTS_MS }?.let { sourceSearch.value = it.second; return }
@@ -238,6 +247,32 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
             catch (error: Exception) { sourceSearch.value = SourceSearchState(book, searched = true, error = friendly(error)) }
         }
     }
+
+    /**
+     * TEMPORARY (workstream U): shows [session] on its book's details and mirrors its releases into [sourceSearch],
+     * so Listen, recording pages, and Listening options keep working on them.
+     */
+    fun attachSourceSession(session: SourceSearchSession?) {
+        sourceSessionJob?.cancel()
+        sourceSession.value = session
+        if (session == null) return
+        sourceSessionJob = viewModelScope.launch {
+            session.state.collect { streamed ->
+                sourceSearch.update { old ->
+                    SourceSearchState(streamed.book, streamed.groups.flatMap { it.recordings }, loading = !streamed.complete, searched = true,
+                        possible = streamed.groups.flatMap { it.possible }, chosenId = old.chosenId.takeIf { old.book?.id == streamed.book.id })
+                }
+            }
+        }
+    }
+
+    /** Searches one source again; today's one-shot search can only repeat the whole lookup. */
+    fun retrySource(book: Audiobook, providerId: String) {
+        sourceSession.value?.takeIf { it.state.value.book.id == book.id }?.retry(providerId) ?: findSources(book, force = true)
+    }
+
+    /** Listens to [recording] as the book's choice: the best match, or another release the listener picked. */
+    fun listenTo(recording: Audiobook) { chooseVersion(recording); listenToChoice() }
 
     /** Opens a recording's own page, where its formats, files, downloads, and preparation are available. */
     fun chooseRecording(recording: Audiobook) {

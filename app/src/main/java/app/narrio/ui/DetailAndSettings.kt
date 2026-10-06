@@ -30,6 +30,12 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import kotlinx.coroutines.launch
 import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -54,6 +60,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val connected by vm.connected.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val sourceSearch by vm.sourceSearch.collectAsStateWithLifecycle()
+    val sourceProviders by vm.sourceProviderSettings.providers.collectAsStateWithLifecycle()
+    val session by vm.sourceSession.collectAsStateWithLifecycle()
     val ebookSearch by vm.ebookSearch.collectAsStateWithLifecycle()
     val installedAddons by vm.graph.addons.installed.collectAsStateWithLifecycle()
     val ebookSearchLinks = remember(book.title, book.author, installedAddons) { vm.graph.addons.ebookSearchLinks(book) }
@@ -73,6 +81,37 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     // An ebook-only book asks before looking for a recording.
     val awaitingAudioSearch = catalogBook && formats.ebook && !formats.audio && search?.searched != true && search?.loading != true
     val openEbooks = { ebookSheet = true; vm.openEbookSearch(book) }
+    // Listening by source: the streaming session when one runs for this book, otherwise today's one-shot search.
+    val sessionState = session?.state?.collectAsStateWithLifecycle()?.value?.takeIf { it.book.id == book.id }
+    val streamed = if (!catalogBook || awaitingAudioSearch) null else sessionState
+        ?: remember(search, sourceProviders, connected) { (search ?: SourceSearchState(book)).interimStreamed(sourceProviders, connected) }
+    val providersById = remember(sourceProviders) { sourceProviders.associateBy { it.id } }
+    val tally = streamed?.let { remember(it, providersById, connected) { tally(it, providersById, connected) } }
+    // Once the listener touches the page (or listens with TalkBack), a better match waits instead of moving the card.
+    val talkBack = remember(context) { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager).isTouchExplorationEnabled }
+    var interacted by remember(book.id) { mutableStateOf(talkBack) }
+    LaunchedEffect(listState.isScrollInProgress) { if (listState.isScrollInProgress) interacted = true }
+    var pinned by remember(book.id) { mutableStateOf(PinnedBest()) }
+    LaunchedEffect(streamed?.best, interacted, streamed?.groups?.size) {
+        pinned = pinned.next(streamed?.best, interacted) { id -> streamed?.groups.orEmpty().any { group -> group.recordings.any { it.id == id } || group.possible.any { it.id == id } } }
+    }
+    val scope = rememberCoroutineScope()
+    val downloadsHere = downloads.filter { it.book.id == book.id }
+    // Items before "Listening sources": identity, error, actions, edition, downloads, preparation.
+    val sourcesIndex by rememberUpdatedState(2 + (if (selected.error != null) 1 else 0) + (if (formats.ebook) 1 else 0) + downloadsHere.size + (if (preparation != null) 1 else 0))
+    val sourceActions = remember(book.id, vm) {
+        SourceActions(
+            listen = vm::listenTo,
+            prepare = { recording -> vm.chooseVersion(recording); listeningOptions = true },
+            open = vm::chooseRecording,
+            options = { recording -> recording?.let(vm::chooseVersion); listeningOptions = true },
+            retry = { vm.retrySource(book, it) },
+            searchAgain = { vm.findSources(book, force = true) },
+            connectTorBox = { vm.navigate(2) },
+            sourceSettings = { vm.navigate(2) },
+            showSources = { scope.launch { listState.animateScrollToItem(sourcesIndex) } },
+        )
+    }
     LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, connected) {
         if (preparation != null && preparation?.ready != true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
     }
@@ -95,7 +134,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     Box(Modifier.fillMaxWidth().height(2.dp)) {
         androidx.compose.animation.AnimatedVisibility(visible = selected.loading, enter = fadeIn(), exit = fadeOut()) { LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), gapSize = 0.dp) }
     }
-    LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection).testTag("book-details"), listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+    // Wide panes (tablets, large windows) put two source sections side by side.
+    val wideSources = maxWidth >= 700.dp
+    LazyColumn(Modifier.fillMaxSize().nestedScroll(scroll.nestedScrollConnection).testTag("book-details")
+        .pointerInput(book.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); interacted = true } },
+        listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item(key = "identity") {
             val identity: @Composable ColumnScope.() -> Unit = {
                 Text(book.title, style = MaterialTheme.typography.headlineLarge)
@@ -127,11 +171,21 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this edition", it) { vm.open(book) } } }
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
-            FormatActions(formats, audioSlot = { slot, leading ->
+            if (streamed != null && tally != null) {
+                // A catalog book's listening slot is its best match; the reading slot keeps its usual place and weight.
+                val readingFirst = formats.leadingMode == PositionOrigin.READING
+                val readSlot: @Composable () -> Unit = {
+                    if (formats.ebook) ModeButton({ vm.read(book) }, Modifier.fillMaxWidth().testTag("read-action"), leading = readingFirst) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, "Read") }
+                    else OutlinedButton(openEbooks, Modifier.fillMaxWidth().testTag("find-ebook-action")) { SlotLabel(Icons.Rounded.Search, "Find ebook") }
+                }
+                val card: @Composable () -> Unit = {
+                    BestMatchCard(streamed, pinned, tally, providersById, book, connected, busy, starting, leading = !readingFirst, sourceActions, { pinned = pinned.accept() })
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { if (readingFirst) { readSlot(); card() } else { card(); readSlot() } }
+            } else FormatActions(formats, audioSlot = { slot, leading ->
                 when {
                     awaitingAudioSearch -> OutlinedButton({ vm.findSources(book, force = true) }, slot.testTag("find-audiobook-action")) { SlotLabel(Icons.Rounded.Search, "Find audiobook") }
                     starting -> ModeButton({}, slot.testTag("listen-action"), leading, enabled = false) { WorkingLabel("Starting…") }
-                    catalogBook -> CatalogListenButton(vm, book, sourceSearch, busy, slot, leading) { listeningOptions = true }
                     else -> ModeButton({ sourcePicker = true }, slot.testTag("listen-action"), leading, enabled = !selected.loading && book.sources.isNotEmpty() && !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
                 }
             }, read = { vm.read(book) }, findEbook = openEbooks)
@@ -142,8 +196,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                      else "Find audiobook checks LibriVox for a free public recording of this title and author. Connect TorBox for more sources.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else if (catalogBook) {
-                Spacer(Modifier.height(12.dp))
-                SourceStatus(vm, book, sourceSearch.takeIf { it.book?.id == book.id } ?: SourceSearchState(book), connected) { listeningOptions = true }
+                // The best match card above explains the choice; sections below list every source.
             } else if (book.detailsLoaded && book.sources.isEmpty()) {
                 Spacer(Modifier.height(12.dp)); Text(if (book.provider == "knaben") "No cached audio files found for this release. Try another ready source. File formats appear once a source is available in TorBox." else "This edition has no compatible audio files. Try another recording.", style = MaterialTheme.typography.bodyMedium)
                 if (book.provider == "knaben" && connected && preparation == null) OutlinedButton({ vm.prepareUncached(book, "") }, enabled = !busy) { Text("Prepare this release in TorBox") }
@@ -155,7 +208,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             if (!catalogBook && sourceSearch.book?.provider == "catalog") TextButton({ vm.back() }) { Text("Choose another recording") }
         } }
         if (formats.ebook) item(key = "edition") { EditionSummary(book, formats, openEbooks, Modifier.animateItem()) }
-        downloads.filter { it.book.id == book.id }.forEach { download -> item(key = "download:${download.source.id}") { OfflineStatus(vm, download, Modifier.animateItem()) } }
+        downloadsHere.forEach { download -> item(key = "download:${download.source.id}") { OfflineStatus(vm, download, Modifier.animateItem()) } }
         preparation?.let { prep -> item(key = "preparation") {
             Column(Modifier.animateItem().fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -175,6 +228,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 TextButton({ vm.refreshPreparation(book) }, enabled = !busy && connected) { Text("Check availability") }
             }
         } }
+        if (streamed != null && tally != null) listeningSources(streamed, tally, providersById, book, pinned.shown?.recording?.id, connected, wideSources,
+            searchAnnouncement(streamed, pinned.shown, tally, book), sourceActions)
         item(key = "about") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(24.dp))
@@ -203,6 +258,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         }
     }
     }
+    }
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
     if (listeningOptions && search != null && search.results.isNotEmpty()) ListeningOptionsSheet(vm, book, search, connected, busy) { listeningOptions = false }
     if (ebookSheet) EbookSheet(book, formats, ebookSearch, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
@@ -216,62 +272,6 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 fun ModeButton(onClick: () -> Unit, modifier: Modifier, leading: Boolean, enabled: Boolean = true, content: @Composable RowScope.() -> Unit) {
     if (leading) Button(onClick, modifier, enabled = enabled, content = content)
     else FilledTonalButton(onClick, modifier, enabled = enabled, content = content)
-}
-
-@Composable
-private fun CatalogListenButton(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, busy: Boolean, modifier: Modifier, leading: Boolean, review: () -> Unit) {
-    val current = search.takeIf { it.book?.id == book.id }
-    val choice = current?.choice
-    when {
-        current == null || current.loading || !current.searched -> ModeButton({}, modifier, leading, enabled = false) { WorkingLabel("Finding audio…") }
-        choice != null -> {
-            val ready = SourceQuality.ready(choice)
-            ModeButton({ if (ready) vm.listenToChoice() else review() }, modifier.testTag("listen-action"), leading, enabled = !busy) {
-                SlotLabel(if (ready) Icons.Rounded.PlayArrow else Icons.Rounded.CloudDownload, if (ready) "Listen" else "Review and prepare")
-            }
-        }
-        current.results.isNotEmpty() -> ModeButton(review, modifier, leading) { SlotLabel(Icons.Rounded.Search, "Choose a recording") }
-        else -> ModeButton({ vm.findSources(book, force = true) }, modifier, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
-    }
-}
-
-/** A format slot that is busy on the listener's behalf: a small spinner and what it is doing. */
-@Composable
-private fun RowScope.WorkingLabel(text: String) {
-    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text(text, maxLines = 1)
-}
-
-/** Explains what was chosen automatically, or why nothing was, with only the next useful actions. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SourceStatus(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, connected: Boolean, options: () -> Unit) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val choice = search.choice
-    when {
-        search.loading || !search.searched -> Text(if (connected) "Checking LibriVox, your TorBox library, and indexed releases for this title and author." else "Checking LibriVox for a free public recording of this title and author.",
-            style = MaterialTheme.typography.bodySmall, color = muted)
-        choice != null -> {
-            Text(listOf(availabilityLabel(choice), choice.sources.joinToString(" / ") { it.format }, versionLabel(choice, book)).filter(String::isNotBlank).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
-            Text(choice.releaseTitle.ifBlank { choice.title }, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
-            // One door to every choice: other recordings, the audio format, downloads, and TorBox preparation.
-            TextButton(options, Modifier.testTag("listening-options-action")) {
-                Text(if (search.results.size > 1) "Change recording or format · ${search.results.size} found" else "Change audio format")
-            }
-        }
-        else -> {
-            Text(when {
-                search.results.isNotEmpty() -> "No recording matched this title and author closely enough to choose automatically. Review ${search.results.size} search ${if (search.results.size == 1) "result" else "results"} to pick one."
-                connected -> "No recording of this title and author was found in LibriVox, your TorBox library, or indexed releases."
-                else -> "No free public recording of this title and author was found."
-            }, style = MaterialTheme.typography.bodyMedium)
-            search.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp)) }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (search.results.isNotEmpty() || search.error != null) TextButton({ vm.findSources(book, force = true) }) { Text("Search again") }
-                if (!connected) TextButton({ vm.navigate(2) }) { Text("Connect TorBox for more sources") }
-            }
-        }
-    }
 }
 
 internal fun availabilityLabel(recording: Audiobook) = when {
@@ -389,7 +389,7 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val page = when { addonsOpen -> "addons"; appearanceOpen -> "appearance"; else -> "home" }
     AnimatedContent(page, modifier, transitionSpec = { Motion.sharedAxisX(targetState != "home") }, label = "settings page") { shown ->
         when (shown) {
-            "addons" -> AddonSettings(vm.graph.addons, vm::addonsChanged, { addonsOpen = false })
+            "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, connected, { addonsOpen = false }, vm::addonsChanged, { addonsOpen = false })
             "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
             else -> SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }, { addonsOpen = true }) { appearanceOpen = true }
         }
@@ -406,7 +406,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
         item { AppearanceEntry(appearance, openAppearance) }
         item {
             OutlinedButton(openAddons, Modifier.fillMaxWidth()) {
-                Text("Add-ons · Book metadata, audio & ebooks")
+                Text("Sources & add-ons · Audiobooks, ebooks & book info")
             }
         }
         item { UpdateSettings(vm.graph.updates) }
