@@ -116,6 +116,27 @@ class ReaderVisualQa {
         android.util.Log.i("ReaderVisualQa", "image probe $image")
     }
 
+    /** Galaxy Z Fold8 cover (1248 x 1972) and inner (2448 x 1848) screens, each in both orientations. */
+    @Test fun foldScreensBothOrientations() {
+        for ((name, size, density) in listOf(Triple("fold-cover-portrait", "1248x1972", 420), Triple("fold-cover-landscape", "1972x1248", 420),
+                Triple("fold-inner-landscape", "2448x1848", 395), Triple("fold-inner-portrait", "1848x2448", 395))) {
+            shell("wm size $size"); shell("wm density $density")
+            val controller = seeds.open(book, AppearanceSettings(mode = ThemeMode.DAY))
+            compose.runOnIdle { controller.jumpTo(controller.book.cursor("OEBPS/text/chapter2.xhtml", 0)) }
+            compose.waitUntil(10_000) { controller.cursor.value?.resource == "OEBPS/text/chapter2.xhtml" }
+            compose.runOnIdle { controller.next(animated = false) }
+            Thread.sleep(2_000)
+            android.util.Log.i("ReaderVisualQa", "$name page " + seeds.evaluate(controller,
+                "(function(){var b=document.body.getBoundingClientRect();return {w:innerWidth,h:innerHeight,cols:getComputedStyle(document.documentElement).columnCount,pad:getComputedStyle(document.body).paddingLeft,body:b.width};})()"))
+            capture("$name-reading")
+            compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+            compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Contents").fetchSemanticsNodes().isNotEmpty() }
+            capture("$name-controls")
+            compose.runOnIdle { seeds.vm.closeReader() }
+            compose.waitForIdle()
+        }
+    }
+
     @Test fun unfoldedSpreadAndPhoneLandscape() {
         shell("wm size 2448x1848"); shell("wm density 395")
         states(ThemeMode.NIGHT, "unfolded-night")
