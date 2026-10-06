@@ -15,9 +15,9 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * Live provider check, not part of required CI: a real LibriVox recording finds its Project Gutenberg
- * text automatically and on-device recognition anchors the text to the narration. Needs network and
- * downloads the pinned speech model once.
+ * Live provider check, not part of required CI: a real LibriVox recording with its Project Gutenberg text
+ * reads along, and on-device recognition anchors the text to the narration. Needs network and downloads the
+ * pinned speech model once.
  */
 @RunWith(AndroidJUnit4::class)
 class NarrationSyncLiveTest {
@@ -43,10 +43,12 @@ class NarrationSyncLiveTest {
             runBlocking { withContext(Dispatchers.Main) { graph.playback.service!!.load(book, source, false, source.parts[1].id, 90_000) } }
             compose.runOnIdle {
                 graph.preferences.edit().putBoolean("notificationAsked", true).apply()
-                vm.setFollowAlongAuto(true); vm.allowSyncModelDownload(); vm.playerOpen.value = true
+                vm.setReadAlongSync(true); vm.allowSyncModelDownload(); vm.playerOpen.value = true
             }
-            compose.onNodeWithText("Follow along").performClick()
+            val text = runBlocking { graph.textDiscovery.search("Secret Garden").first { it.title.equals("The Secret Garden", true) } }
+            runBlocking { graph.followAlong.fetch(text, book, source.id, source.parts[1].id) }
             compose.waitUntil(120_000) { vm.bookText.value.document != null }
+            compose.runOnIdle { vm.readAlong() }
             val document = vm.bookText.value.document!!
             assertTrue(document.title.contains("Secret Garden", ignoreCase = true))
             assertTrue(app.narrio.data.BookTextFinder.plausible(document, book, source))
@@ -78,9 +80,6 @@ class NarrationSyncLiveTest {
             android.util.Log.i("NarrationSyncLiveTest", "anchors=${anchors.size} span=${anchors.last().positionMs - anchors.first().positionMs}ms pace=$wordsPerSecond words/s")
             assertTrue("pace $wordsPerSecond", wordsPerSecond in 1.5..4.0)
             capture("narration-synced")
-            compose.onNodeWithContentDescription("Manage book text").performClick()
-            compose.onNodeWithText("Find and sync automatically").performScrollTo()
-            capture("narration-sync-setting")
         } finally {
             runBlocking { withContext(Dispatchers.Main) { graph.playback.service?.forget() }; graph.followAlong.remove(book.id); graph.library.remove(book.id) }
         }

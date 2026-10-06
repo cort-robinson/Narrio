@@ -304,6 +304,26 @@ class ListeningService : MediaSessionService() {
         return true
     }
 
+    /**
+     * A switch back to listening (leaving read along, or starting it from a page): start at the shared place, as
+     * [load] does, when reading moved it. Large moves offer Undo through [ReadingSync]'s audio jump.
+     */
+    suspend fun alignToSharedPosition(): Boolean {
+        val book = currentBook ?: return false
+        val source = currentSource ?: return false
+        val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return false
+        if (graph.sharedPositions.current(book.id)?.origin != PositionOrigin.READING || player.isPlaying) return false
+        val here = AudioCursor(source.id, part.id, player.currentPosition.coerceAtLeast(0))
+        val jump = graph.readingSync.listeningStart(book.id, source, here)
+        val destination = jump.destination?.takeIf { it != here } ?: return false
+        invalidateNavigation()
+        player.seekTo(resumeIndex(source.parts, destination.partId), destination.positionMs)
+        if (jump.confidence == MappingConfidence.ESTIMATED) correctionWanted = graph.sharedPositions.current(book.id)?.text
+        undoEpoch = navigationEpoch
+        publish(); save()
+        return true
+    }
+
     fun undoSyncJump() {
         val jump = graph.readingSync.state.value.audioJump ?: return
         if (!jump.offerUndo || undoEpoch != navigationEpoch) return

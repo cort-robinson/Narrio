@@ -35,6 +35,8 @@ data class ReaderSettings(
     val publisherStyles: Boolean = true,
     val scroll: Boolean = false,
     val volumeKeys: Boolean = true,
+    /** Read along: mark the narrated word, where narration anchors make it exact. */
+    val wordHighlight: Boolean = false,
 ) {
     fun normalized() = copy(fontScale = (Math.round(fontScale.coerceIn(MIN_SCALE, MAX_SCALE) * 20) / 20.0))
     fun larger() = copy(fontScale = fontScale + SCALE_STEP).normalized()
