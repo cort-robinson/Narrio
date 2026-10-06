@@ -2,14 +2,12 @@ package app.narrio.data
 
 import app.narrio.domain.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resumeWithException
 
 /** Reads public file metadata only. It never joins peers, fetches audio, or creates a TorBox download. */
 class TorrentFileDiscovery(http: OkHttpClient, private val baseUrl: String = "https://itorrents.org/torrent/") {
@@ -23,41 +21,34 @@ class TorrentFileDiscovery(http: OkHttpClient, private val baseUrl: String = "ht
         var url = "$baseUrl${hash.uppercase()}.torrent".toHttpUrl()
         var response = fetch(url)
         var hops = 0
-        while (response.isRedirect && hops++ < MAX_REDIRECTS) {
-            url = response.use { redirect(url, it.header("Location"), hash) } ?: return@withContext null
+        while (response.redirect && hops++ < MAX_REDIRECTS) {
+            url = redirect(url, response.location, hash) ?: return@withContext null
             response = fetch(url)
         }
-        response.use {
-            // Missing metadata is normal for some indexed releases; it isn't proof of usable audio.
-            if (it.code == 404 || it.isRedirect) return@withContext null
-            if (!it.isSuccessful) throw IOException("Audio file metadata is unavailable.")
-            val body = it.body ?: return@withContext null
-            if (body.contentLength() > TorrentFiles.MAX_BYTES) return@withContext null
-            val source = body.source()
-            source.request(TorrentFiles.MAX_BYTES.toLong() + 1)
-            if (source.buffer.size > TorrentFiles.MAX_BYTES) return@withContext null
-            val files = TorrentFiles.parse(source.readByteArray(), hash) ?: return@withContext null
-            val sources = files.files.filter { it.size > 0 && isBookAudioFile(it.name) }
-                .groupBy { when (val ext = it.name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" } }
-                .map { (format, group) -> AudioSource("manifest:$hash:$format", if (format == "M4B") "Whole-book audio" else "Ordered audio parts",
-                    format, group.sortedWith { a, b -> AudioOrdering.compare(a.name, b.name) }.map { file ->
-                        AudioPart("manifest:$hash:${file.name}", file.name, file.name.substringAfterLast('/').substringBeforeLast('.').replace('_', ' '), sizeBytes = file.size)
-                    }, delivery = "torbox") }
-            val magnet = book.magnetUri.takeIf { Regex("[?&]xt=urn:btih:$hash(?:&|$)", RegexOption.IGNORE_CASE).containsMatchIn(it) }
-                ?: "magnet:?xt=urn:btih:$hash"
-            if (sources.isEmpty()) null else book.copy(title = files.name, releaseTitle = files.name, sources = sources, filesVerified = true, magnetUri = magnet)
-        }
+        // Missing metadata is normal for some indexed releases; it isn't proof of usable audio.
+        if (response.code == 404 || response.redirect) return@withContext null
+        if (response.code !in 200..299) throw IOException("Audio file metadata is unavailable.")
+        val files = TorrentFiles.parse(response.bytes ?: return@withContext null, hash) ?: return@withContext null
+        val sources = files.files.filter { it.size > 0 && isBookAudioFile(it.name) }
+            .groupBy { when (val ext = it.name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" } }
+            .map { (format, group) -> AudioSource("manifest:$hash:$format", if (format == "M4B") "Whole-book audio" else "Ordered audio parts",
+                format, group.sortedWith { a, b -> AudioOrdering.compare(a.name, b.name) }.map { file ->
+                    AudioPart("manifest:$hash:${file.name}", file.name, file.name.substringAfterLast('/').substringBeforeLast('.').replace('_', ' '), sizeBytes = file.size)
+                }, delivery = "torbox") }
+        val magnet = book.magnetUri.takeIf { Regex("[?&]xt=urn:btih:$hash(?:&|$)", RegexOption.IGNORE_CASE).containsMatchIn(it) }
+            ?: "magnet:?xt=urn:btih:$hash"
+        if (sources.isEmpty()) null else book.copy(title = files.name, releaseTitle = files.name, sources = sources, filesVerified = true, magnetUri = magnet)
     }
 
-    private suspend fun fetch(url: HttpUrl): Response = suspendCancellableCoroutine { continuation ->
-        val call = client.newCall(Request.Builder().url(url).build())
-        continuation.invokeOnCancellation { call.cancel() }
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(e) }
-            override fun onResponse(call: Call, response: Response) {
-                continuation.resume(response) { _, value, _ -> value.close() }
-            }
-        })
+    private data class FileResponse(val code: Int, val redirect: Boolean, val location: String?, val bytes: ByteArray?)
+
+    private suspend fun fetch(url: HttpUrl): FileResponse = client.readCancellable(Request.Builder().url(url).build()) { response ->
+        val body = response.body
+        val bytes = if (!response.isSuccessful || body == null || body.contentLength() > TorrentFiles.MAX_BYTES) null else {
+            val source = body.source()
+            if (source.request(TorrentFiles.MAX_BYTES.toLong() + 1)) null else source.readByteArray()
+        }
+        FileResponse(response.code, response.isRedirect, response.header("Location"), bytes)
     }
 
     companion object {

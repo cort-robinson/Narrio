@@ -1,6 +1,6 @@
 # Add-ons
 
-Settings → Add-ons manages book metadata, audiobook sources, and ebook sources. Narrio bundles Audible, Open Library, AudiobookBay, The Pirate Bay, Knaben audiobooks, Knaben ebooks, and Anna's Archive. The older JSONKeeper links describe the same AudiobookBay and Knaben IDs and can also be imported; importing an existing ID updates its definition while retaining its enabled state.
+Settings → Sources & add-ons manages audiobook sources (built in and add-ons, which can be reordered), ebook sources, and book info. Narrio bundles Audible, Open Library, AudiobookBay, The Pirate Bay, Knaben audiobooks, Knaben ebooks, and Anna's Archive. The older JSONKeeper links describe the same AudiobookBay and Knaben IDs and can also be imported; importing an existing ID updates its definition while retaining its enabled state.
 
 Enable or disable providers individually, refresh a definition from its saved URL, remove it, or import another HTTPS manifest URL. Settings and definitions persist on this device. Bundled definitions work without first downloading a manifest; refreshes are explicit. Removing a bundled provider persists across restarts. Reimport its URL to restore it. Provider status reflects the last actual lookup, not a guaranteed health check.
 

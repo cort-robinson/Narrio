@@ -253,14 +253,14 @@ object SourceQuality {
         return null
     }
 
-    fun filter(book: Audiobook, recordings: List<Audiobook>): List<Audiobook> = recordings
+    fun filter(book: Audiobook, recordings: List<Audiobook>, onPhoneSources: Set<String> = emptySet()): List<Audiobook> = recordings
         .mapNotNull { selectBookFiles(book, it) }
         .mapNotNull { recording ->
             val sources = recording.sources.filter { source ->
                 source.parts.isNotEmpty() && source.parts.all { part ->
                     isBookAudioFile(part.name) &&
                         (source.delivery != "archive" || part.archiveUrl.startsWith("https://"))
-                } && (recording.provider == "archive" || recording.cacheState == "cached" && source.format in recording.cachedFormats ||
+                } && (source.id in onPhoneSources || recording.provider == "archive" || recording.cacheState == "cached" && source.format in recording.cachedFormats ||
                     recording.provider == "knaben" && recording.cacheState == "uncached" && recording.filesVerified && recording.seeders > 0 &&
                         recording.torrentHash.matches(Regex("[a-fA-F0-9]{40}")) && recording.magnetUri.startsWith("magnet:?"))
             }

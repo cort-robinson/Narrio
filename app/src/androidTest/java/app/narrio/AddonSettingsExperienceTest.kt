@@ -62,12 +62,13 @@ class AddonSettingsExperienceTest {
         val original = vm.graph.addons.installed.value.first { it.id == "audiobookbay" }.enabled
         try {
             compose.runOnIdle { vm.navigate(2) }
-            compose.onNodeWithText("Add-ons · Book metadata, audio & ebooks").performScrollTo().performClick()
-            compose.onNodeWithText("Add-on manifest URL").assertIsDisplayed()
+            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
+            // Importing is the rarer task; it sits after the source lists.
+            reveal(hasText("Add-on manifest URL")); compose.onNodeWithText("Add-on manifest URL").assertIsDisplayed()
             compose.onNodeWithText("Import add-on").assertIsNotEnabled()
             reveal(hasText("Audible Audiobooks")); compose.onNodeWithText("Audible Audiobooks").assertIsDisplayed()
             reveal(hasText("Open Library")); compose.onNodeWithText("Open Library").assertIsDisplayed()
-            reveal(hasContentDescription("Enable AudiobookBay")); compose.onNodeWithContentDescription("Enable AudiobookBay").performClick()
+            reveal(hasTestTag("source-toggle:addon:audiobookbay")); compose.onNodeWithTag("source-toggle:addon:audiobookbay").performClick()
             compose.waitUntil { vm.graph.addons.installed.value.first { it.id == "audiobookbay" }.enabled != original }
             compose.runOnIdle {
                 val restored = AddonManager.create(compose.activity, vm.graph.http)
@@ -77,10 +78,10 @@ class AddonSettingsExperienceTest {
             reveal(hasText("The Pirate Bay")); compose.onNodeWithText("The Pirate Bay").assertIsDisplayed()
             reveal(hasText("Knaben Ebooks")); compose.onNodeWithText("Knaben Ebooks").assertIsDisplayed()
             reveal(hasText("Anna's Archive")); compose.onNodeWithText("Anna's Archive").assertIsDisplayed()
-            compose.onNodeWithText("Enabled · Opens inside Narrio").assertExists()
+            compose.onNodeWithText("Opens inside Narrio").assertExists()
             compose.onNodeWithContentDescription("Back to settings").performClick()
-            compose.onNodeWithText("Add-ons · Book metadata, audio & ebooks").assertIsDisplayed()
-            compose.onNodeWithText("Add-ons · Book metadata, audio & ebooks").performScrollTo().performClick()
+            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").assertIsDisplayed()
+            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
             reveal(hasText("Add-on manifest URL"))
             val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
             File(compose.activity.filesDir, "addon-settings.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

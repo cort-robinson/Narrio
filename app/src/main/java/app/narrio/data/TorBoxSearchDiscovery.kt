@@ -22,7 +22,7 @@ class TorBoxSearchDiscovery(
         if (key == null || query.isBlank()) return@withContext emptyList()
         val url = endpoint.toHttpUrl().newBuilder().addPathSegments("torrents/search").addPathSegment(query.trim().take(200))
             .addQueryParameter("metadata", "false").addQueryParameter("check_cache", "false").build()
-        val root = http.newCall(Request.Builder().url(url).header("Authorization", "Bearer $key").build()).execute().use { response ->
+        val root = http.readCancellable(Request.Builder().url(url).header("Authorization", "Bearer $key").build()) { response ->
             if (!response.isSuccessful) throw ProviderException("TorBox release search is unavailable. Other sources may still be available.")
             runCatching { NarrioJson.parseToJsonElement(response.body?.string().orEmpty()).jsonObject }
                 .getOrElse { throw ProviderException("TorBox returned an unreadable search response.") }
