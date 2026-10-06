@@ -224,13 +224,15 @@ private class SelectionMenu(
 
 /**
  * Highlights, bookmarks, and search drawn over the reader: decorations, the page ribbon, the highlight tray and
- * search pill above the folio, the search panel, the highlight sheet, and Undo. [top]/[bottom] are the system bar
- * insets; [margin] is the spread's side margin.
+ * search pill above the folio, the search panel, the highlight sheet, and Undo. [page] is the room the page leaves
+ * at the window's edges while reading; [controlsTop]/[controlsBottom] are the system bars that return with the controls.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BoxWithConstraintsScope.ReaderMarksLayer(ui: ReaderMarksUi, session: ReaderSession, appVm: NarrioViewModel, controls: Boolean, dark: Boolean,
-                                             top: Dp, bottom: Dp, margin: Dp, hideControls: () -> Unit) {
+                                             page: PageInsets, controlsTop: Dp, controlsBottom: Dp, hideControls: () -> Unit) {
+    val top = page.top
+    val bottom = page.bottom
     val controller = session.controller
     val marks = ui.marks
     val ready by controller.ready.collectAsStateWithLifecycle()
@@ -271,14 +273,14 @@ fun BoxWithConstraintsScope.ReaderMarksLayer(ui: ReaderMarksUi, session: ReaderS
     // The ribbon hangs from the top of a bookmarked page; with the controls up it hangs from the bar and can be added.
     val here = remember(visible, bookmarks) { marks.onPage(visible, bookmarks) }
     val marked = here.isNotEmpty()
-    val ribbonTop by animateDpAsState(if (controls) top + 56.dp else top, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "ribbon")
-    AnimatedVisibility((marked || controls) && ready && !ui.searchOpen, Modifier.align(Alignment.TopEnd).padding(top = ribbonTop, end = 6.dp + margin),
+    val ribbonTop by animateDpAsState(if (controls) controlsTop + 56.dp else top, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "ribbon")
+    AnimatedVisibility((marked || controls) && ready && !ui.searchOpen, Modifier.align(Alignment.TopEnd).padding(top = ribbonTop).absolutePadding(right = page.right + 6.dp),
         enter = fadeIn(tween(Motion.SHORT)), exit = fadeOut(tween(Motion.SHORT))) {
         BookmarkRibbon(marked) { ui.toggleBookmark(visible) }
     }
 
     val density = LocalDensity.current
-    Column(Modifier.align(Alignment.BottomCenter).padding(bottom = bottom + if (controls) 160.dp else 40.dp).padding(horizontal = 16.dp)
+    Column(Modifier.align(Alignment.BottomCenter).padding(bottom = if (controls) controlsBottom + 160.dp else bottom + 40.dp).padding(horizontal = 16.dp)
         .onSizeChanged { ui.stackHeight = with(density) { it.height.toDp() } },
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         val trayHighlight = highlights.firstOrNull { it.id == ui.tray }
@@ -291,13 +293,13 @@ fun BoxWithConstraintsScope.ReaderMarksLayer(ui: ReaderMarksUi, session: ReaderS
             SearchPill(search, { index -> hideControls(); ui.showMatch(index) }, { ui.searchOpen = true }, ui::endSearch)
         }
     }
-    SnackbarHost(ui.snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom + ui.stackHeight + if (controls) 168.dp else 48.dp))
+    SnackbarHost(ui.snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = ui.stackHeight + if (controls) controlsBottom + 168.dp else bottom + 48.dp))
 
     val wide = maxWidth >= 600.dp
     AnimatedVisibility(ui.searchOpen, Modifier.align(if (wide) Alignment.TopEnd else Alignment.TopCenter),
         enter = if (wide) slideInHorizontally(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn() else fadeIn(tween(Motion.SHORT)),
         exit = if (wide) slideOutHorizontally(tween(Motion.SHORT, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut() else fadeOut(tween(Motion.SHORT))) {
-        SearchPanel(ui, session, wide, top, bottom) { index -> hideControls(); ui.showMatch(index) }
+        SearchPanel(ui, session, wide, controlsTop, controlsBottom) { index -> hideControls(); ui.showMatch(index) }
     }
     BackHandler(ui.searchOpen) { ui.closeSearchPanel() }
 
