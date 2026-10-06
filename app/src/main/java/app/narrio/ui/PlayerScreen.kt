@@ -233,22 +233,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             }
         }
     }
-    if (bookmarksOpen) {
-        val bookmarkFlow = remember(book.id) { vm.graph.library.bookmarks(book.id) }
-        val bookmarks by bookmarkFlow.collectAsStateWithLifecycle(emptyList())
-        ModalBottomSheet(onDismissRequest = { bookmarksOpen = false }, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-            LazyColumn(contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.heightIn(max = 480.dp)) {
-                item { Text("Bookmarks", style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); FilledTonalButton({ haptics.performHapticFeedback(HapticFeedbackType.Confirm); vm.bookmark() }) { Icon(Icons.Rounded.BookmarkAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add bookmark") } }
-                if (bookmarks.isEmpty()) item { Text("No bookmarks yet. Each one saves the exact audio part and time.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(bookmarks, key = { it.id }) { bookmark ->
-                    Row(Modifier.fillMaxWidth().animateItem(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { vm.jumpBookmark(bookmark); bookmarksOpen = false }.padding(vertical = 12.dp)) { Text(formatTime(bookmark.positionMs), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary); Text(bookmark.label, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                        IconButton({ vm.deleteBookmark(bookmark.id) }) { Icon(Icons.Rounded.DeleteOutline, "Delete bookmark at ${formatTime(bookmark.positionMs)}") }
-                    }
-                }
-            }
-        }
-    }
+    if (bookmarksOpen) ListeningBookmarksSheet(vm, state, book) { bookmarksOpen = false }
 }
 
 /**

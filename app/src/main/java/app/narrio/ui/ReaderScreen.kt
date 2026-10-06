@@ -93,7 +93,7 @@ fun ReaderScreen(appVm: NarrioViewModel, bookId: String, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("reader")) {
         when (val current = state) {
-            is ReaderState.Ready -> ReaderRoom(appVm, vm, current.session, onClose)
+            is ReaderState.Ready -> vm.marks.collectAsStateWithLifecycle().value?.let { marks -> ReaderRoom(appVm, vm, current.session, marks, onClose) }
             is ReaderState.Failed -> Column(Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp), verticalArrangement = Arrangement.Center) {
                 RecoveryState("This book couldn't be opened", current.message) { vm.open() }
                 TextButton(onClose, Modifier.padding(top = 8.dp)) { Text("Close the reader") }
@@ -114,7 +114,7 @@ private fun OpeningBook() {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: ReaderSession, onClose: () -> Unit) {
+private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: ReaderSession, marks: ReaderMarks, onClose: () -> Unit) {
     val controller = session.controller
     val book = session.book
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -133,6 +133,7 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
     var footnote by remember { mutableStateOf<ReaderEvent.Footnote?>(null) }
     var image by remember { mutableStateOf<Content.ImageElement?>(null) }
     var outsideLink by remember { mutableStateOf<AbsoluteUrl?>(null) }
+    val marksUi = rememberReaderMarksUi(marks, controller)
 
     // Page colours follow the target Appearance scheme, not the 450 ms dissolve, so the book relays out once.
     val dark = appearance.mode.isDark(androidx.compose.foundation.isSystemInDarkTheme())
@@ -189,7 +190,7 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
         EpubReaderView(controller, preferences, spread, Modifier.fillMaxSize()
             .padding(top = top + 36.dp, bottom = bottom + 34.dp, start = margin, end = margin)
             .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
-            .testTag("reader-page"))
+            .testTag("reader-page"), selectionActionMode = marksUi.selectionMenu)
 
         // Running head and folio, like a printed page; they give way to the controls.
         val quiet = MaterialTheme.colorScheme.onSurfaceVariant
@@ -208,7 +209,7 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
         AnimatedVisibility(controls, Modifier.align(Alignment.TopCenter),
             enter = slideInVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { -it } + fadeIn(),
             exit = slideOutVertically(tween(Motion.SHORT, easing = Motion.EmphasizedAccelerate)) { -it } + fadeOut()) {
-            ReaderTopBar(book.title, book.author, dark, onClose, { sheet = "contents" }, { sheet = "text" }) {
+            ReaderTopBar(book.title, book.author, dark, onClose, marksUi::openSearch, { marksUi.guideTab = 0; sheet = "contents" }, { sheet = "text" }) {
                 appVm.updateAppearance(appearance.copy(mode = if (dark) ThemeMode.DAY else ThemeMode.NIGHT))
             }
         }
@@ -217,7 +218,8 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
             exit = slideOutVertically(tween(Motion.SHORT, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
             ReaderBottomBar(session, location, contents, layout != null)
         }
-        AnimatedVisibility(returnPoint != null && ready, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom + if (controls) 168.dp else 56.dp),
+        AnimatedVisibility(returnPoint != null && ready, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom + (if (controls) 168.dp else 56.dp) +
+            if (marksUi.stackHeight > 0.dp) marksUi.stackHeight + 8.dp else 0.dp),
             enter = scaleIn(Motion.responsive(), initialScale = .8f) + fadeIn(), exit = scaleOut(targetScale = .8f) + fadeOut()) {
             val label = returnPoint?.let { session.label(BookPlace(it.resource, it.offset)) }
             FilledTonalButton(controller::goBack, Modifier.testTag("reader-return")) {
@@ -225,13 +227,16 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
                 Text(if (label != null) "Back to $label" else "Back to where you were")
             }
         }
+        ReaderMarksLayer(marksUi, session, appVm, controls, dark, top, bottom, margin) { controls = false }
     }
 
     if (sheet == "text") ModalBottomSheet({ sheet = null }, containerColor = MaterialTheme.colorScheme.surfaceContainer, scrimColor = Color.Black.copy(alpha = .12f)) {
         TypographySheet(settings, appearance, dark, vm::update, appVm::updateAppearance)
     }
     if (sheet == "contents") ModalBottomSheet({ sheet = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-        ContentsSheet(session, location) { place -> sheet = null; controls = false; controller.jumpTo(place) }
+        ReaderGuideSheet(marksUi, session, dark, { cursor -> sheet = null; controls = false; controller.jumpTo(cursor) }) {
+            ContentsSheet(session, location, header = false) { place -> sheet = null; controls = false; controller.jumpTo(place) }
+        }
     }
     footnote?.let { note ->
         ModalBottomSheet({ footnote = null }, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
@@ -270,7 +275,7 @@ private fun timeLeft(location: ReaderLocation): String? {
 }
 
 @Composable
-private fun ReaderTopBar(title: String, author: String, dark: Boolean, close: () -> Unit, contents: () -> Unit, text: () -> Unit, toggleMode: () -> Unit) {
+private fun ReaderTopBar(title: String, author: String, dark: Boolean, close: () -> Unit, search: () -> Unit, contents: () -> Unit, text: () -> Unit, toggleMode: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.statusBarsPadding().windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)).padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -279,6 +284,7 @@ private fun ReaderTopBar(title: String, author: String, dark: Boolean, close: ()
                 Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (author.isNotBlank()) Text(author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            IconButton(search, Modifier.testTag("reader-search-open")) { Icon(Icons.Rounded.Search, "Search this book") }
             IconButton(contents, Modifier.testTag("reader-contents")) { Icon(Icons.AutoMirrored.Rounded.List, "Contents") }
             IconButton(text, Modifier.testTag("reader-text-settings").semantics { contentDescription = "Text and page settings" }) {
                 Text("Aa", style = MaterialTheme.typography.titleLarge.copy(fontFamily = Editorial))
@@ -472,15 +478,17 @@ private fun SwitchRow(title: String, detail: String, checked: Boolean, change: (
 }
 
 @Composable
-private fun ContentsSheet(session: ReaderSession, location: ReaderLocation, open: (BookPlace) -> Unit) {
+private fun ContentsSheet(session: ReaderSession, location: ReaderLocation, header: Boolean = true, open: (BookPlace) -> Unit) {
     val contents by session.book.contents.collectAsStateWithLifecycle()
     val visible by session.controller.visible.collectAsStateWithLifecycle()
     val current = visible?.first?.let { here -> contents.indexOfLast { entry -> entry.place?.let { session.book.compare(it, BookPlace(here.resource, here.offset)) }?.let { it <= 0 } == true } } ?: -1
     val list = rememberLazyListState((current - 2).coerceAtLeast(0))
     Column(Modifier.fillMaxWidth().testTag("reader-contents-sheet")) {
-        Text(session.book.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(horizontal = 24.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text("Contents", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 8.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        if (header) {
+            Text(session.book.title, style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(horizontal = 24.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("Contents", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 24.dp, top = 12.dp, bottom = 8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
         if (contents.isEmpty()) Text("Preparing the contents…", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(24.dp))
         LazyColumn(state = list, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp)) {
             itemsIndexed(contents) { index, entry ->

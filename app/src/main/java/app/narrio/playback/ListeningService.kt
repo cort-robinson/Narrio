@@ -191,8 +191,10 @@ class ListeningService : MediaSessionService() {
     suspend fun bookmark(label: String = "") {
         val book = currentBook ?: return; val source = currentSource ?: return
         val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return
-        graph.library.bookmark(BookmarkEntry(bookId = book.id, sourceId = source.id, partId = part.id,
-            positionMs = player.currentPosition, label = label.ifBlank { part.title }))
+        val audio = AudioCursor(source.id, part.id, player.currentPosition.coerceAtLeast(0))
+        // The reading place is kept only when narration confirms it; otherwise the bookmark list maps it each time.
+        val text = runCatching { BookmarkMapping(graph, book.id).textFor(audio) }.getOrNull()
+        graph.library.bookmark(newBookmark(book.id, label.ifBlank { part.title }, audio = audio, mappedText = text))
     }
 
     private suspend fun save() {

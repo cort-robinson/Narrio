@@ -1,0 +1,192 @@
+<!doctype html>
+<!-- Layout and interaction plan for reader search, highlights, notes, and bookmarks. A planning sketch, not shipped UI. -->
+<html><head><meta charset="utf-8"><title>Narrio reader annotations plan</title>
+<style>
+@font-face { font-family: Newsreader; src: url("../../app/src/main/res/font/newsreader.ttf"); font-weight: 200 800; }
+@font-face { font-family: Manrope; src: url("../../app/src/main/res/font/manrope.ttf"); font-weight: 200 800; }
+.night { --ground:#101B1A; --text:#F4EDDE; --low:#15221F; --surface:#1B2A27; --high:#263832; --muted:#B9C8BD; --outline:#809087; --outline-muted:#36483F; --copper:#E8AF79; --on-copper:#342312; --sage:#B1C9AC; --selected:#304739; --on-selected:#D3E7CA;
+  --hl-yellow: rgba(255,213,79,.30); --hl-green: rgba(156,214,154,.30); --hl-blue: rgba(142,193,242,.30); --hl-pink: rgba(244,163,192,.30);
+  --sw-yellow:#FFD54F; --sw-green:#9CD69A; --sw-blue:#8EC1F2; --sw-pink:#F4A3C0; }
+.day { --ground:#F6F0E5; --text:#20332C; --low:#F3EBDC; --surface:#EEE5D5; --high:#E7DCCA; --muted:#536359; --outline:#727C71; --outline-muted:#D0D1C3; --copper:#805031; --on-copper:#FFFFFF; --sage:#476447; --selected:#D4E5C9; --on-selected:#223B24;
+  --hl-yellow: rgba(242,190,34,.30); --hl-green: rgba(98,170,96,.30); --hl-blue: rgba(84,148,214,.30); --hl-pink: rgba(222,110,150,.30);
+  --sw-yellow:#F2BE22; --sw-green:#62AA60; --sw-blue:#5494D6; --sw-pink:#DE6E96; }
+body { margin:0; padding: 40px; background:#d9d6cf; font-family: Manrope, sans-serif; color:#1b1b1b; }
+h1 { font: 400 34px/40px Newsreader, serif; margin: 0 0 6px; letter-spacing:-.4px }
+.lead { font: 400 15px/24px Manrope; max-width: 1500px; margin: 0 0 28px; color:#3b3b3b }
+.row { display:flex; gap: 36px; margin-bottom: 18px; align-items:flex-start }
+.cap { width:360px; font: 600 13px/19px Manrope; color:#333; margin: 10px 0 0 }
+.cap span { display:block; font-weight:400; color:#555 }
+.phone { width:360px; height:780px; position:relative; overflow:hidden; border-radius: 28px; background: var(--ground); color: var(--text); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
+.wide { width:840px; height:690px; position:relative; overflow:hidden; border-radius: 24px; background: var(--ground); color: var(--text); box-shadow: 0 18px 40px rgba(0,0,0,.18); }
+.page { position:absolute; inset: 0; padding: 54px 28px 0; }
+.runhead { position:absolute; top: 18px; left:0; right:0; text-align:center; font: 500 11px/16px Manrope; color: var(--muted) }
+.text { font: 400 17.5px/1.58 Newsreader, serif; text-align: justify; hyphens:auto; }
+.text p { margin: 0; text-indent: 1.4em }
+.folio { position:absolute; bottom: 16px; left: 28px; right: 28px; display:flex; justify-content:space-between; font: 500 11px/16px Manrope; color: var(--muted) }
+.hl-yellow { background: var(--hl-yellow); border-radius:3px } .hl-green { background: var(--hl-green); border-radius:3px }
+.hl-blue { background: var(--hl-blue); border-radius:3px } .hl-pink { background: var(--hl-pink); border-radius:3px }
+.noted { border-bottom: 2px solid var(--sw-blue) }
+.hit { background: color-mix(in srgb, var(--copper) 30%, transparent); border-bottom: 2px solid var(--copper); border-radius:3px }
+.sel { background: rgba(120,160,230,.45) }
+.ribbon { position:absolute; top:0; right:22px; width:16px; height:30px; background: var(--copper); clip-path: polygon(0 0,100% 0,100% 100%,50% 76%,0 100%) }
+.ribbon.out { background: none; border: 0; outline: none; }
+.ribbon.out::after { content:""; position:absolute; inset:0; background: var(--outline); clip-path: polygon(0 0,100% 0,100% 100%,50% 76%,0 100%, 0 0, 2px 2px, 2px calc(100% - 4px), 50% calc(76% - 3px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) 2px, 2px 2px) }
+.topbar { position:absolute; top:0; left:0; right:0; background: var(--surface); padding: 28px 4px 8px 4px; display:flex; align-items:center; gap: 2px }
+.icon { width:48px; height:48px; display:grid; place-items:center; flex: none; color: var(--text); font: 600 18px Manrope }
+.icon svg { width:24px; height:24px; fill: currentColor }
+.titleblock { flex:1; min-width:0; padding-left: 2px } .titleblock b { display:block; font: 600 16px/22px Manrope; white-space:nowrap; overflow:hidden; text-overflow:ellipsis } .titleblock i { font: 400 12px/17px Manrope; font-style:normal; color: var(--muted) }
+.search-top { position:absolute; top:0; left:0; right:0; background: var(--surface); padding: 30px 4px 8px; display:flex; align-items:center }
+.field { flex:1; height:48px; border-radius:14px; border: 1px solid var(--outline); display:flex; align-items:center; padding: 0 12px; font: 400 16px Manrope; gap:8px }
+.field .caret { width:2px; height:20px; background: var(--copper) }
+.panel { position:absolute; top:96px; left:0; right:0; bottom:0; background: var(--ground); overflow:hidden }
+.status-line { font: 600 12px/18px Manrope; color: var(--muted); padding: 12px 24px 4px }
+.group { font: 500 15px/20px Newsreader; color: var(--copper); padding: 14px 24px 6px; display:flex; justify-content:space-between } .group small { font: 600 12px Manrope; color: var(--muted) }
+.result { padding: 8px 24px 10px; font: 400 14px/21px Manrope; color: var(--muted) } .result b { color: var(--text); font-weight:700; background: color-mix(in srgb, var(--copper) 22%, transparent); border-radius:3px; padding: 0 1px }
+.result small { display:block; font: 600 11px/16px Manrope; color: var(--muted); margin-top:2px }
+.result.current { background: var(--selected); border-radius: 12px; margin: 0 12px; padding: 8px 12px 10px; color: var(--on-selected) }
+.pill { position:absolute; left: 50%; transform: translateX(-50%); bottom: 44px; background: var(--selected); color: var(--on-selected); border-radius: 24px; display:flex; align-items:center; height: 48px; padding: 0 4px; box-shadow: 0 4px 12px rgba(0,0,0,.18); white-space:nowrap }
+.pill .lbl { font: 600 13px Manrope; padding: 0 6px }
+.pill .icon { width:40px; height:40px; color: var(--on-selected) }
+.menu { position:absolute; background: var(--high); color: var(--text); border-radius: 22px; display:flex; padding: 0 6px; height: 44px; align-items:center; box-shadow: 0 6px 16px rgba(0,0,0,.25); font: 500 13px Manrope; gap: 2px }
+.menu span { padding: 0 9px } .menu span.f { color: var(--copper); font-weight: 700 } .menu .more { width:28px; text-align:center }
+.tray { position:absolute; left:50%; transform: translateX(-50%); bottom: 40px; background: var(--high); border-radius: 14px; display:flex; align-items:center; padding: 0 6px; height: 56px; gap: 0; box-shadow: 0 6px 16px rgba(0,0,0,.22) }
+.sw { width:48px; height:48px; display:grid; place-items:center } .sw i { width:28px; height:28px; border-radius: 50%; display:block }
+.sw.on i { box-shadow: 0 0 0 3px var(--high), 0 0 0 5px var(--text) }
+.vr { width:1px; height: 28px; background: var(--outline-muted); margin: 0 4px }
+.sheet { position:absolute; left:0; right:0; bottom:0; background: var(--surface); border-radius: 28px 28px 0 0; padding: 22px 24px 20px }
+.handle { width: 32px; height: 4px; border-radius: 2px; background: var(--outline); opacity:.6; margin: -10px auto 14px }
+.label { font: 600 12px/18px Manrope; color: var(--muted) }
+.quote { display:flex; gap: 12px; background: var(--high); border-radius: 14px; padding: 14px 16px; margin: 8px 0 14px; font: 400 16px/25px Newsreader }
+.bar { width:4px; border-radius:2px; flex:none }
+.swrow { display:flex; gap: 4px; margin: 4px 0 10px }
+.note { border:1px solid var(--outline); border-radius: 12px; padding: 12px 14px; min-height: 76px; font: 400 15px/23px Manrope }
+.note .lab { font: 500 12px Manrope; color: var(--copper); display:block; margin-bottom:4px }
+.actions { display:flex; justify-content:space-between; align-items:center; margin-top: 14px; font: 600 14px Manrope }
+.btn { background: var(--copper); color: var(--on-copper); border-radius: 20px; padding: 10px 22px } .tbtn { color: var(--copper); padding: 10px 8px } .danger { color: #D86A5A } .night .danger { color: #FFB4AB }
+.tabs { display:flex; gap: 0; border-bottom: 1px solid var(--outline-muted); margin: 10px -24px 0; padding: 0 12px }
+.tabs span { padding: 10px 12px 12px; font: 600 14px Manrope; color: var(--muted) } .tabs span.on { color: var(--copper); box-shadow: inset 0 -3px 0 var(--copper) }
+.mark { display:flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--outline-muted) }
+.mark .body { flex:1; min-width:0 } .mark h4 { margin:0; font: 500 16px/22px Newsreader } .mark p { margin: 3px 0; font: 400 14px/21px Newsreader; color: var(--text) }
+.mark .meta { font: 600 12px/18px Manrope; color: var(--muted); display:flex; gap:8px; align-items:center; flex-wrap:wrap } .mark .meta .sage { color: var(--sage) }
+.mark .notep { font: 400 13px/20px Manrope; color: var(--muted); margin-top: 4px }
+.mark .trail { width: 32px; color: var(--muted); text-align:center; font: 600 18px Manrope }
+.tonal { display:inline-flex; gap:8px; align-items:center; background: var(--selected); color: var(--on-selected); border-radius: 20px; padding: 10px 18px; font: 600 14px Manrope; margin: 12px 0 4px }
+.empty { text-align:center; padding: 30px 20px; } .empty h3 { font: 400 24px/28px Newsreader; margin: 8px 0 } .empty p { font: 400 14px/22px Manrope; color: var(--muted); margin:0 }
+.scrim { position:absolute; inset:0; background: rgba(0,0,0,.32) }
+.side { position:absolute; top:0; right:0; bottom:0; width: 380px; background: var(--surface); box-shadow: -8px 0 24px rgba(0,0,0,.18) }
+</style></head>
+<body>
+<h1>Search, highlights, notes, and bookmarks — layout and interaction plan</h1>
+<p class="lead">Workstream F inside the reader chrome from <code>reader-chrome-plan.png</code>. Everything stays out of the way until asked for: search is one top-bar action; highlighting starts from Android's own text-selection toolbar; bookmarks are a ribbon hanging from the page; lists live in the Contents sheet's reserved Bookmarks and Highlights tabs. Highlight colours are four semantic names (yellow, green, blue, pink) with separate Night and Day tints drawn by the navigator at 30% over the page; a note adds an underline in the same colour. Search hits use copper. Narration (workstream E) draws its own decoration group, so neither replaces the other.</p>
+
+<div class="row">
+ <div>
+  <div class="phone night"><div class="page"><div class="runhead">II · Mistress Mary Quite Contrary</div><div class="ribbon"></div>
+   <div class="text"><p>She had a little thin face and a little thin body, thin light hair and a sour expression. <span class="hl-yellow">Her hair was yellow, and her face was yellow because she had been born in India</span> and had always been ill in one way or another.</p><p>Her father had held a position under the English Government and had always been busy and ill himself, and <span class="hl-blue noted">her mother had been a great beauty who cared only to go to parties</span> and amuse herself with gay people.</p><p>She had not wanted a little girl at all, and when Mary was born she handed her over to the care of an Ayah.</p></div></div>
+   <div class="folio"><span>p. 24 · 18%</span><span>6 min left in chapter</span></div></div>
+  <p class="cap">A · Reading with highlights<span>A copper ribbon hangs from the top-right corner of a bookmarked page, even with the controls hidden. Yellow is a plain highlight; blue with an underline carries a note. Tapping either opens the highlight tray (C).</span></p>
+ </div>
+ <div>
+  <div class="phone night"><div class="page"><div class="runhead">II · Mistress Mary Quite Contrary</div>
+   <div class="text"><p>She had a little thin face and a little thin body, thin light hair and a sour expression. Her hair was yellow, and her face was yellow because <span class="sel">she had been born in India and had always been ill</span> in one way or another.</p><p>Her father had held a position under the English Government and had always been busy and ill himself.</p></div>
+   <div class="menu" style="top:76px;left:14px"><span class="f">Highlight</span><span class="f">Note</span><span>Copy</span><span>Share</span><span>Translate</span><span class="more">⋮</span></div></div>
+   <div class="folio"><span>p. 24 · 18%</span><span>6 min left in chapter</span></div></div>
+  <p class="cap">B · Selection toolbar<span>Narrio's Highlight and Note lead Android's floating toolbar; Copy, Share, and every installed text action (Translate, dictionaries) follow, so look-up still works. Highlight saves at once in the last colour; Note opens the sheet (D) before anything is saved.</span></p>
+ </div>
+ <div>
+  <div class="phone day"><div class="page"><div class="runhead">II · Mistress Mary Quite Contrary</div>
+   <div class="text"><p>She had a little thin face and a little thin body, thin light hair and a sour expression. Her hair was yellow, and her face was yellow because <span class="hl-green">she had been born in India and had always been ill</span> in one way or another.</p><p>Her father had held a position under the English Government and had always been busy and ill himself, and her mother had been a great beauty who cared only to go to parties and amuse herself with gay people.</p></div></div>
+   <div class="tray"><div class="sw"><i style="background:var(--sw-yellow)"></i></div><div class="sw on"><i style="background:var(--sw-green)"></i></div><div class="sw"><i style="background:var(--sw-blue)"></i></div><div class="sw"><i style="background:var(--sw-pink)"></i></div><div class="vr"></div><div class="icon" title="Note">✎</div><div class="icon" title="Remove">🗑</div></div>
+   <div class="folio"><span>p. 24 · 18%</span><span>About 6 min left in chapter</span></div></div>
+  <p class="cap">C · Highlight tray (Day)<span>Appears after Highlight and when a highlight is tapped: four colour swatches (radio semantics, 48 dp targets), Note, and Remove (with Undo). It leaves on a page turn, a tap on the page, or Back. Non-modal, so reading never stops.</span></p>
+ </div>
+ <div>
+  <div class="phone night"><div class="page"><div class="text" style="opacity:.6"><p>She had a little thin face and a little thin body, thin light hair and a sour expression.</p></div></div><div class="scrim"></div>
+   <div class="sheet"><div class="handle"></div>
+    <div class="label">Note · II · Mistress Mary Quite Contrary</div>
+    <div class="quote"><div class="bar" style="background:var(--sw-blue)"></div><div>her mother had been a great beauty who cared only to go to parties</div></div>
+    <div class="label">Colour</div>
+    <div class="swrow"><div class="sw"><i style="background:var(--sw-yellow)"></i></div><div class="sw"><i style="background:var(--sw-green)"></i></div><div class="sw on" style="--high:var(--surface)"><i style="background:var(--sw-blue)"></i></div><div class="sw"><i style="background:var(--sw-pink)"></i></div></div>
+    <div class="note"><span class="lab">Note</span>Compare with Mrs Medlock's description in chapter III.<span style="display:inline-block;width:2px;height:16px;background:var(--copper);vertical-align:middle"></span></div>
+    <div class="actions"><span class="tbtn danger">Remove highlight</span><span><span class="tbtn">Cancel</span> <span class="btn">Save</span></span></div>
+   </div></div>
+  <p class="cap">D · Highlight sheet<span>Quoted passage in Newsreader with its colour bar, colour choice, and a multi-line note. Save keeps the colour and note; a new note from the toolbar is saved only on Save. Remove is offered once the highlight exists.</span></p>
+ </div>
+</div>
+
+<div class="row">
+ <div>
+  <div class="phone night"><div class="search-top"><div class="icon">←</div><div class="field">ill<span class="caret"></span><span style="flex:1"></span><span style="color:var(--muted)">✕</span></div></div>
+   <div class="panel"><div class="status-line">27 matches in 5 chapters</div>
+    <div class="group">I · There Is No One Left<small>4</small></div>
+    <div class="result">…her face was yellow because she had always been <b>ill</b> in one way or another.<small>p. 2</small></div>
+    <div class="result current">…had always been busy and <b>ill</b> himself, and her mother had been…<small>p. 2 · Reading now</small></div>
+    <div class="result">…when she was a sickly, fretful, ugly little baby she was kept out of the way…<small>p. 3</small></div>
+    <div class="group">II · Mistress Mary Quite Contrary<small>6</small></div>
+    <div class="result">…had always been <b>ill</b> in one way or another. Her father had held…<small>p. 24</small></div>
+    <div class="result">…busy and <b>ill</b> himself, and her mother had been a great…<small>p. 25</small></div>
+   </div></div>
+  <p class="cap">E · Search results<span>The top bar becomes the field. Results stream in by chapter (Newsreader heads with counts) with context snippets; matching ignores case, accents, and curly quotes. The match nearest the current page is marked. States: hint before typing, "Searching…" progress while chapters are read, "No matches for …", and a cap note past 500.</span></p>
+ </div>
+ <div>
+  <div class="phone day"><div class="page"><div class="runhead">II · Mistress Mary Quite Contrary</div>
+   <div class="text"><p>She had a little thin face and a little thin body, thin light hair and a sour expression. Her hair was yellow, and her face was yellow because she had been born in India and had always been <span class="hit">ill</span> in one way or another.</p><p>Her father had held a position under the English Government and had always been busy and ill himself, and her mother had been a great beauty.</p></div></div>
+   <div class="pill"><div class="icon">‹</div><span class="lbl">“ill” · 4 of 27</span><div class="icon">›</div><div class="icon">✕</div></div>
+   <div class="folio"><span>p. 24 · 18%</span><span>About 6 min left in chapter</span></div></div>
+  <p class="cap">F · Jumped to a match<span>The hit carries a transient copper highlight while the search pill is up. ‹ › move between matches; the label reopens the list; ✕ (or Back) ends the search and clears the highlight. "Back to p. N" keeps pointing where reading was before the search.</span></p>
+ </div>
+ <div>
+  <div class="phone night"><div class="page"></div><div class="scrim"></div>
+   <div class="sheet" style="top:120px"><div class="handle"></div>
+    <div style="font: 400 24px/28px Newsreader">The Secret Garden</div>
+    <div class="tabs"><span>Contents</span><span class="on">Bookmarks</span><span>Highlights</span></div>
+    <div class="tonal">🔖 Bookmark this page</div>
+    <div class="mark"><div class="body"><h4>I · There Is No One Left</h4><p>When Mary Lennox was sent to Misselthwaite Manor to live with her uncle…</p><div class="meta">p. 1 · 1% <span class="sage">🎧 0:00:42</span></div></div><div class="trail">⋮</div></div>
+    <div class="mark"><div class="body"><h4>II · Mistress Mary Quite Contrary</h4><p>She had not wanted a little girl at all, and when Mary was born…</p><div class="meta">p. 26 · 19% <span class="sage">🎧 ≈ Part 2 · 14:05</span></div></div><div class="trail">⋮</div></div>
+    <div class="mark"><div class="body"><h4>IV · Martha</h4><p>Bookmarked while listening</p><div class="meta">≈ p. 61 · 45% <span class="sage">🎧 Part 4 · 3:12</span></div></div><div class="trail">⋮</div></div>
+   </div></div>
+  <p class="cap">G · Bookmarks tab<span>One list for reading and listening, in book order. Each row names the chapter, a line from the page, the page/percentage, and the matched listening time. "≈" marks whichever side was mapped and is still estimated (read aloud as "about…, estimated"). Rows made while listening appear here; tapping goes to the text place.</span></p>
+ </div>
+ <div>
+  <div class="phone day"><div class="page"></div><div class="scrim"></div>
+   <div class="sheet" style="top:120px"><div class="handle"></div>
+    <div style="font: 400 24px/28px Newsreader">The Secret Garden</div>
+    <div class="tabs"><span>Contents</span><span>Bookmarks</span><span class="on">Highlights</span></div>
+    <div class="mark"><div class="bar" style="background:var(--sw-yellow)"></div><div class="body"><p>Her hair was yellow, and her face was yellow because she had been born in India</p><div class="meta">I · There Is No One Left · p. 2</div></div><div class="trail">⋮</div></div>
+    <div class="mark"><div class="bar" style="background:var(--sw-blue)"></div><div class="body"><p>her mother had been a great beauty who cared only to go to parties</p><div class="notep">✎ Compare with Mrs Medlock's description in chapter III.</div><div class="meta">I · There Is No One Left · p. 2</div></div><div class="trail">⋮</div></div>
+    <div class="mark"><div class="bar" style="background:var(--sw-pink)"></div><div class="body"><p>The moor is open, uncultivated upland covered with heather.</p><div class="meta">III · Across the Moor · p. 40</div></div><div class="trail">⋮</div></div>
+   </div></div>
+  <p class="cap">H · Highlights tab<span>Every highlight and note of this edition in book order: colour bar, the passage in Newsreader, the note in Manrope, chapter and page. Tap to go there; the overflow edits the note or colour, or removes it (Undo). Empty: "No highlights yet — select text, then choose Highlight or Note."</span></p>
+ </div>
+</div>
+
+<div class="row">
+ <div>
+  <div class="wide night"><div class="page" style="padding: 54px 48px 0; display:flex; gap: 48px"><div class="runhead">The Secret Garden · II · Mistress Mary Quite Contrary</div>
+   <div class="text" style="flex:1"><p>She had a little thin face and a little thin body, thin light hair and a sour expression. Her hair was yellow, and her face was yellow because she had been born in India and had always been <span class="hit">ill</span> in one way or another.</p><p>Her father had held a position under the English Government.</p></div>
+   <div class="text" style="flex:1"></div></div>
+   <div class="side"><div class="search-top" style="position:relative;padding-top:18px;background:none"><div class="icon">✕</div><div class="field">ill<span style="flex:1"></span><span style="color:var(--muted)">⌫</span></div></div>
+    <div class="status-line">27 matches in 5 chapters</div>
+    <div class="group">I · There Is No One Left<small>4</small></div>
+    <div class="result">…she had always been <b>ill</b> in one way or another.<small>p. 2</small></div>
+    <div class="result">…busy and <b>ill</b> himself, and her mother…<small>p. 2</small></div>
+    <div class="group">II · Mistress Mary Quite Contrary<small>6</small></div>
+    <div class="result current">…had always been <b>ill</b> in one way or another.<small>p. 24 · Reading now</small></div>
+    <div class="result">…busy and <b>ill</b> himself, and her mother…<small>p. 25</small></div>
+   </div></div>
+  <p class="cap" style="width:840px">I · Unfolded: search as a side sheet<span>At 600 dp and wider the results dock to the end edge (380 dp) instead of covering the page, and the left page stays readable. Choosing a result closes the sheet to the pill (F) so a match on the right-hand page is never hidden. Folding back to a phone keeps the query and results.</span></p>
+ </div>
+ <div>
+  <div class="phone day"><div style="position:absolute;inset:0;background:var(--ground)"></div><div class="scrim"></div>
+   <div class="sheet" style="top:150px; background: var(--surface)"><div class="handle"></div>
+    <div style="font: 400 28px/32px Newsreader">Bookmarks</div>
+    <div class="tonal">🔖 Add bookmark</div>
+    <div class="mark"><div class="body"><h4 style="font:600 16px Manrope;color:var(--copper)">0:00:42</h4><p style="font:400 13px Manrope;color:var(--muted)">Part 1 · Reading: I · p. 1</p></div><div class="trail">🗑</div></div>
+    <div class="mark"><div class="body"><h4 style="font:600 16px Manrope;color:var(--copper)">≈ 14:05 <span style="font-weight:500;color:var(--muted);font-size:12px">Part 2</span></h4><p style="font:400 13px Manrope;color:var(--muted)">📖 "She had not wanted a little girl at all…" · Ch 2</p></div><div class="trail">🗑</div></div>
+    <div class="mark"><div class="body"><h4 style="font:600 16px Manrope;color:var(--copper)">3:12 <span style="font-weight:500;color:var(--muted);font-size:12px">Part 4</span></h4><p style="font:400 13px Manrope;color:var(--muted)">Part 4</p></div><div class="trail">🗑</div></div>
+    <div class="mark"><div class="body"><h4 style="font:600 16px Manrope;color:var(--text)">Reading bookmark</h4><p style="font:400 13px Manrope;color:var(--muted)">📖 Ch 5 · 72% · Opens in the reader</p></div><div class="trail">🗑</div></div>
+   </div></div>
+  <p class="cap">J · Listening room bookmarks (Day)<span>The same rows from the player: time first, "≈" while mapped from a reading bookmark, the page line beneath. A reading bookmark with no matching time (unpaired or ebook-only) opens the reader at that page instead of seeking.</span></p>
+ </div>
+</div>
+</body></html>
