@@ -208,14 +208,17 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             OptionRow("Turn timer off", !state.sleepAtEnd && state.sleepUntil == 0L) { vm.graph.playback.service?.sleep(0); sleepOpen = false }
         }
     }
-    if (partsOpen) ModalBottomSheet(onDismissRequest = { partsOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+    if (partsOpen) {
+        val partsSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val closeParts = rememberSheetCloser(partsSheet) { partsOpen = false }
+        ModalBottomSheet(onDismissRequest = { partsOpen = false }, sheetState = partsSheet, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
         // Open where the listener is, not at the top of a 40-part list.
         val list = rememberLazyListState(initialFirstVisibleItemIndex = if (state.chapters.isNotEmpty()) 0 else (state.partIndex - 1).coerceAtLeast(0) + 1)
         val currentChapter = state.chapters.indexOfLast { it.startMs <= state.positionMs }
         LazyColumn(state = list, contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
             item { Text(if (state.chapters.isNotEmpty()) "Chapters & audio parts" else "Audio parts", style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); Text("File boundaries may differ from book chapters.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             if (state.chapters.isNotEmpty()) itemsIndexed(state.chapters) { index, chapter ->
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.graph.playback.service?.seek(chapter.startMs); partsOpen = false }.padding(horizontal = 16.dp, vertical = 12.dp),
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { closeParts { vm.graph.playback.service?.seek(chapter.startMs) } }.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(formatTime(chapter.startMs), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(chapter.title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = if (index == currentChapter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
@@ -225,24 +228,27 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             itemsIndexed(state.source?.parts.orEmpty(), key = { _, part -> part.id }) { index, part ->
                 val current = index == state.partIndex
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (current) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer)
-                    .clickable { vm.graph.playback.service?.part(index); partsOpen = false }.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    .clickable { closeParts { vm.graph.playback.service?.part(index) } }.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("${index + 1}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Column(Modifier.weight(1f)) { Text(part.title, style = MaterialTheme.typography.titleSmall); if (part.durationMs > 0) Text(formatTime(part.durationMs), style = MaterialTheme.typography.bodySmall) }
                     if (current) NarrationPulse(state.playing, Modifier.semantics { contentDescription = "Current audio part" })
                 }
             }
         }
+        }
     }
     if (bookmarksOpen) {
         val bookmarkFlow = remember(book.id) { vm.graph.library.bookmarks(book.id) }
         val bookmarks by bookmarkFlow.collectAsStateWithLifecycle(emptyList())
-        ModalBottomSheet(onDismissRequest = { bookmarksOpen = false }, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        val bookmarksSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val closeBookmarks = rememberSheetCloser(bookmarksSheet) { bookmarksOpen = false }
+        ModalBottomSheet(onDismissRequest = { bookmarksOpen = false }, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = bookmarksSheet) {
             LazyColumn(contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.heightIn(max = 480.dp)) {
                 item { Text("Bookmarks", style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); FilledTonalButton({ haptics.performHapticFeedback(HapticFeedbackType.Confirm); vm.bookmark() }) { Icon(Icons.Rounded.BookmarkAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add bookmark") } }
                 if (bookmarks.isEmpty()) item { Text("No bookmarks yet. Each one saves the exact audio part and time.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 items(bookmarks, key = { it.id }) { bookmark ->
                     Row(Modifier.fillMaxWidth().animateItem(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { vm.jumpBookmark(bookmark); bookmarksOpen = false }.padding(vertical = 12.dp)) { Text(formatTime(bookmark.positionMs), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary); Text(bookmark.label, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                        Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { closeBookmarks { vm.jumpBookmark(bookmark) } }.padding(vertical = 12.dp)) { Text(formatTime(bookmark.positionMs), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary); Text(bookmark.label, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
                         IconButton({ vm.deleteBookmark(bookmark.id) }) { Icon(Icons.Rounded.DeleteOutline, "Delete bookmark at ${formatTime(bookmark.positionMs)}") }
                     }
                 }

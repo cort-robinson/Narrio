@@ -204,23 +204,29 @@ fun FollowAlongScreen(vm: NarrioViewModel, state: ListeningState, modifier: Modi
         }
     }
 
-    if (sourcesOpen) ModalBottomSheet(onDismissRequest = { sourcesOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-        TextSourcesSheet(vm, state, textState, { sourcesOpen = false; import() }, { vm.fetchBookText(it); sourcesOpen = false }, {
-            sourcesOpen = false; removeOpen = true
-        })
+    if (sourcesOpen) {
+        val sourcesSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val closeSources = rememberSheetCloser(sourcesSheet) { sourcesOpen = false }
+        ModalBottomSheet(onDismissRequest = { sourcesOpen = false }, sheetState = sourcesSheet, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+            TextSourcesSheet(vm, state, textState, { closeSources(import) }, { candidate -> closeSources { vm.fetchBookText(candidate) } }, { closeSources { removeOpen = true } })
+        }
     }
-    if (chaptersOpen && document != null) ModalBottomSheet(onDismissRequest = { chaptersOpen = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+    if (chaptersOpen && document != null) {
+        val chaptersSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val closeChapters = rememberSheetCloser(chaptersSheet) { chaptersOpen = false }
+        ModalBottomSheet(onDismissRequest = { chaptersOpen = false }, sheetState = chaptersSheet, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 560.dp), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Text(if (state.source?.parts?.size == 1) "Jump to a text chapter" else "Text for this audio part", style = MaterialTheme.typography.headlineMedium)
                 Text(state.part?.title.orEmpty(), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (state.source?.parts?.size == 1) Text("Chapter jumps use estimated timing across the whole recording.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            item { TextButton({ vm.selectTextChapter(WHOLE_BOOK); chaptersOpen = false }, Modifier.fillMaxWidth()) { Text("Whole book${if (binding?.chapterId == WHOLE_BOOK) " · selected" else ""}") } }
-            items(document.chapters, key = { it.id }) { chapter -> TextButton({ vm.selectTextChapter(chapter.id); chaptersOpen = false }, Modifier.fillMaxWidth()) {
+            item { TextButton({ closeChapters { vm.selectTextChapter(WHOLE_BOOK) } }, Modifier.fillMaxWidth()) { Text("Whole book${if (binding?.chapterId == WHOLE_BOOK) " · selected" else ""}") } }
+            items(document.chapters, key = { it.id }) { chapter -> TextButton({ closeChapters { vm.selectTextChapter(chapter.id) } }, Modifier.fillMaxWidth()) {
                 Text(chapter.title + if (chapter.id == binding?.chapterId) " · selected" else "", Modifier.fillMaxWidth())
             } }
-            if (binding?.anchors?.isNotEmpty() == true) item { OutlinedButton({ vm.resetTextTiming(); chaptersOpen = false }, Modifier.fillMaxWidth()) { Text("Reset timing for this part") } }
+            if (binding?.anchors?.isNotEmpty() == true) item { OutlinedButton({ closeChapters { vm.resetTextTiming() } }, Modifier.fillMaxWidth()) { Text("Reset timing for this part") } }
+        }
         }
     }
     if (removeOpen) AlertDialog(onDismissRequest = { removeOpen = false }, title = { Text("Remove book text?") }, text = { Text("The ebook file and its timing matches will be removed from this device. Your audiobook, bookmarks, and listening progress stay saved.") },

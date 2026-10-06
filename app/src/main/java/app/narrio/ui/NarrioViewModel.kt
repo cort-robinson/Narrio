@@ -73,6 +73,8 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     val preparation = MutableStateFlow<Preparation?>(null)
     val preferredFormat = MutableStateFlow("")
     val busy = MutableStateFlow(false)
+    /** True only while a tapped Listen is loading its audio, so the button can say so. */
+    val starting = MutableStateFlow(false)
     val connected = MutableStateFlow(graph.credentials.read() != null)
     private val appearanceStore = AppearanceStore(graph.preferences)
     private val appearanceState = MutableStateFlow(appearanceStore.read())
@@ -184,7 +186,8 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
         val browseCategory = if (value.isBlank()) cat else "All"
         query.value = value; category.value = browseCategory
         searchJob?.cancel()
-        catalog.value = CatalogState(emptyList(), true)
+        // The last results stay on screen while the next ones load, so typing never blanks the list.
+        catalog.value = CatalogState(catalog.value.books, true)
         searchJob = viewModelScope.launch {
             delay(if (value.isBlank()) 0 else 350)
             try {
@@ -437,7 +440,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
 
     fun start(book: Audiobook, source: AudioSource, delivery: String) = viewModelScope.launch {
         if (busy.value) return@launch
-        busy.value = true
+        busy.value = true; starting.value = true
         try {
             val resolved = playableSource(book, source, delivery) ?: return@launch
             awaitService().load(book, resolved)
@@ -446,7 +449,7 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
             playerOpen.value = true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { messages.emit(friendly(error)) }
-        finally { busy.value = false }
+        finally { busy.value = false; starting.value = false }
     }
 
     private suspend fun playableSource(book: Audiobook, source: AudioSource, delivery: String): AudioSource? {

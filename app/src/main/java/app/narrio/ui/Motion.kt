@@ -10,8 +10,11 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SheetState
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
@@ -71,6 +74,18 @@ fun animationsEnabled(): Boolean {
     return remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
 }
 
+/**
+ * Closes a modal sheet the way a swipe does: the action runs at once, the sheet slides away, and only then
+ * leaves the composition. Removing a sheet directly cuts it from the screen mid-frame.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun rememberSheetCloser(sheetState: SheetState, dismiss: () -> Unit): (() -> Unit) -> Unit {
+    val scope = rememberCoroutineScope()
+    val latest by rememberUpdatedState(dismiss)
+    return remember(sheetState, scope) { { after: () -> Unit -> after(); scope.launch { sheetState.hide() }.invokeOnCompletion { latest() } } }
+}
+
 /** Shared-element plumbing for compact navigation. Absent scopes leave covers static. */
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransition = staticCompositionLocalOf<SharedTransitionScope?> { null }
@@ -94,6 +109,13 @@ fun Modifier.pressScale(interaction: InteractionSource, pressed: Float = .97f): 
     val isPressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) pressed else 1f, Motion.responsive(), label = "press")
     return graphicsLayer { scaleX = scale; scaleY = scale }
+}
+
+/** Results that are about to be replaced fade back a step, so the list reads as "still here, updating". */
+@Composable
+fun Modifier.staleWhile(loading: Boolean): Modifier {
+    val alpha by animateFloatAsState(if (loading) .55f else 1f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "stale")
+    return graphicsLayer { this.alpha = alpha }
 }
 
 /** Three narration bars: they move only while a voice is actually playing. */

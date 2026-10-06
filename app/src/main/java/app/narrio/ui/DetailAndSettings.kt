@@ -49,6 +49,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val selected = currentSelection.takeIf { it.book?.id == book.id } ?: SelectionState(book)
     val preparation by vm.preparation.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
+    val starting by vm.starting.collectAsStateWithLifecycle()
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val connected by vm.connected.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
@@ -91,8 +92,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         },
         windowInsets = WindowInsets(0), scrollBehavior = scroll,
         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer))
-    LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection).testTag("book-details"), listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        item {
+    // Loading shows in a fixed slot under the bar; the page never shifts when it begins or ends.
+    Box(Modifier.fillMaxWidth().height(2.dp)) {
+        androidx.compose.animation.AnimatedVisibility(visible = selected.loading, enter = fadeIn(), exit = fadeOut()) { LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), gapSize = 0.dp) }
+    }
+    LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection).testTag("book-details"), listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        item(key = "identity") {
             val identity: @Composable ColumnScope.() -> Unit = {
                 Text(book.title, style = MaterialTheme.typography.headlineLarge)
                 Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -121,12 +126,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 }
             }
         }
-        if (selected.loading) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
-        selected.error?.let { item { RecoveryState("Couldn't load this edition", it) { vm.open(book) } } }
-        item {
+        selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this edition", it) { vm.open(book) } } }
+        item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             FormatActions(formats, audioSlot = { slot, leading ->
                 when {
                     awaitingAudioSearch -> OutlinedButton({ vm.findSources(book, force = true) }, slot.testTag("find-audiobook-action")) { SlotLabel(Icons.Rounded.Search, "Find audiobook") }
+                    starting -> ModeButton({}, slot.testTag("listen-action"), leading, enabled = false) { WorkingLabel("Starting…") }
                     catalogBook -> CatalogListenButton(vm, book, sourceSearch, busy, slot, leading) { showResults = true }
                     else -> ModeButton({ sourcePicker = true }, slot.testTag("listen-action"), leading, enabled = !selected.loading && book.sources.isNotEmpty() && !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
                 }
@@ -150,30 +155,32 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 Text(when (book.cacheState) { "cached" -> "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}"; "uncached" -> "Not cached in TorBox · Pick a ready source to listen immediately"; else -> "TorBox cache hasn't been checked" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (!catalogBook && sourceSearch.book?.provider == "catalog") TextButton({ vm.back() }) { Text("Choose another recording") }
-        }
-        if (formats.ebook) item { EditionSummary(book, formats, openEbooks) }
+        } }
+        if (formats.ebook) item(key = "edition") { EditionSummary(book, formats, openEbooks, Modifier.animateItem()) }
         if (catalogBook && sourceSearch.book?.id == book.id && !sourceSearch.loading) {
             val choice = sourceSearch.choice
             if (showVersions && sourceSearch.versions.size > 1) {
-                item { Text("Versions", style = MaterialTheme.typography.titleMedium) }
+                item(key = "versions-title") { Text("Versions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.animateItem()) }
                 items(sourceSearch.versions, key = { "version:${it.id}" }) { recording ->
                     SourceRow(recording, book, Modifier.animateItem(), selected = recording.id == choice?.id) { vm.chooseVersion(recording); showVersions = false }
                 }
             }
             if (showResults && sourceSearch.results.isNotEmpty()) {
-                item {
-                    Text("Search results", style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Closest matches first. Check the release name and narrator before listening.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                item(key = "results-title") {
+                    Column(Modifier.animateItem()) {
+                        Text("Search results", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Closest matches first. Check the release name and narrator before listening.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 items(sourceSearch.results, key = { "result:${it.id}" }) { recording ->
                     SourceRow(recording, book, Modifier.animateItem(), possible = recording in sourceSearch.possible) { vm.chooseRecording(recording) }
                 }
             }
         }
-        downloads.filter { it.book.id == book.id }.forEach { download -> item { OfflineStatus(vm, download) } }
-        preparation?.let { prep -> item {
-            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp)) {
+        downloads.filter { it.book.id == book.id }.forEach { download -> item(key = "download:${download.source.id}") { OfflineStatus(vm, download, Modifier.animateItem()) } }
+        preparation?.let { prep -> item(key = "preparation") {
+            Column(Modifier.animateItem().fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (prep.ready) Icons.Rounded.CheckCircle else Icons.Rounded.CloudDownload, null, tint = MaterialTheme.colorScheme.primary)
                     Text(prep.state, style = MaterialTheme.typography.titleMedium)
@@ -191,7 +198,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 TextButton({ vm.refreshPreparation(book) }, enabled = !busy && connected) { Text("Check availability") }
             }
         } }
-        item { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
+        item(key = "about") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(24.dp))
             Text("About this book", style = MaterialTheme.typography.headlineSmall)
@@ -207,7 +214,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 Text(if (selected.metadataLoading) "Fetching book details\u2026" else "Refresh book details")
             }
         } }
-        if (book.sources.isNotEmpty()) item {
+        if (book.sources.isNotEmpty()) item(key = "audio") {
             Text("Available audio", style = MaterialTheme.typography.headlineSmall)
             book.sources.forEach { source ->
                 Spacer(Modifier.height(14.dp))
@@ -238,9 +245,7 @@ private fun CatalogListenButton(vm: NarrioViewModel, book: Audiobook, search: So
     val current = search.takeIf { it.book?.id == book.id }
     val choice = current?.choice
     when {
-        current == null || current.loading || !current.searched -> ModeButton({}, modifier, leading, enabled = false) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text("Finding audio…", maxLines = 1)
-        }
+        current == null || current.loading || !current.searched -> ModeButton({}, modifier, leading, enabled = false) { WorkingLabel("Finding audio…") }
         choice != null -> ModeButton({ vm.listenToChoice() }, modifier.testTag("listen-action"), leading, enabled = !busy) {
             val ready = SourceQuality.ready(choice)
             SlotLabel(if (ready) Icons.Rounded.PlayArrow else Icons.Rounded.CloudDownload, if (ready) "Listen" else "Review and prepare")
@@ -248,6 +253,12 @@ private fun CatalogListenButton(vm: NarrioViewModel, book: Audiobook, search: So
         current.results.isNotEmpty() -> ModeButton(review, modifier, leading) { SlotLabel(Icons.Rounded.Search, "Choose a recording") }
         else -> ModeButton({ vm.findSources(book, force = true) }, modifier, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
     }
+}
+
+/** A format slot that is busy on the listener's behalf: a small spinner and what it is doing. */
+@Composable
+private fun RowScope.WorkingLabel(text: String) {
+    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text(text, maxLines = 1)
 }
 
 /** Explains what was chosen automatically, or why nothing was, with only the next useful actions. */
@@ -331,7 +342,9 @@ private fun SourcePicker(vm: NarrioViewModel, book: Audiobook, connected: Boolea
     val ready = delivery == "archive" || chosen.format in book.cachedFormats
     val downloaded = downloads.firstOrNull { it.book.id == book.id && it.source.format == chosen.format }
     fun choose(source: AudioSource) { chosen = source; vm.chooseFormat(book, source.format) }
-    ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val close = rememberSheetCloser(sheetState, dismiss)
+    ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = sheetState) {
         val view = LocalView.current
         val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
         SideEffect { (view.parent as? DialogWindowProvider)?.window?.let { window ->
@@ -356,15 +369,15 @@ private fun SourcePicker(vm: NarrioViewModel, book: Audiobook, connected: Boolea
                 RadioButton(delivery == "torbox", { delivery = "torbox" }); Column(Modifier.weight(1f)) { Text("TorBox", style = MaterialTheme.typography.titleSmall); Text(if (!connected) "Connect your account to use this source" else if (chosen.format in book.cachedFormats) "Cached · Ready to stream" else "Not cached · Requires cloud preparation", style = MaterialTheme.typography.bodySmall) }
             }
             Text("Streaming doesn't save the book to your phone. Each audio format and delivery source keeps its own listening position.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button({ dismiss(); if (delivery == "torbox" && !connected) vm.navigate(2) else vm.start(book, chosen, delivery) }, Modifier.fillMaxWidth(), enabled = !busy && (ready || !connected && delivery == "torbox")) {
+            Button({ close { if (delivery == "torbox" && !connected) vm.navigate(2) else vm.start(book, chosen, delivery) } }, Modifier.fillMaxWidth(), enabled = !busy && (ready || !connected && delivery == "torbox")) {
                 Text(if (delivery == "torbox" && !connected) "Connect TorBox" else if (delivery == "torbox") "Stream now" else "Start listening")
             }
             if (delivery == "torbox" && connected && !ready) {
                 Text("This source may take minutes or hours to become available. Choose a cached release to listen immediately.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedButton({ dismiss(); vm.prepareUncached(book, chosen.format) }, Modifier.fillMaxWidth(), enabled = !busy) { Text("Prepare in TorBox") }
+                OutlinedButton({ close { vm.prepareUncached(book, chosen.format) } }, Modifier.fillMaxWidth(), enabled = !busy) { Text("Prepare in TorBox") }
             }
-            if (downloaded?.complete == true) OutlinedButton({ dismiss(); vm.start(book, downloaded.source, downloaded.source.delivery) }, Modifier.fillMaxWidth(), enabled = !busy) { Icon(Icons.Rounded.OfflinePin, null); Spacer(Modifier.width(8.dp)); Text("Play offline") }
-            else OutlinedButton({ dismiss(); vm.download(book, chosen, delivery) }, Modifier.fillMaxWidth(), enabled = ready && !busy && (delivery != "torbox" || connected) && downloaded == null) {
+            if (downloaded?.complete == true) OutlinedButton({ close { vm.start(book, downloaded.source, downloaded.source.delivery) } }, Modifier.fillMaxWidth(), enabled = !busy) { Icon(Icons.Rounded.OfflinePin, null); Spacer(Modifier.width(8.dp)); Text("Play offline") }
+            else OutlinedButton({ close { vm.download(book, chosen, delivery) } }, Modifier.fillMaxWidth(), enabled = ready && !busy && (delivery != "torbox" || connected) && downloaded == null) {
                 Icon(Icons.Rounded.Download, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(if (downloaded != null) "Download on your shelf" else "Download to phone")
             }
             if (chosen.parts.sumOf { it.sizeBytes } > 0) Text("Phone storage: ${sizeLabel(chosen.parts.sumOf { it.sizeBytes })} for this format", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -384,9 +397,9 @@ private fun Modifier.selectableRow(selected: Boolean, action: () -> Unit): Modif
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun OfflineStatus(vm: NarrioViewModel, download: OfflineBook) {
+fun OfflineStatus(vm: NarrioViewModel, download: OfflineBook, modifier: Modifier = Modifier) {
     var remove by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(if (download.complete) Icons.Rounded.OfflinePin else Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.secondary)
             Text(download.label, style = MaterialTheme.typography.titleSmall)
@@ -416,10 +429,14 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     var appearanceOpen by rememberSaveable { mutableStateOf(false) }
     var addonsOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(connected) { if (connected) key = "" }
-    AnimatedContent(appearanceOpen, modifier, transitionSpec = { Motion.sharedAxisX(targetState) }, label = "settings page") { open ->
-        if (addonsOpen) AddonSettings(vm.graph.addons, vm::addonsChanged, { addonsOpen = false })
-        else if (open) AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
-        else SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }, { addonsOpen = true }) { appearanceOpen = true }
+    // Every sub-page, not only Appearance, slides in and back out along the same axis.
+    val page = when { addonsOpen -> "addons"; appearanceOpen -> "appearance"; else -> "home" }
+    AnimatedContent(page, modifier, transitionSpec = { Motion.sharedAxisX(targetState != "home") }, label = "settings page") { shown ->
+        when (shown) {
+            "addons" -> AddonSettings(vm.graph.addons, vm::addonsChanged, { addonsOpen = false })
+            "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
+            else -> SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }, { addonsOpen = true }) { appearanceOpen = true }
+        }
     }
 }
 
