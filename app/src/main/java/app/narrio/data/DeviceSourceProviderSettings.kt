@@ -33,7 +33,6 @@ class DeviceSourceProviderSettings(
         val builtIns = listOf(
             SourceProvider(ARCHIVE, "Internet Archive / LibriVox", SourceProviderKind.BUILT_IN, true, 0, false, false),
             SourceProvider(LIBRARY, "My TorBox library", SourceProviderKind.BUILT_IN, true, 1, true, false),
-            SourceProvider(TORBOX_SEARCH, "TorBox search", SourceProviderKind.BUILT_IN, true, 2, true, false),
         ).map { it.copy(enabled = it.id !in saved.disabledBuiltIns) }
         val installed = addons.installed.value.filter { it.source && it.contentType == "audiobook" }.map {
             SourceProvider("addon:${it.id}", it.name, SourceProviderKind.ADDON, it.enabled, 0, true, true,
@@ -67,7 +66,6 @@ class DeviceSourceProviderSettings(
     companion object {
         const val ARCHIVE = "archive"
         const val LIBRARY = "torbox-library"
-        const val TORBOX_SEARCH = "torbox-search"
         fun create(context: Context, addons: AddonManager, scope: CoroutineScope): DeviceSourceProviderSettings {
             val preferences = context.getSharedPreferences("source-providers.v1", Context.MODE_PRIVATE)
             val initial = runCatching { NarrioJson.decodeFromString<SourceProviderPreferences>(preferences.getString("settings", "{}")!!) }

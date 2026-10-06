@@ -104,6 +104,27 @@ class AddonManagerTest {
         assertEquals(removed, AddonManager.addNewBundled(removed, defaults, defaults.map { it.id }.toSet()))
     }
 
+    @Test fun savedPirateBayDefinitionFromTheRetiredProxyIsReplacedKeepingItsSwitch() {
+        val defaults = AddonManager.bundledUrls.keys.map(::bundled)
+        val current = bundled("tpb-audiobooks")
+        val retired = current.copy(manifestUrl = "https://api.npoint.io/526af6fc28a90bed10c8", enabled = false)
+        val imported = current.copy(manifestUrl = "https://example.com/my-tpb.json")
+        val replaced = AddonManager.replaceRetiredBundled(listOf(retired), defaults).single()
+        assertEquals(current.manifestUrl, replaced.manifestUrl)
+        assertTrue(replaced.manifest.toString().contains("https://apibay.org/q.php"))
+        assertFalse(replaced.enabled)
+        assertEquals(listOf(imported), AddonManager.replaceRetiredBundled(listOf(imported), defaults))
+    }
+
+    @Test fun pirateBayEmptySearchPlaceholderIsNotAResult() = runBlocking {
+        val server = MockWebServer(); server.start()
+        try {
+            server.enqueue(MockResponse().setBody("""[{"id":"0","name":"No results returned","info_hash":"${"0".repeat(40)}","seeders":"0","size":"0"}]"""))
+            val manager = AddonManager(OkHttpClient(), listOf(at(bundled("tpb-audiobooks"), server.url("/q").toString())), allowTestHttp = true)
+            assertTrue(manager.search("Unknown book").isEmpty())
+        } finally { server.shutdown() }
+    }
+
     @Test fun pathsSupportArraysIndexesAndNumericObjectKeys() {
         val root = NarrioJson.parseToJsonElement("""{"authors":[{"name":"One"},{"name":"Two"}],"narrators":[{"name":"Reader"}],"product_images":{"500":"cover"}}""")
         assertEquals(listOf("One", "Two"), AddonManifest.values(root, "authors[].name").map { it.stringValue() })

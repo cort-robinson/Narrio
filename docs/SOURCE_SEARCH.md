@@ -28,7 +28,7 @@ Book details find listening sources by provider, Nuvio-style: each source gets i
 
 ### Settings
 
-- Settings → Add-ons becomes a single place for sources, with sections for **Audiobook sources**, **Ebook sources**, and **Book info**. Audiobook sources list the built-in sources (Internet Archive / LibriVox, My TorBox library, TorBox search) alongside installed add-ons.
+- Settings → Add-ons becomes a single place for sources, with sections for **Audiobook sources**, **Ebook sources**, and **Book info**. Audiobook sources list the built-in sources (Internet Archive / LibriVox and My TorBox library) alongside installed add-ons.
 - Each source can be turned on or off. Audiobook sources can be reordered; order sets the section order and tie-breaking. Built-in sources can be disabled but not removed. Sources needing TorBox say so when it isn't connected.
 - Existing add-on enable/remove/refresh/import behavior and persistence stay as they are.
 
