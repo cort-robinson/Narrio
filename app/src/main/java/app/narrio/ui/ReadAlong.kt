@@ -599,6 +599,8 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
     val formats by formatsFlow.collectAsStateWithLifecycle(null)
     val search by vm.ebookSearch.collectAsStateWithLifecycle()
     val connected by vm.connected.collectAsStateWithLifecycle()
+    val addons by vm.graph.addons.installed.collectAsStateWithLifecycle()
+    val searchLinks = remember(book.title, book.author, addons) { vm.graph.addons.ebookSearchLinks(book) }
     var sheet by remember { mutableStateOf(false) }
     val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     val ebook = formats?.ebook == true
@@ -621,7 +623,8 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
     val current = formats
     if (sheet && current != null) EbookSheet(book, current, search, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
         chooseFile = { vm.beginEbookImport(book); file.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
-        activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, dismiss = { sheet = false })
+        activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, dismiss = { sheet = false },
+        searchLinks = searchLinks, openSearch = { vm.openEbookWebsite(book, it) })
 }
 
 @OptIn(ExperimentalLayoutApi::class)
