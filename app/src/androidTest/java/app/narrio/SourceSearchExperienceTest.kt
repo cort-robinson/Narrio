@@ -203,17 +203,17 @@ class SourceSearchExperienceTest {
             compose.runOnIdle { originalAppearance = vm.appearance.value; vm.connected.value = false; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.DAY)); vm.navigate(2) }
             compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
             compose.onNodeWithText("TorBox isn't connected").assertIsDisplayed()
-            compose.onNodeWithTag("addon-options").performScrollToNode(hasTestTag("source-row:torbox-search"))
+            compose.onNodeWithTag("addon-options").performScrollToNode(hasTestTag("source-row:torbox-library"))
             capture("source-settings-day")
 
             // Built-ins switch off, but offer no Remove.
-            compose.onNodeWithTag("source-toggle:torbox-search").performClick()
-            compose.waitUntil(5_000) { !settings.providers.value.first { it.id == "torbox-search" }.enabled }
-            compose.onNodeWithContentDescription("More for TorBox search").performClick()
-            compose.onNodeWithText("Remove TorBox search").assertDoesNotExist()
-            val before = settings.providers.value.indexOfFirst { it.id == "torbox-search" }
+            compose.onNodeWithTag("source-toggle:torbox-library").performClick()
+            compose.waitUntil(5_000) { !settings.providers.value.first { it.id == "torbox-library" }.enabled }
+            compose.onNodeWithContentDescription("More for My TorBox library").performClick()
+            compose.onNodeWithText("Remove My TorBox library").assertDoesNotExist()
+            val before = settings.providers.value.indexOfFirst { it.id == "torbox-library" }
             compose.onNodeWithText("Move up").performClick()
-            compose.waitUntil(5_000) { settings.providers.value.indexOfFirst { it.id == "torbox-search" } == before - 1 }
+            compose.waitUntil(5_000) { settings.providers.value.indexOfFirst { it.id == "torbox-library" } == before - 1 }
 
             // TalkBack's Move down action, without dragging.
             val archive = settings.providers.value.indexOfFirst { it.id == "archive" }
