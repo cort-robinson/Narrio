@@ -97,6 +97,35 @@ class ReadAlongVisualQa {
         capture("phone-night-estimated")
     }
 
+    /** Read along with the reader's own marks: user highlights under and beside the narration, a highlight's tray, search. */
+    @Test fun withHighlights() {
+        for (mode in listOf(ThemeMode.NIGHT, ThemeMode.DAY)) {
+            appearance(mode)
+            readAlongAt(200_000)
+            val narrated = fixture.place(200_000)!!
+            val marks = fixture.reader().marks.value!!
+            val passages = fixture.document.chapters.flatMap { it.passages }
+            val next = passages[passages.indexOfFirst { it.id == narrated.passageId } + 2]
+            kotlinx.coroutines.runBlocking {
+                marks.highlight(narrated.sentence, app.narrio.reader.HighlightColor.entries[1])
+                val start = app.narrio.domain.ContentCursor(fixture.document.id, next.resource, next.offset)
+                marks.highlight(app.narrio.reader.CursorRange(start, start.copy(offset = next.offset + next.text.length)), app.narrio.reader.HighlightColor.entries[2])
+            }
+            Thread.sleep(1_500)
+            capture("highlights-${mode.name.lowercase()}")
+        }
+        compose.onNodeWithTag("reader-page").performTouchInput { click(androidx.compose.ui.geometry.Offset(width / 2f, height * .02f)) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Search this book").fetchSemanticsNodes().isNotEmpty() }
+        capture("highlights-day-controls")
+        compose.onNodeWithContentDescription("Search this book").performClick()
+        compose.onNodeWithTag("reader-search-field").performTextInput("Martha")
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("reader-search-result").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithTag("reader-search-result")[0].performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("reader-search-pill").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("back-to-narration").fetchSemanticsNodes().isNotEmpty() }
+        capture("highlights-day-search")
+    }
+
     @Test fun unfolded() {
         shell("wm size 1848x2448"); shell("wm density 360")
         for (mode in listOf(ThemeMode.NIGHT, ThemeMode.DAY)) {

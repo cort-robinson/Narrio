@@ -41,20 +41,28 @@ class ReadAlongExperienceTest {
         return result
     }
 
-    /** A point on a line of text, in the reader-page node's pixels, and the character there. */
-    private fun textPoint(controller: ReaderController): Pair<Offset, ContentCursor> {
+    /** The page web view on screen (the pager keeps its neighbours too): its content origin in reader-page pixels, and its size. */
+    private fun webContent(controller: ReaderController): Pair<Offset, Offset> {
         val node = compose.onNodeWithTag("reader-page").fetchSemanticsNode()
-        // Taps reach the reader in the web content's coordinates: inside the page web view and below its padding.
-        fun webView(view: android.view.View): android.webkit.WebView? = view as? android.webkit.WebView
-            ?: (view as? android.view.ViewGroup)?.let { group -> (0 until group.childCount).firstNotNullOfOrNull { webView(group.getChildAt(it)) } }
+        fun webViews(view: android.view.View): List<android.webkit.WebView> = (view as? android.webkit.WebView)?.let { listOf(it) }
+            ?: (view as? android.view.ViewGroup)?.let { group -> (0 until group.childCount).flatMap { webViews(group.getChildAt(it)) } } ?: emptyList()
         var shift = Offset.Zero
         var size = Offset.Zero
         fixture.onMain {
-            val web = requireNotNull(webView(controller.navigator!!.publicationView)) { "No page web view" }
-            val at = IntArray(2).also(web::getLocationOnScreen)
+            val at = IntArray(2)
+            val web = webViews(controller.navigator!!.publicationView).first { view ->
+                view.getLocationOnScreen(at); view.isShown && at[0] + view.width / 2 in node.positionOnScreen.x.toInt()..(node.positionOnScreen.x + node.size.width).toInt()
+            }
+            web.getLocationOnScreen(at)
             shift = Offset(at[0] + web.paddingLeft - node.positionOnScreen.x, at[1] + web.paddingTop - node.positionOnScreen.y)
             size = Offset((web.width - web.paddingLeft - web.paddingRight).toFloat(), (web.height - web.paddingTop - web.paddingBottom).toFloat())
         }
+        return shift to size
+    }
+
+    /** A point on a line of text, in the reader-page node's pixels, and the character there. */
+    private fun textPoint(controller: ReaderController): Pair<Offset, ContentCursor> {
+        val (shift, size) = webContent(controller)
         for (fraction in listOf(.3f, .34f, .38f, .42f, .46f, .5f, .55f, .6f)) {
             val point = Offset(size.x * .5f, size.y * fraction)
             var cursor: ContentCursor? = null
@@ -128,6 +136,63 @@ class ReadAlongExperienceTest {
         compose.runOnIdle { vm.back() }
         compose.waitUntil(10_000) { vm.reader.value == null && vm.playerOpen.value }
         assertEquals(estimatedAt, graph.playback.state.value.positionMs)
+    }
+
+    /** A point on the page (reader-page pixels) whose character satisfies [wanted], or, with null, a point beside the text. */
+    private fun pagePoint(controller: ReaderController, wanted: ((ContentCursor) -> Boolean)?): Offset {
+        val (shift, size) = webContent(controller)
+        for (step in 1 until 60) {
+            val point = Offset(size.x * .5f, size.y * step / 60f)
+            var cursor: ContentCursor? = null
+            fixture.onMain { cursor = controller.cursorAt(point.x, point.y) }
+            val found = cursor
+            if (if (wanted == null) found == null else found != null && wanted(found)) return point + shift
+        }
+        throw AssertionError("No such point on the page")
+    }
+
+    @Test fun highlightsSearchAndBookmarksKeepWorkingWhileReadingAlong() {
+        fixture.seek(200_000)
+        compose.runOnIdle { vm.playerOpen.value = true }
+        compose.onNodeWithTag("read-along").performClick()
+        val controller = fixture.controller()
+        val narrated = fixture.place(200_000)!!
+        compose.waitUntil(15_000) { controller.following.value && controller.visible.value?.contains(narrated.cursor) == true && marks(controller, ".narrio-said") > 0 }
+        val marks = fixture.reader().marks.value!!
+
+        // A highlight on the narrated sentence is drawn alongside the narration, not replaced by it.
+        val highlight = kotlinx.coroutines.runBlocking { marks.highlight(narrated.sentence) }!!
+        compose.waitUntil(10_000) { marks(controller, "[data-group=\"narrio-highlights\"] *") > 0 }
+        assertTrue("narration stays drawn", marks(controller, ".narrio-said") > 0)
+
+        // Tapping the highlight opens its tray; it doesn't seek.
+        val before = graph.playback.state.value.positionMs
+        // The centre of the highlight's first drawn line box, where Readium's own hit test finds it.
+        val box = org.json.JSONObject(fixture.evaluate(controller,
+            "JSON.stringify(document.querySelector('[data-group=\\\"narrio-highlights\\\"] > div > *').getBoundingClientRect())")!!.let { if (it.startsWith("\"")) org.json.JSONTokener(it).nextValue() as String else it })
+        val density = compose.activity.resources.displayMetrics.density
+        val (shift, _) = webContent(controller)
+        val onHighlight = Offset(((box.getDouble("left") + box.getDouble("width") / 2) * density).toFloat(), ((box.getDouble("top") + box.getDouble("height") / 2) * density).toFloat()) + shift
+        compose.onNodeWithTag("reader-page").performTouchInput { click(onHighlight) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("reader-highlight-tray").fetchSemanticsNodes().isNotEmpty() }
+        Thread.sleep(800)
+        assertEquals("a highlight tap doesn't seek", before, graph.playback.state.value.positionMs)
+
+        // The controls, the bookmark ribbon, and search all work while reading along.
+        compose.onNodeWithTag("reader-page").performTouchInput { click(pagePoint(controller, null)) }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("reader-bookmark-ribbon").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("reader-bookmark-ribbon").performClick()
+        compose.waitUntil(10_000) { marks.bookmarks.value.isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithContentDescription("Search this book").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Search this book").performClick()
+        compose.onNodeWithTag("reader-search-field").performTextInput("Martha")
+        compose.waitUntil(20_000) { compose.onAllNodesWithTag("reader-search-result").fetchSemanticsNodes().isNotEmpty() }
+        assertFalse("the first match is elsewhere", controller.visible.value!!.contains(marks.search.state.value.hits.first().range.start))
+        compose.onAllNodesWithTag("reader-search-result")[0].performClick()
+        compose.waitUntil(10_000) { !controller.following.value && controller.visible.value?.contains(marks.search.state.value.hits.first().range.start) == true }
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("back-to-narration").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("back-to-narration").performClick()
+        compose.waitUntil(10_000) { controller.following.value && controller.visible.value?.contains(narrated.cursor) == true }
     }
 
     @Test fun startingFromAPageMovesTheNarrationThereWithUndo() {

@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.window.layout.FoldingFeature
@@ -229,8 +230,11 @@ private fun readAlongFor(vm: NarrioViewModel, reader: ReaderViewModel, request: 
 
     // A tap on text plays from its sentence (keeping play/pause); while fixing the timing it chooses the sentence.
     LaunchedEffect(controller) {
+        // A tap on a highlight opens it; the page can report the same tap too, which must not also seek.
+        var decorationTapAt = 0L
         controller.events.collect { event ->
-            if (event !is ReaderEvent.TextTapped) return@collect
+            if (event is ReaderEvent.DecorationActivated) { decorationTapAt = SystemClock.uptimeMillis(); return@collect }
+            if (event !is ReaderEvent.TextTapped || SystemClock.uptimeMillis() - decorationTapAt < 600) return@collect
             val doc = state.document ?: return@collect
             if (state.matching) { state.selected = Narration.passageAt(doc, event.cursor); return@collect }
             if (!state.playingHere) { vm.messages.tryEmit("Start the narration from this page with Listen from here."); return@collect }
@@ -307,15 +311,18 @@ fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Com
 
 /** The phone's tray: speed · −30 · play · +30 · sleep, under a line of narration status. */
 @Composable
-fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: ListeningState, options: () -> Unit, modifier: Modifier = Modifier) {
+fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: ListeningState, options: () -> Unit, modifier: Modifier = Modifier, above: Dp = 0.dp) {
     var speedOpen by remember { mutableStateOf(false) }
     var sleepOpen by remember { mutableStateOf(false) }
     val progress = if (playback.durationMs > 0) (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f) else 0f
     val lift = LocalSnackbarLift.current
     val density = LocalDensity.current
+    var height by remember { mutableStateOf(0.dp) }
+    // Snackbars rise above the tray, and above whatever the page shows just over it ([above]).
+    LaunchedEffect(height, above) { lift.value = height + above }
     DisposableEffect(lift) { onDispose { lift.value = 0.dp } }
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth().testTag("read-along-tray")
-        .onSizeChanged { lift.value = with(density) { it.height.toDp() } }) {
+        .onSizeChanged { height = with(density) { it.height.toDp() } }) {
         Column(Modifier.navigationBarsIgnoringVisibilityPadding()) {
             if (readAlong.playingHere && playback.durationMs > 0) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp).clearAndSetSemantics { },
                 color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})

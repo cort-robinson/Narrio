@@ -415,9 +415,9 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             // shows the narration being followed.
             if (first == previous) return@launch
             if (_following.value && followAnchor?.let(range::contains) == true) return@launch
-            // While following, only the reader's own touch or turn stops it; a page change without one is the
-            // navigator settling after a relayout, so the narration goes back on screen.
-            if (_following.value && !inputRecently()) { followAnchor?.let { goTo(it); scheduleProbe(350) }; return@launch }
+            // While following, only the reader's own touch, turn, or jump (contents, search, bookmarks) stops it; a page
+            // change without one is the navigator settling after a relayout, so the narration goes back on screen.
+            if (_following.value && !jumpPending && !inputRecently()) { followAnchor?.let { goTo(it); scheduleProbe(350) }; return@launch }
             val jump = jumpPending
             jumpPending = false
             readerTarget = null

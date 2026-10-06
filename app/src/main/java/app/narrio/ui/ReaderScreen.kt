@@ -258,7 +258,9 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
         val alongNow = readAlong ?: return@ReadAlongLayout
         Box {
             when (arrangement) {
-                ReadAlongArrangement.TRAY -> ReadAlongTray(appVm, alongNow, playback, { optionsOpen = true })
+                // The highlight tray and search pill sit just above the read-along tray; snackbars clear them too.
+                ReadAlongArrangement.TRAY -> ReadAlongTray(appVm, alongNow, playback, { optionsOpen = true },
+                    above = if (marksUi.stackHeight > 0.dp) marksUi.stackHeight + 48.dp else 0.dp)
                 ReadAlongArrangement.PANEL -> ReadAlongPanel(appVm, alongNow, playback, { optionsOpen = true })
                 ReadAlongArrangement.TABLETOP -> ReadAlongDeck(appVm, alongNow, playback, { optionsOpen = true }, { sheet = "contents" })
             }

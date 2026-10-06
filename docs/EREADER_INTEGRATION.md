@@ -47,9 +47,11 @@ Read along (`ui/ReadAlong.kt`) is built on the API above without contract change
 - `MappingEngine.audioFor` uses the timeline's measured pace beyond the outermost anchors, as `textFor` already did,
   so an estimated place mapped to audio and back stays on its sentence (C's engine; covered by `NarrationTest`).
 
-F's selection menu, highlight groups, and search hits can coexist: read along uses its own decoration groups
-(`narration`, `narration-word`, `narration-selected`) and leaves `selectionActionMode` untouched. With `textTaps` on,
-taps on text seek; F's highlight activation still arrives as `DecorationActivated`.
+With F: narration uses its own groups (`narration`, `narration-word`, `narration-selected`) beside F's
+`narrio-highlights` and `narrio-search`, through F's main-thread application and once-per-navigator tap listener;
+E adds serialized, non-cancellable drawing and redraws. Readium hit-tests every group before a tap reaches the page,
+so narration marks expose only an off-page activable element: a highlight under the narration still opens F's tray,
+and other taps on text seek. The top bar's actions slot holds F's Search and E's read-along action.
 
 ## Annotations and search (F)
 
@@ -103,7 +105,7 @@ Delivered (F):
 
 ## Remaining scope
 
-No open product identity decision. Annotations/search UI remain F's work. Read along can't show WebVTT-only text, so VTT import was retired with the passage list.
+No open product identity decision. Together mode (E) and annotations/search (F) are delivered. Read along can't show WebVTT-only text, so VTT import was retired with the passage list.
 Fixed-layout/PDF/DRM remain unsupported. Two-page spreads do not yet use a real separating hinge; read along places its panel beyond one.
 Real narration accuracy, battery/background behavior, physical devices, live delivery providers,
 TalkBack and minified-release runtime acceptance remain separate from controlled integration checks.
