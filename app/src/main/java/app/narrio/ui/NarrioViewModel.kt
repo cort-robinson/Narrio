@@ -30,7 +30,8 @@ data class SourceSearchState(
     val book: Audiobook? = null, val recordings: List<Audiobook> = emptyList(), val loading: Boolean = false, val searched: Boolean = false,
     val error: String? = null, val possible: List<Audiobook> = emptyList(), val chosenId: String? = null,
 ) {
-    val choice: Audiobook? get() = recordings.firstOrNull { it.id == chosenId } ?: recordings.firstOrNull()
+    /** The listener may pick any match, including a possible one; otherwise the best verified recording leads. */
+    val choice: Audiobook? get() = results.firstOrNull { it.id == chosenId } ?: recordings.firstOrNull()
     val versions: List<Audiobook> by lazy { SourceQuality.versions(recordings) }
     val results: List<Audiobook> get() = recordings + possible
 }
@@ -246,20 +247,47 @@ class NarrioViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun chooseVersion(recording: Audiobook) {
-        sourceSearch.update { state -> if (recording in state.recordings) state.copy(chosenId = recording.id) else state }
+        sourceSearch.update { state -> if (recording in state.results) state.copy(chosenId = recording.id) else state }
     }
 
-    /** Plays the chosen recording directly when it is ready; otherwise its page offers explicit TorBox preparation. */
-    fun listenToChoice() = viewModelScope.launch {
+    /** The audio format remembered for a book, chosen in Listening options or on a recording's page. */
+    fun savedFormat(bookId: String): String = graph.preferences.getString("format:$bookId", "").orEmpty()
+
+    /**
+     * Plays the chosen recording directly when it is ready, in [format] when given, else the remembered or best
+     * format; an unready recording opens its page, where TorBox preparation is explicit.
+     */
+    fun listenToChoice(format: String? = null) = viewModelScope.launch {
         val search = sourceSearch.value
         val book = search.book ?: return@launch
         val recording = search.choice ?: return@launch
         val described = graph.followAlong.adoptRecording(SourceQuality.describe(recording, book), book)
         val formats = if (recording.provider == "archive") recording.sources else recording.sources.filter { it.format in recording.cachedFormats }
         if (!SourceQuality.ready(recording) || formats.isEmpty()) return@launch open(described, keepSources = true)
-        val saved = graph.preferences.getString("format:${described.id}", "")
-        val source = formats.firstOrNull { it.format == saved } ?: formats.firstOrNull { it.format == "M4B" } ?: formats.first()
+        val wanted = format ?: savedFormat(described.id)
+        val source = formats.firstOrNull { it.format == wanted } ?: formats.firstOrNull { it.format == "M4B" } ?: formats.first()
+        if (format != null) chooseFormat(described, format)
         start(described, source, if (recording.provider == "archive") "archive" else "torbox")
+    }
+
+    /** Saves the chosen recording's audio to the phone, as Download to phone does on a recording's page. */
+    fun downloadChoice(format: String) = viewModelScope.launch {
+        val search = sourceSearch.value
+        val book = search.book ?: return@launch
+        val recording = search.choice ?: return@launch
+        val described = graph.followAlong.adoptRecording(SourceQuality.describe(recording, book), book)
+        val source = described.sources.firstOrNull { it.format == format } ?: return@launch
+        chooseFormat(described, format)
+        download(described, source, if (recording.provider == "archive") "archive" else "torbox")
+    }
+
+    /** Asks TorBox to fetch the chosen uncached recording; its progress then shows on this book's page. */
+    fun prepareChoice(format: String) = viewModelScope.launch {
+        val search = sourceSearch.value
+        val book = search.book ?: return@launch
+        val recording = search.choice ?: return@launch
+        val described = graph.followAlong.adoptRecording(SourceQuality.describe(recording, book), book)
+        prepareUncached(described, format)
     }
 
     fun open(book: Audiobook, keepSources: Boolean = false) {

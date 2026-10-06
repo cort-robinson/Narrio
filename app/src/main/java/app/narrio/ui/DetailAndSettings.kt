@@ -63,10 +63,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     var ebookSheet by remember(book.id) { mutableStateOf(false) }
     val ebookFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     var expandedDescription by remember(book.id) { mutableStateOf(false) }
-    var showVersions by remember(book.id) { mutableStateOf(false) }
-    var showResults by remember(book.id) { mutableStateOf(false) }
-    // A page that is leaving (or being reused mid-exit) never carries its source sheet with it.
-    LaunchedEffect(currentSelection.book?.id) { if (currentSelection.book?.id != book.id) sourcePicker = false }
+    var listeningOptions by remember(book.id) { mutableStateOf(false) }
+    // A page that is leaving (or being reused mid-exit) never carries its sheets with it.
+    LaunchedEffect(currentSelection.book?.id) { if (currentSelection.book?.id != book.id) { sourcePicker = false; listeningOptions = false } }
     val catalogBook = book.provider == "catalog"
     val saved = shelf.any { it.bookId == book.id }
     val formats = loadedFormats?.takeIf { it.bookId == book.id } ?: BookFormats(book.id, audio = !catalogBook && book.sources.isNotEmpty())
@@ -132,7 +131,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 when {
                     awaitingAudioSearch -> OutlinedButton({ vm.findSources(book, force = true) }, slot.testTag("find-audiobook-action")) { SlotLabel(Icons.Rounded.Search, "Find audiobook") }
                     starting -> ModeButton({}, slot.testTag("listen-action"), leading, enabled = false) { WorkingLabel("Starting…") }
-                    catalogBook -> CatalogListenButton(vm, book, sourceSearch, busy, slot, leading) { showResults = true }
+                    catalogBook -> CatalogListenButton(vm, book, sourceSearch, busy, slot, leading) { listeningOptions = true }
                     else -> ModeButton({ sourcePicker = true }, slot.testTag("listen-action"), leading, enabled = !selected.loading && book.sources.isNotEmpty() && !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
                 }
             }, read = { vm.read(book) }, findEbook = openEbooks)
@@ -144,8 +143,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else if (catalogBook) {
                 Spacer(Modifier.height(12.dp))
-                SourceStatus(vm, book, sourceSearch.takeIf { it.book?.id == book.id } ?: SourceSearchState(book), connected,
-                    showVersions = { showVersions = !showVersions; showResults = false }, showResults = { showResults = !showResults; showVersions = false })
+                SourceStatus(vm, book, sourceSearch.takeIf { it.book?.id == book.id } ?: SourceSearchState(book), connected) { listeningOptions = true }
             } else if (book.detailsLoaded && book.sources.isEmpty()) {
                 Spacer(Modifier.height(12.dp)); Text(if (book.provider == "knaben") "No cached audio files found for this release. Try another ready source. File formats appear once a source is available in TorBox." else "This edition has no compatible audio files. Try another recording.", style = MaterialTheme.typography.bodyMedium)
                 if (book.provider == "knaben" && connected && preparation == null) OutlinedButton({ vm.prepareUncached(book, "") }, enabled = !busy) { Text("Prepare this release in TorBox") }
@@ -157,27 +155,6 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             if (!catalogBook && sourceSearch.book?.provider == "catalog") TextButton({ vm.back() }) { Text("Choose another recording") }
         } }
         if (formats.ebook) item(key = "edition") { EditionSummary(book, formats, openEbooks, Modifier.animateItem()) }
-        if (catalogBook && sourceSearch.book?.id == book.id && !sourceSearch.loading) {
-            val choice = sourceSearch.choice
-            if (showVersions && sourceSearch.versions.size > 1) {
-                item(key = "versions-title") { Text("Versions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.animateItem()) }
-                items(sourceSearch.versions, key = { "version:${it.id}" }) { recording ->
-                    SourceRow(recording, book, Modifier.animateItem(), selected = recording.id == choice?.id) { vm.chooseVersion(recording); showVersions = false }
-                }
-            }
-            if (showResults && sourceSearch.results.isNotEmpty()) {
-                item(key = "results-title") {
-                    Column(Modifier.animateItem()) {
-                        Text("Search results", style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(4.dp))
-                        Text("Closest matches first. Check the release name and narrator before listening.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                items(sourceSearch.results, key = { "result:${it.id}" }) { recording ->
-                    SourceRow(recording, book, Modifier.animateItem(), possible = recording in sourceSearch.possible) { vm.chooseRecording(recording) }
-                }
-            }
-        }
         downloads.filter { it.book.id == book.id }.forEach { download -> item(key = "download:${download.source.id}") { OfflineStatus(vm, download, Modifier.animateItem()) } }
         preparation?.let { prep -> item(key = "preparation") {
             Column(Modifier.animateItem().fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp)) {
@@ -227,6 +204,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     }
     }
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
+    if (listeningOptions && search != null && search.results.isNotEmpty()) ListeningOptionsSheet(vm, book, search, connected, busy) { listeningOptions = false }
     if (ebookSheet) EbookSheet(book, formats, ebookSearch, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
         chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks,
@@ -246,9 +224,11 @@ private fun CatalogListenButton(vm: NarrioViewModel, book: Audiobook, search: So
     val choice = current?.choice
     when {
         current == null || current.loading || !current.searched -> ModeButton({}, modifier, leading, enabled = false) { WorkingLabel("Finding audio…") }
-        choice != null -> ModeButton({ vm.listenToChoice() }, modifier.testTag("listen-action"), leading, enabled = !busy) {
+        choice != null -> {
             val ready = SourceQuality.ready(choice)
-            SlotLabel(if (ready) Icons.Rounded.PlayArrow else Icons.Rounded.CloudDownload, if (ready) "Listen" else "Review and prepare")
+            ModeButton({ if (ready) vm.listenToChoice() else review() }, modifier.testTag("listen-action"), leading, enabled = !busy) {
+                SlotLabel(if (ready) Icons.Rounded.PlayArrow else Icons.Rounded.CloudDownload, if (ready) "Listen" else "Review and prepare")
+            }
         }
         current.results.isNotEmpty() -> ModeButton(review, modifier, leading) { SlotLabel(Icons.Rounded.Search, "Choose a recording") }
         else -> ModeButton({ vm.findSources(book, force = true) }, modifier, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
@@ -264,7 +244,7 @@ private fun RowScope.WorkingLabel(text: String) {
 /** Explains what was chosen automatically, or why nothing was, with only the next useful actions. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SourceStatus(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, connected: Boolean, showVersions: () -> Unit, showResults: () -> Unit) {
+private fun SourceStatus(vm: NarrioViewModel, book: Audiobook, search: SourceSearchState, connected: Boolean, options: () -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val choice = search.choice
     when {
@@ -274,10 +254,9 @@ private fun SourceStatus(vm: NarrioViewModel, book: Audiobook, search: SourceSea
             Text(listOf(availabilityLabel(choice), choice.sources.joinToString(" / ") { it.format }, versionLabel(choice, book)).filter(String::isNotBlank).joinToString(" · "),
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary)
             Text(choice.releaseTitle.ifBlank { choice.title }, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 4.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (search.versions.size > 1) TextButton(showVersions) { Text("${search.versions.size} versions") }
-                TextButton({ vm.chooseRecording(choice) }) { Text("Listening options") }
-                if (search.results.size > 1) TextButton(showResults) { Text("Not the right recording?") }
+            // One door to every choice: other recordings, the audio format, downloads, and TorBox preparation.
+            TextButton(options, Modifier.testTag("listening-options-action")) {
+                Text(if (search.results.size > 1) "Change recording or format · ${search.results.size} found" else "Change audio format")
             }
         }
         else -> {
@@ -295,30 +274,7 @@ private fun SourceStatus(vm: NarrioViewModel, book: Audiobook, search: SourceSea
     }
 }
 
-@Composable
-private fun SourceRow(recording: Audiobook, book: Audiobook, modifier: Modifier, selected: Boolean = false, possible: Boolean = false, action: () -> Unit) {
-    Column(modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
-            .clickable(onClick = action).padding(vertical = 8.dp, horizontal = if (selected) 8.dp else 0.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(recording.releaseTitle.ifBlank { recording.title }, style = MaterialTheme.typography.titleSmall)
-                Text(versionLabel(recording, book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                Text(listOf(providerLabel(recording), recording.sources.joinToString(" / ") { it.format }).filter(String::isNotBlank).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(when { recording.cacheState == "cached" -> Icons.Rounded.Bolt; recording.provider == "archive" -> Icons.Rounded.Headphones; else -> Icons.Rounded.CloudDownload }, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                    Text(availabilityLabel(recording) + if (possible) " · Possible match" else "", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                }
-            }
-            Icon(if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.ChevronRight, null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Spacer(Modifier.height(8.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-    }
-}
-
-private fun availabilityLabel(recording: Audiobook) = when {
+internal fun availabilityLabel(recording: Audiobook) = when {
     recording.cacheState == "cached" -> "Ready in TorBox"
     recording.provider == "archive" -> "Free public recording"
     recording.filesVerified -> "Needs TorBox preparation"
@@ -326,7 +282,7 @@ private fun availabilityLabel(recording: Audiobook) = when {
 }
 
 /** Narrator, dramatization/abridgment, and language: what distinguishes one version from another. */
-private fun versionLabel(recording: Audiobook, book: Audiobook): String {
+internal fun versionLabel(recording: Audiobook, book: Audiobook): String {
     val edition = SourceQuality.edition(recording)
     return listOf(edition.narrator.takeIf(String::isNotBlank)?.let { "Read by $it" } ?: "Narrator not listed", edition.kind,
         edition.language.takeUnless { it.isBlank() || it.equals(book.language, true) }.orEmpty()).filter(String::isNotBlank).joinToString(" · ")
