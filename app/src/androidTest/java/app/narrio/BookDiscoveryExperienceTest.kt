@@ -1,20 +1,32 @@
 package app.narrio
 
+import android.content.Context
+import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.domain.*
-import app.narrio.data.SourceQuality
+import app.narrio.data.*
 import app.narrio.ui.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.jsonObject
+import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Controlled catalog/source states. Opening a catalog book looks up sources automatically, so these tests
- * inject the book's selection and lookup results directly; they make no recording or delivery lookup.
+ * Controlled catalog/source fixtures. Display tests inject selection/results; lookup regressions exercise
+ * the ViewModel and matcher with a synthetic public provider, without live audio-provider or delivery calls.
  */
 @RunWith(AndroidJUnit4::class)
 class BookDiscoveryExperienceTest {
@@ -27,6 +39,124 @@ class BookDiscoveryExperienceTest {
     /** Lazy rows below the fold aren't composed until the details list scrolls to them. */
     private fun reveal(matcher: SemanticsMatcher) = compose.onNode(hasScrollToNodeAction()).performScrollToNode(matcher)
     private fun show(state: SourceSearchState) = compose.runOnIdle { vm.connected.value = false; vm.selection.value = SelectionState(book); vm.sourceSearch.value = state }
+
+    private val fixtureStore = ViewModelStore()
+    private val fixtureBooks = mutableSetOf<String>()
+    @After fun cleanLookupFixtures() = runBlocking {
+        compose.runOnIdle { fixtureStore.clear() }
+        fixtureBooks.forEach { vm.graph.followAlong.remove(it); vm.graph.library.remove(it) }
+    }
+
+    /** Runs the real matcher against one public fixture recording; no live audio provider or delivery call. */
+    private fun lookupFixture(calls: AtomicInteger): NarrioViewModel {
+        val audio = recording("lookup-fixture", book.title, "Fixture Reader")
+        val archive = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String): List<Audiobook> {
+                calls.incrementAndGet()
+                return listOf(audio)
+            }
+            override suspend fun recording(id: String): Audiobook = error("The fixture is already hydrated")
+        }
+        val discovery = BookSourceDiscovery(archive, emptyList(), { error("Disconnected") }, { error("No torrents") })
+        lateinit var fixture: NarrioViewModel
+        compose.runOnIdle {
+            fixture = NarrioViewModel(compose.activity.application, discovery::search)
+            fixtureStore.put("lookup", fixture)
+            fixture.connected.value = false
+            compose.activity.setContent { NarrioApp(compose.activity, fixture) }
+        }
+        return fixture
+    }
+
+    /** A saved catalog book could have follow-along text before ever choosing an audio source. */
+    private fun migrateCatalogText(): Audiobook = runBlocking {
+        val context = compose.activity
+        val name = "catalog-lookup-v4.db"
+        val catalogBook = book.copy(id = "catalog:lookup-migrated")
+        fixtureBooks += catalogBook.id
+        context.deleteDatabase(name)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val schema = NarrioJson.parseToJsonElement(instrumentation.context.assets.open("app.narrio.data.LibraryDatabase/4.json")
+            .bufferedReader().use { it.readText() }).jsonObject["database"]!!.jsonObject
+        val bytes = "Chapter One\n\nA saved follow-along edition.".toByteArray()
+        val document = BookTextParser.parse(bytes, "TXT", catalogBook.title, catalogBook.author)
+        val folder = File(context.filesDir, "follow-along/${BookTextParser.fingerprint(catalogBook.id.toByteArray())}").apply { mkdirs() }
+        File(folder, "${document.id}.txt").writeBytes(bytes)
+        File(folder, "${document.id}.json").writeText(NarrioJson.encodeToString(document))
+        context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { old ->
+            schema.objects("entities").forEach { table ->
+                old.execSQL(table.text("createSql").replace("\${TABLE_NAME}", table.text("tableName")))
+                table.objects("indices").forEach { old.execSQL(it.text("createSql").replace("\${TABLE_NAME}", table.text("tableName"))) }
+            }
+            old.execSQL("INSERT INTO shelf VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>(catalogBook.id, NarrioJson.encodeToString(catalogBook), "", "", 0, 1, 0, "saved", 0, ""))
+            old.execSQL("INSERT INTO book_text VALUES (?, ?)", arrayOf(catalogBook.id, document.id))
+            old.version = 4
+        }
+        val migrated = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration4To5).build()
+        try {
+            val dao = migrated.library()
+            assertFalse(dao.find(catalogBook.id)!!.hasAudio)
+            assertEquals("TXT", dao.editions(catalogBook.id).single().format)
+            // Copy the migrated rows into the app's isolated test library to exercise RoomReadingLibrary + open.
+            vm.graph.library.save(dao.find(catalogBook.id)!!.book())
+            dao.editions(catalogBook.id).forEach { vm.graph.library.putEdition(it) }
+            vm.graph.library.putBookText(dao.bookText(catalogBook.id)!!)
+        } finally { migrated.close(); context.deleteDatabase(name) }
+        catalogBook
+    }
+
+    @Test fun openingMigratedCatalogWithTextFindsAudioAndReusesResults() {
+        val migrated = migrateCatalogText()
+        val calls = AtomicInteger()
+        val fixture = lookupFixture(calls)
+        val formats = runBlocking { fixture.readingLibrary.value.observeBook(migrated).first() }
+        assertTrue(formats.ebook)
+        assertFalse(formats.audio)
+        compose.runOnIdle { fixture.open(migrated) }
+        compose.waitUntil(5_000) { fixture.sourceSearch.value.searched && !fixture.sourceSearch.value.loading }
+        assertEquals("lookup-fixture", fixture.sourceSearch.value.choice?.id)
+        compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        File(compose.activity.filesDir, "audio-lookup-regression.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+        assertEquals(1, calls.get())
+        compose.runOnIdle { fixture.open(migrated) }
+        compose.waitUntil(5_000) { fixture.sourceSearch.value.choice != null }
+        assertEquals("Returning to the parent book reuses its lookup", 1, calls.get())
+        compose.runOnIdle { fixture.chooseRecording(fixture.sourceSearch.value.choice!!) }
+        compose.waitUntil(5_000) { fixture.selection.value.book?.recordingId == "lookup-fixture" }
+        assertEquals(migrated.id, fixture.selection.value.book?.id)
+        compose.runOnIdle { fixture.back() }
+        compose.waitUntil(5_000) { fixture.selection.value.book?.provider == "catalog" }
+        assertEquals(1, calls.get())
+    }
+
+    @Test fun catalogLookupStartsWithoutWaitingForReadingLibrary() {
+        val calls = AtomicInteger()
+        val fixture = lookupFixture(calls)
+        compose.runOnIdle {
+            fixture.readingLibrary.value = object : ReadingLibrary by fixture.readingLibrary.value {
+                override fun observeBook(book: Audiobook): Flow<BookFormats> = flow { awaitCancellation() }
+            }
+            fixture.open(book)
+        }
+        compose.waitUntil(5_000) { fixture.sourceSearch.value.choice != null }
+        assertEquals(1, calls.get())
+    }
+
+    @Test fun findAudiobookButtonRunsLookupForBookWithEbook() {
+        val migrated = migrateCatalogText()
+        val calls = AtomicInteger()
+        val fixture = lookupFixture(calls)
+        // An unsearched details state still exposes the explicit action (e.g. restored/injected selection).
+        compose.runOnIdle { fixture.selection.value = SelectionState(migrated); fixture.sourceSearch.value = SourceSearchState(migrated) }
+        compose.waitUntil(5_000) { fixture.detailFormats.value?.ebook == true }
+        compose.onNodeWithTag("find-audiobook-action").performScrollTo().performClick()
+        compose.waitUntil(5_000) { fixture.sourceSearch.value.choice != null }
+        assertEquals(1, calls.get())
+        compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
+    }
 
     @Test fun verifiedUncachedSourceIsLabelledAndRequiresExplicitPreparation() {
         val eragon = book.copy(title = "Eragon", author = "Christopher Paolini")
