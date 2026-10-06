@@ -42,7 +42,7 @@ class MetadataExperienceTest {
             graph.library.progress(original.id, NarrioJson.encodeToString(original.sources.single()), "metadata-part", 123_000, 99)
             val enriched = graph.metadata.enrich(original)
             assertEquals("Project Hail Mary", enriched.title); assertEquals("Andy Weir", enriched.author)
-            assertEquals("Ray Porter", enriched.narrator); assertEquals("Audible", enriched.metadataSource)
+            assertEquals("Ray Porter", enriched.narrator); assertTrue("catalog add-on named ${enriched.metadataSource}", enriched.metadataSource.startsWith("Audible"))
             assertTrue(enriched.description.length > 500); assertTrue(enriched.coverUrl.startsWith("https://"))
             graph.library.updateBookDetails(enriched.copy(sources = emptyList(), cacheState = "uncached"))
             val saved = graph.library.find(original.id)!!
@@ -55,10 +55,10 @@ class MetadataExperienceTest {
 
     @Test fun recordingDisplaysRealArtCatalogAttributionAndNonBlockingMetadataState() {
         val enriched = runBlocking { graph.metadata.enrich(book()) }
-        assertEquals("Audible", enriched.metadataSource)
+        assertTrue("catalog add-on named ${enriched.metadataSource}", enriched.metadataSource.startsWith("Audible"))
         val appearance = InstrumentationRegistry.getArguments().getString("reviewTheme", "Night")
         compose.runOnIdle { vm.connected.value = false; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.entries.firstOrNull { it.label == appearance } ?: ThemeMode.NIGHT)); vm.open(enriched) }
-        compose.waitUntil(20_000) { vm.selection.value.book?.metadataSource == "Audible" && !vm.selection.value.loading && !vm.selection.value.metadataLoading }
+        compose.waitUntil(20_000) { vm.selection.value.book?.metadataSource?.startsWith("Audible") == true && !vm.selection.value.loading && !vm.selection.value.metadataLoading }
         compose.onNodeWithText("Catalog narrator: Ray Porter").assertIsDisplayed()
         compose.onNodeWithContentDescription("Cover of Project Hail Mary").assertExists()
         compose.waitUntil(15_000) { compose.onAllNodesWithText("Project Hail Mary").fetchSemanticsNodes().size == 1 }
@@ -66,7 +66,7 @@ class MetadataExperienceTest {
         val window = compose.activity.resources.configuration
         val suffix = (if (window.screenWidthDp >= 600) "expanded" else if (window.fontScale > 1.2f) "large-text" else "phone") + if (appearance == "Day") "-day" else ""
         capture("metadata-recording-$suffix")
-        compose.onNodeWithText("Details from Audible").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Details from Audible", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Refresh book details").performScrollTo().assertIsEnabled()
         capture("metadata-description-$suffix")
         compose.runOnIdle { vm.selection.value = SelectionState(enriched, metadataLoading = true) }

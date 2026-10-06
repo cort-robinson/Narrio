@@ -203,9 +203,10 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
         // Below the tray or the tabletop hinge, the page no longer meets the navigation bar.
         val bottom = if (arrangement == ReadAlongArrangement.TRAY || arrangement == ReadAlongArrangement.TABLETOP) 0.dp
             else WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-        val margin = if (spread) 40.dp else 0.dp
+        // The page keeps only the room its running head and folio need; the shell adds no insets of its own here.
+        val margin = if (spread) 16.dp else 0.dp
         EpubReaderView(controller, preferences, spread, Modifier.fillMaxSize()
-            .padding(top = top + 36.dp, bottom = bottom + 34.dp, start = margin, end = margin)
+            .padding(top = top + 28.dp, bottom = bottom + 26.dp, start = margin, end = margin)
             .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
             .testTag("reader-page"), selectionActionMode = marksUi.selectionMenu)
 
@@ -213,10 +214,10 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
         val quiet = MaterialTheme.colorScheme.onSurfaceVariant
         AnimatedVisibility(!controls && ready, Modifier.align(Alignment.TopCenter), enter = fadeIn(), exit = fadeOut()) {
             Text(location.chapter ?: book.title, style = MaterialTheme.typography.labelSmall, color = quiet, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = top + 12.dp).padding(horizontal = 48.dp))
+                modifier = Modifier.padding(top = top + 8.dp).padding(horizontal = 48.dp))
         }
         AnimatedVisibility(!controls && ready && layout != null, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
-            Row(Modifier.fillMaxWidth().padding(bottom = bottom + 10.dp).padding(horizontal = 28.dp + margin).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth().padding(bottom = bottom + 6.dp).padding(horizontal = 24.dp + margin).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(folioPlace(location), style = MaterialTheme.typography.labelSmall, color = quiet)
                 timeLeft(location)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = quiet) }
             }

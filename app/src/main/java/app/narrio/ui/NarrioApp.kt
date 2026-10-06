@@ -119,7 +119,9 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         var barHeight by remember { mutableStateOf(0.dp) }
         val snackbarLift = remember { mutableStateOf(0.dp) }
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground, LocalFold provides fold, LocalSnackbarLift provides snackbarLift) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))) {
+        // Screens pad themselves below the status bar and beside cutouts; the reader alone draws edge to edge.
+        val shellInsets = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             val windowWidth = maxWidth
             val expanded = maxWidth >= 600.dp && !tabletop
             val statusTop = WindowInsets.statusBars.getTop(density)
@@ -136,32 +138,29 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
                     val gap = with(density) { fold!!.bounds.height().toDp().value }
                     val open = reader
                     if (open != null) ReaderScreen(vm, open.book.id, vm::closeReader, open.together, open.fromListening)
-                    else PlayerScreen(vm, true, Modifier.fillMaxSize().navigationBarsPadding(), hingeY, gap)
+                    else PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding(), hingeY, gap)
                 }
                 expanded -> {
                     BackHandler(backEnabled, goBack)
                     // A landscape phone has width but little height: give an open player the whole canvas.
                     val fullPlayer = maxHeight < 480.dp && playerOpen && state.book != null
-                    // The reader takes the whole canvas beside the rail, leaving room for a two-page spread.
-                    val canvas = when { reader != null -> "reader"; fullPlayer -> "player"; else -> "panes" }
-                    Row(Modifier.fillMaxSize().navigationBarsPadding()) {
-                        NavigationRail(containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.width(80.dp), header = { Spacer(Modifier.height(24.dp)) }) {
-                            navItems.forEachIndexed { index, item -> NavigationRailItem(destination == index && !fullPlayer, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }, modifier = Modifier.padding(bottom = 18.dp)) }
-                        }
-                        AnimatedContent(canvas, Modifier.weight(1f).fillMaxHeight(), transitionSpec = {
-                            when { targetState == "player" -> Motion.rise(); initialState == "player" -> Motion.fall(); else -> Motion.sharedAxisX(targetState == "reader") }
-                        }, label = "full canvas") { key ->
-                            when (key) {
-                                "player" -> PlayerScreen(vm, true, Modifier.fillMaxSize())
-                                "reader" -> recentReader?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
-                                else -> ExpandedPanes(vm, windowWidth, fold, density, destination, bookFor, scrollFor, playerOpen, state.book != null, selected.book?.id)
+                    // The reader takes the whole window, rail included: a book open on the inner display is just the book.
+                    AnimatedContent(reader != null, Modifier.fillMaxSize(), transitionSpec = { Motion.sharedAxisX(targetState) }, label = "reading") { reading ->
+                        if (reading) recentReader?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
+                        else Row(shellInsets.fillMaxSize().navigationBarsPadding()) {
+                            NavigationRail(containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.width(80.dp), header = { Spacer(Modifier.height(24.dp)) }) {
+                                navItems.forEachIndexed { index, item -> NavigationRailItem(destination == index && !fullPlayer, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }, modifier = Modifier.padding(bottom = 18.dp)) }
+                            }
+                            AnimatedContent(fullPlayer, Modifier.weight(1f).fillMaxHeight(), transitionSpec = { if (targetState) Motion.rise() else Motion.fall() }, label = "full canvas") { player ->
+                                if (player) PlayerScreen(vm, true, Modifier.fillMaxSize())
+                                else ExpandedPanes(vm, windowWidth, fold, density, destination, bookFor, scrollFor, playerOpen, state.book != null, selected.book?.id)
                             }
                         }
                     }
                 }
-                else -> CompactShell(vm, current, destination, state.book != null, bookFor, { recentReader }, scrollFor, backEnabled, goBack, barHeight) { barHeight = it }
+                else -> CompactShell(vm, current, destination, state.book != null, bookFor, { recentReader }, scrollFor, backEnabled, goBack, barHeight, shellInsets) { barHeight = it }
             }
-            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).then(when {
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).then(when {
                 snackbarLift.value > 0.dp -> Modifier.padding(bottom = snackbarLift.value)
                 !expanded && !tabletop && current == Home -> Modifier.padding(bottom = barHeight)
                 else -> Modifier.navigationBarsPadding()
@@ -175,7 +174,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int, hasPlayback: Boolean, bookFor: (String) -> Audiobook?, readerFor: () -> ReaderRequest?, scrollFor: (String) -> LazyListState,
-                         backEnabled: Boolean, goBack: () -> Unit, barHeight: Dp, onBarHeight: (Dp) -> Unit) {
+                         backEnabled: Boolean, goBack: () -> Unit, barHeight: Dp, shellInsets: Modifier, onBarHeight: (Dp) -> Unit) {
     val seekState = remember { SeekableTransitionState(current) }
     LaunchedEffect(current) { seekState.animateTo(current) }
     val scope = rememberCoroutineScope()
@@ -204,9 +203,9 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                 }, contentKey = { it }) { screen ->
                     CompositionLocalProvider(LocalNavigationScope provides this) {
                         when (screen) {
-                            Home -> Box(Modifier.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
-                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, Modifier.navigationBarsPadding(), scrollFor(it.id)) }
-                            Listening -> PlayerScreen(vm, true, Modifier.fillMaxSize().navigationBarsPadding())
+                            Home -> Box(shellInsets.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
+                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
+                            Listening -> PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
                             is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
                         }
                     }
@@ -215,7 +214,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                     enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
                     exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
                     CompositionLocalProvider(LocalNavigationScope provides this) {
-                        Column(Modifier.onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
+                        Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
                             AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) { MiniPlayer(vm) }
                             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                                 navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }

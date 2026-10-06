@@ -58,8 +58,13 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithText("versions", substring = true).assertDoesNotExist()
         compose.onNodeWithText(book.description).performScrollTo().assertIsDisplayed()
 
-        compose.onNodeWithText("Listening options").performScrollTo().performClick()
-        compose.waitUntil { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == chosen.id && !vm.selection.value.loading }
+        // Listening options is one sheet: the recording, its format, and the recording's own page for its files.
+        compose.onNodeWithTag("listening-options-action").performScrollTo().performClick()
+        compose.onNodeWithTag("listening-options").assertIsDisplayed()
+        compose.onNodeWithText("Whole-book audio").assertIsDisplayed()
+        compose.onNodeWithTag("listen-choice").assertIsEnabled()
+        compose.onNodeWithText("About this recording").performClick()
+        compose.waitUntil(10_000) { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == chosen.id && !vm.selection.value.loading }
         compose.onNodeWithText("The recording").assertIsDisplayed()
         compose.onNodeWithText("Read by Fixture Reader").assertIsDisplayed()
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
@@ -74,11 +79,12 @@ class BookDiscoveryExperienceTest {
 
         val other = recording("fixture-other", "Project Hail Mary (version 3)", "Second Reader")
         compose.runOnIdle { vm.sourceSearch.value = SourceSearchState(book, listOf(chosen, other), searched = true) }
-        compose.onNodeWithText("2 versions").performScrollTo().performClick()
-        reveal(hasText(other.title))
+        compose.onNodeWithText("Change recording or format · 2 found").performScrollTo().performClick()
+        compose.onNodeWithTag("listening-options").performScrollToNode(hasText(other.title))
         compose.onNodeWithText(other.title).performClick()
         compose.runOnIdle { assertEquals(other.id, vm.sourceSearch.value.choice?.id) }
-        compose.onNodeWithText("Read by Second Reader", substring = true).performScrollTo().assertIsDisplayed()
+        // The page behind the sheet follows the pick: its status line now names the second reader too.
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Read by Second Reader", substring = true).fetchSemanticsNodes().size >= 2 }
     }
 
     @Test fun uncertainMatchesWaitForTheListenerToChooseFromSearchResults() {
@@ -87,10 +93,13 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithText("Listen").assertDoesNotExist()
         compose.onNodeWithText("Review 1 search result", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Choose a recording").performScrollTo().performClick()
-        reveal(hasText("Possible match", substring = true))
+        compose.onNodeWithTag("listening-options").performScrollToNode(hasText("Possible match", substring = true))
         compose.onNodeWithText("Possible match", substring = true).assertIsDisplayed()
         compose.onNodeWithText(possible.title).performClick()
-        compose.waitUntil { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == possible.id && !vm.selection.value.loading }
+        compose.runOnIdle { assertEquals(possible.id, vm.sourceSearch.value.choice?.id) }
+        compose.onNodeWithTag("listen-choice").assertIsEnabled()
+        compose.onNodeWithText("About this recording").performClick()
+        compose.waitUntil(10_000) { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == possible.id && !vm.selection.value.loading }
         compose.onNodeWithText("The recording").assertIsDisplayed()
 
         show(SourceSearchState(book, searched = true))
