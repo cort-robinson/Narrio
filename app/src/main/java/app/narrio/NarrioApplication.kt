@@ -8,6 +8,8 @@ import app.narrio.data.*
 import app.narrio.playback.PlaybackHub
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.map
 
 class NarrioApplication : Application() {
     lateinit var graph: AppGraph
@@ -32,6 +34,8 @@ class AppGraph(application: Application) {
     val catalog = ArchiveDiscovery(http)
     val indexedCatalog = KnabenDiscovery(http)
     val addons = AddonManager.create(application, http)
+    private val sourceSettingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val sourceProviderSettings = DeviceSourceProviderSettings.create(application, addons, sourceSettingsScope)
     val metadata = BookMetadata(http, addonSearch = addons::catalog, addonRevision = { addons.revision })
     val books = BookCatalog(metadata, addonSearch = addons::catalog, addonRevision = { addons.revision })
     val torbox = TorBoxDelivery(http, credentials::read)
@@ -46,6 +50,17 @@ class AppGraph(application: Application) {
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()
     val offline = OfflineStore(application, http, torbox)
+    val streamingSourceSearch: app.narrio.domain.StreamingSourceSearch = ProviderSourceSearch(sourceProviderSettings, { provider ->
+        when (provider.id) {
+            DeviceSourceProviderSettings.ARCHIVE -> RecordingSourceLookup(catalog)
+            DeviceSourceProviderSettings.LIBRARY -> AccountSourceLookup(torbox::library)
+            DeviceSourceProviderSettings.TORBOX_SEARCH -> RecordingSourceLookup(TorBoxSearchDiscovery(http, credentials::read))
+            else -> if (provider.kind == app.narrio.domain.SourceProviderKind.ADDON) AddonSourceLookup(addons, provider.id.removePrefix("addon:")) else null
+        }
+    }, torbox::checkCached, torrentFiles::recording, sourceProviderSettings::recordStatus,
+        phoneRecordings = { offline.books.value.filter { it.complete }.map { it.book.copy(id = it.book.recordingId.ifBlank { it.book.id }, sources = listOf(it.source)) } },
+        rankingChanges = offline.books.map { Unit },
+        preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() })
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks, webEbooks::accountText)
     val speechModels = SpeechModelStore(application, http)
     val narrationSync = app.narrio.playback.NarrationSync(application, http, offline, torbox, speechModels)

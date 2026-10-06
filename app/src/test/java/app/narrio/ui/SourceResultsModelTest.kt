@@ -1,15 +1,8 @@
 package app.narrio.ui
 
-import app.narrio.data.AddonManager
-import app.narrio.data.AddonManifest
 import app.narrio.domain.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancel
-import okhttp3.OkHttpClient
 import org.junit.Assert.*
 import org.junit.Test
-import java.io.File
 
 class SourceResultsModelTest {
     private val book = Audiobook("catalog:phm", "Project Hail Mary", "Andy Weir", provider = "catalog")
@@ -84,28 +77,18 @@ class SourceResultsModelTest {
         assertEquals(NoMatchKind.POSSIBLE_ONLY, noMatchCopy(possibleOnly, tally(possibleOnly, providers, true)).kind)
     }
 
-    @Test fun interimSectionsGroupOneShotResultsByProviderAndSkipTorBoxSourcesWhenDisconnected() {
-        val addon = AddonManifest.parse(File("src/main/assets/addons/audiobookbay.json").readText(), AddonManager.bundledUrls.getValue("audiobookbay"))
-        val scope = CoroutineScope(Dispatchers.Unconfined)
-        try {
-            val settings = InterimSourceProviderSettings(AddonManager(OkHttpClient(), listOf(addon)), scope)
-            val providers = settings.providers.value
-            assertEquals(listOf("archive", "torbox-library", "torbox-search", "addon:audiobookbay"), providers.map { it.id })
-            val public = release("lv", "archive", cache = "unchecked")
-            val fromAddon = release("abb", addon = addon.name)
-            val state = SourceSearchState(book, listOf(fromAddon, public), searched = true, possible = listOf(release("maybe")))
-            val shown = state.interimStreamed(providers, connected = true)!!
-            assertTrue(shown.complete)
-            assertEquals(listOf("lv"), shown.groups.first { it.providerId == "archive" }.recordings.map { it.id })
-            assertEquals(listOf("abb"), shown.groups.first { it.providerId == "addon:audiobookbay" }.recordings.map { it.id })
-            assertEquals(listOf("maybe"), shown.groups.first { it.providerId == "torbox-search" }.possible.map { it.id })
-            assertEquals("abb", shown.best?.recording?.id)
-            assertEquals(SourceGroupStatus.SKIPPED, state.interimStreamed(providers, connected = false)!!.groups.first { it.providerId == "torbox-search" }.status)
-
-            // Moving and switching off reach the list the UI reads.
-            settings.move("addon:audiobookbay", 0); settings.setEnabled("torbox-search", false)
-            assertEquals("addon:audiobookbay", settings.providers.value.first().id)
-            assertFalse(settings.providers.value.first { it.id == "torbox-search" }.enabled)
-        } finally { scope.cancel() }
+    @Test fun beforeTheFirstSnapshotEverySourceSearchesOrSaysWhyNot() {
+        val providers = listOf(SourceProvider("archive", "LibriVox", SourceProviderKind.BUILT_IN, true, 0, false, false),
+            SourceProvider("torbox-search", "TorBox search", SourceProviderKind.BUILT_IN, true, 1, true, false),
+            SourceProvider("addon:abb", "AudiobookBay", SourceProviderKind.ADDON, false, 2, true, true))
+        val waiting = pendingSourceSearch(book, providers, connected = false, searching = true, error = null)
+        assertFalse(waiting.complete)
+        assertEquals(listOf(SourceGroupStatus.SEARCHING, SourceGroupStatus.SKIPPED, SourceGroupStatus.SKIPPED), waiting.groups.map { it.status })
+        assertEquals(listOf("Needs TorBox", "Off in settings"), waiting.groups.drop(1).map { skippedReason(it, null, connected = false) })
+        // A lookup that threw fails each active source with its message, so Retry and the recovery copy apply.
+        val thrown = pendingSourceSearch(book, providers, connected = true, searching = false, error = "No connection.")
+        assertTrue(thrown.complete)
+        assertEquals(listOf(SourceGroupStatus.FAILED, SourceGroupStatus.FAILED, SourceGroupStatus.SKIPPED), thrown.groups.map { it.status })
+        assertEquals(NoMatchKind.ALL_FAILED, noMatchCopy(thrown, tally(thrown, providers.associateBy { it.id }, true)).kind)
     }
 }

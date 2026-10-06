@@ -61,7 +61,6 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val sourceSearch by vm.sourceSearch.collectAsStateWithLifecycle()
     val sourceProviders by vm.sourceProviderSettings.providers.collectAsStateWithLifecycle()
-    val session by vm.sourceSession.collectAsStateWithLifecycle()
     val ebookSearch by vm.ebookSearch.collectAsStateWithLifecycle()
     val installedAddons by vm.graph.addons.installed.collectAsStateWithLifecycle()
     val ebookSearchLinks = remember(book.title, book.author, installedAddons) { vm.graph.addons.ebookSearchLinks(book) }
@@ -81,10 +80,13 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     // An ebook-only book asks before looking for a recording.
     val awaitingAudioSearch = catalogBook && formats.ebook && !formats.audio && search?.searched != true && search?.loading != true
     val openEbooks = { ebookSheet = true; vm.openEbookSearch(book) }
-    // Listening by source: the streaming session when one runs for this book, otherwise today's one-shot search.
-    val sessionState = session?.state?.collectAsStateWithLifecycle()?.value?.takeIf { it.book.id == book.id }
-    val streamed = if (!catalogBook || awaitingAudioSearch) null else sessionState
-        ?: remember(search, sourceProviders, connected) { (search ?: SourceSearchState(book)).interimStreamed(sourceProviders, connected) }
+    // Listening by source: the engine's latest snapshot, or every source searching until the first one arrives.
+    val streamed = if (!catalogBook || awaitingAudioSearch) null else search?.streamed?.takeIf { it.book.id == book.id }
+        ?: remember(search?.loading, search?.searched, search?.error, sourceProviders, connected) {
+            pendingSourceSearch(book, sourceProviders, connected, searching = search == null || search.loading || !search.searched, error = search?.error)
+        }
+    // A release the listener picked (in Listening options) leads the card instead of the best match.
+    val chosen = search?.chosenId?.let { id -> search.results.firstOrNull { it.id == id } }
     val providersById = remember(sourceProviders) { sourceProviders.associateBy { it.id } }
     val tally = streamed?.let { remember(it, providersById, connected) { tally(it, providersById, connected) } }
     // Once the listener touches the page (or listens with TalkBack), a better match waits instead of moving the card.
@@ -101,11 +103,11 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val sourcesIndex by rememberUpdatedState(2 + (if (selected.error != null) 1 else 0) + (if (formats.ebook) 1 else 0) + downloadsHere.size + (if (preparation != null) 1 else 0))
     val sourceActions = remember(book.id, vm) {
         SourceActions(
-            listen = vm::listenTo,
+            listen = { recording -> vm.chooseVersion(recording); vm.listenToChoice() },
             prepare = { recording -> vm.chooseVersion(recording); listeningOptions = true },
             open = vm::chooseRecording,
             options = { recording -> recording?.let(vm::chooseVersion); listeningOptions = true },
-            retry = { vm.retrySource(book, it) },
+            retry = vm::retrySource,
             searchAgain = { vm.findSources(book, force = true) },
             connectTorBox = { vm.navigate(2) },
             sourceSettings = { vm.navigate(2) },
@@ -179,7 +181,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                     else OutlinedButton(openEbooks, Modifier.fillMaxWidth().testTag("find-ebook-action")) { SlotLabel(Icons.Rounded.Search, "Find ebook") }
                 }
                 val card: @Composable () -> Unit = {
-                    BestMatchCard(streamed, pinned, tally, providersById, book, connected, busy, starting, leading = !readingFirst, sourceActions, { pinned = pinned.accept() })
+                    BestMatchCard(streamed, pinned, chosen, tally, providersById, book, connected, busy, starting, leading = !readingFirst, sourceActions,
+                        acceptBetter = { pinned = pinned.accept(); pinned.shown?.let { vm.chooseVersion(it.recording) } }, useBest = { pinned.shown?.let { vm.chooseVersion(it.recording) } })
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { if (readingFirst) { readSlot(); card() } else { card(); readSlot() } }
             } else FormatActions(formats, audioSlot = { slot, leading ->

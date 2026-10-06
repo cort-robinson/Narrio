@@ -56,19 +56,23 @@ class SourceActions(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BestMatchCard(
-    search: StreamedSourceSearch, pinned: PinnedBest, tally: SearchTally, providers: Map<String, SourceProvider>, book: Audiobook,
-    connected: Boolean, busy: Boolean, starting: Boolean, leading: Boolean, actions: SourceActions, acceptBetter: () -> Unit, modifier: Modifier = Modifier,
+    search: StreamedSourceSearch, pinned: PinnedBest, chosen: Audiobook?, tally: SearchTally, providers: Map<String, SourceProvider>, book: Audiobook,
+    connected: Boolean, busy: Boolean, starting: Boolean, leading: Boolean, actions: SourceActions, acceptBetter: () -> Unit, useBest: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
         .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp).animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized)).testTag("best-match")) {
-        AnimatedVisibility(pinned.pending != null, enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        AnimatedVisibility(pinned.pending != null && chosen?.let { it.id != pinned.shown?.recording?.id } != true, enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             BetterMatchFound(acceptBetter, Modifier.padding(bottom = 12.dp))
         }
-        val shown = pinned.shown
+        // An explicit pick from Listening options leads; it carries no ranking reasons, so its own labels describe it.
+        val picked = chosen?.takeIf { it.id != pinned.shown?.recording?.id }
+        val shown = picked?.let { recording -> BestMatch(recording, emptyList(), search.groups.firstOrNull { group -> group.recordings.any { it.id == recording.id } || group.possible.any { it.id == recording.id } }?.providerId.orEmpty()) }
+            ?: pinned.shown
         Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-            Text("Best match", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+            Text(if (picked != null) "Your choice" else "Best match", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
             AnimatedVisibility(!search.complete && tally.active > 0, enter = fadeIn(), exit = fadeOut()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Working(Modifier.size(14.dp))
@@ -119,6 +123,10 @@ fun BestMatchCard(
         FlowRow(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
             val count = tally.found + tally.possible
             when {
+                picked != null && pinned.shown != null -> {
+                    TextButton(useBest) { Text("Use the best match") }
+                    TextButton({ actions.options(picked) }, Modifier.testTag("listening-options-action")) { Text("Format and download") }
+                }
                 shown != null -> {
                     TextButton(actions.showSources) { Text(if (search.complete) "Other choices · $count found" else "Other choices · $count so far") }
                     TextButton({ actions.options(shown.recording) }, Modifier.testTag("listening-options-action")) { Text("Format and download") }

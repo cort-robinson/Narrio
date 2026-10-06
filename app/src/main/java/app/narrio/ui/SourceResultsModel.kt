@@ -69,10 +69,24 @@ fun needsPreparing(best: BestMatch): Boolean = BestMatchReason.NEEDS_PREPARING i
 
 /** Why a section was skipped, in the listener's terms. */
 fun skippedReason(group: SourceGroup, provider: SourceProvider?, connected: Boolean): String = when {
-    provider?.enabled == false -> "Off in settings"
-    provider?.requiresTorBox == true && !connected -> "Needs TorBox"
+    provider?.enabled == false || group.message.equals("Disabled", true) -> "Off in settings"
+    provider?.requiresTorBox == true && !connected || group.message.orEmpty().contains("TorBox", true) -> "Needs TorBox"
     !group.message.isNullOrBlank() -> group.message
     else -> "Skipped"
+}
+
+/**
+ * Sections before the engine's first snapshot arrives, or when the lookup itself threw: every source is
+ * searching (or skipped, with why), and a thrown lookup fails each active source with its message.
+ */
+fun pendingSourceSearch(book: Audiobook, providers: List<SourceProvider>, connected: Boolean, searching: Boolean, error: String?): StreamedSourceSearch {
+    val failed = !searching && error != null
+    return StreamedSourceSearch(book, providers.sortedBy { it.order }.map { provider ->
+        val skipped = !provider.enabled || provider.requiresTorBox && !connected
+        SourceGroup(provider.id, provider.name, when { skipped -> SourceGroupStatus.SKIPPED; failed -> SourceGroupStatus.FAILED; else -> SourceGroupStatus.SEARCHING },
+            // Skipped sections carry the engine's own reasons, so they read the same before and after its first snapshot.
+            message = when { !provider.enabled -> "Disabled"; skipped -> "Connect TorBox"; failed -> error; else -> null })
+    }, complete = failed)
 }
 
 /** Totals across sections; a release found by several providers counts once. */

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.data.AddonManager
+import app.narrio.data.DeviceSourceProviderSettings
 import app.narrio.data.InstalledAddon
 import app.narrio.data.text
 import app.narrio.domain.SourceProvider
@@ -73,7 +74,8 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
         val name = providers.firstOrNull { it.id == id }?.name ?: return
         val target = index.coerceIn(0, providers.lastIndex)
         if (providers.indexOfFirst { it.id == id } == target) return
-        sources.move(id, target); changed()
+        // Source settings invalidate cached results and restart an open search on their own.
+        sources.move(id, target)
         say("$name moved to ${target + 1} of ${providers.size}.")
     }
     val haptics = LocalHapticFeedback.current
@@ -119,7 +121,7 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
                         warning = if (provider.requiresTorBox && !connected) "Needs TorBox" else null,
                         enabled = provider.enabled,
                         toggleEnabled = working == null && dragging == null,
-                        onToggle = { value -> sources.setEnabled(provider.id, value); changed(); say("${provider.name} ${if (value) "on" else "off"}.") },
+                        onToggle = { value -> sources.setEnabled(provider.id, value); say("${provider.name} ${if (value) "on" else "off"}.") },
                         tag = provider.id,
                         lifted = lifted,
                         handle = {
@@ -203,9 +205,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.addonSection(
 }
 
 private fun providerSubtitle(provider: SourceProvider, addon: InstalledAddon?): String = when (provider.id) {
-    InterimSourceIds.ARCHIVE -> "Built in · Free public recordings from LibriVox"
-    InterimSourceIds.LIBRARY -> "Built in · Recordings already in your TorBox"
-    InterimSourceIds.TORBOX_SEARCH -> "Built in · Releases TorBox can find"
+    DeviceSourceProviderSettings.ARCHIVE -> "Built in · Free public recordings from LibriVox"
+    DeviceSourceProviderSettings.LIBRARY -> "Built in · Recordings already in your TorBox"
+    DeviceSourceProviderSettings.TORBOX_SEARCH -> "Built in · Releases TorBox can find"
     else -> listOfNotNull(if (provider.kind == SourceProviderKind.BUILT_IN) "Built in" else "Add-on",
         addon?.manifest?.text("version")?.takeIf(String::isNotBlank)?.let { "Version $it" }).joinToString(" · ")
 }
