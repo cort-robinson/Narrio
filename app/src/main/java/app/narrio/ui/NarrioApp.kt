@@ -45,6 +45,7 @@ private sealed interface Screen { val depth: Int }
 private data object Home : Screen { override val depth = 0 }
 private data class Details(val id: String, val catalog: Boolean) : Screen { override val depth = if (catalog) 1 else 2 }
 private data object Listening : Screen { override val depth = 3 }
+private data class Reading(val id: String) : Screen { override val depth = 3 }
 
 @Composable
 fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
@@ -53,6 +54,8 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     val playerOpen by vm.playerOpen.collectAsStateWithLifecycle()
     val state by vm.playback.collectAsStateWithLifecycle()
     val destination by vm.destination.collectAsStateWithLifecycle()
+    val reader by vm.reader.collectAsStateWithLifecycle()
+    val ebookWebsite by vm.ebookWebsite.collectAsStateWithLifecycle()
     val windowInfo by remember(activity) { WindowInfoTracker.getOrCreate(activity).windowLayoutInfo(activity).map { it as WindowLayoutInfo? } }.collectAsStateWithLifecycle(null)
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -82,14 +85,18 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     // Each book keeps its scroll position, so returning from a recording lands back among its sources.
     val detailScroll = remember { object : LinkedHashMap<String, LazyListState>(16, .75f, true) { override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LazyListState>) = size > 12 } }
     val scrollFor: (String) -> LazyListState = { id -> detailScroll.getOrPut(id) { LazyListState() } }
-    val backEnabled = selected.book != null || playerOpen || destination != 0
-    val goBack: () -> Unit = { if (playerOpen || selected.book != null) vm.back() else vm.navigate(0) }
+    // A closing reader keeps rendering the book it showed while it animates away.
+    var recentReader by remember { mutableStateOf<ReaderRequest?>(null) }
+    reader?.let { recentReader = it }
+    val backEnabled = selected.book != null || playerOpen || reader != null || destination != 0
+    val goBack: () -> Unit = { if (playerOpen || selected.book != null || reader != null) vm.back() else vm.navigate(0) }
 
     NarrioTheme(appearance) {
         val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
         SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } }
         val snackbar = remember { SnackbarHostState() }
         LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+        LaunchedEffect(vm) { vm.positionJumps.collectLatest { jump -> try { snackbar.showJump(jump) } finally { vm.finishJump(jump) } } }
         LaunchedEffect(vm) {
             vm.dismissedPlayback.collectLatest { dismissed ->
                 if (snackbar.showSnackbar("Closed ${dismissed.book?.title}. Your place is saved.", "Undo", duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) vm.undoDismissPlayback(dismissed)
@@ -107,14 +114,19 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         }
         val density = LocalDensity.current
         val fold = windowInfo?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()
-        val tabletop = fold?.orientation == FoldingFeature.Orientation.HORIZONTAL && fold.state == FoldingFeature.State.HALF_OPENED && playerOpen
+        // Tabletop takes the whole window for the open player, or for reading along with the narration.
+        val tabletop = fold?.orientation == FoldingFeature.Orientation.HORIZONTAL && fold.state == FoldingFeature.State.HALF_OPENED && (playerOpen || reader?.together == true)
         var barHeight by remember { mutableStateOf(0.dp) }
-        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))) {
+        val snackbarLift = remember { mutableStateOf(0.dp) }
+        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground, LocalFold provides fold, LocalSnackbarLift provides snackbarLift) {
+        // Screens pad themselves below the status bar and beside cutouts; the reader alone draws edge to edge.
+        val shellInsets = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+        BoxWithConstraints(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             val windowWidth = maxWidth
             val expanded = maxWidth >= 600.dp && !tabletop
             val statusTop = WindowInsets.statusBars.getTop(density)
             val current: Screen = when {
+                reader != null -> Reading(reader!!.book.id)
                 playerOpen && state.book != null -> Listening
                 selected.book != null -> selected.book!!.let { Details(it.id, it.provider == "catalog") }
                 else -> Home
@@ -124,35 +136,45 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
                     BackHandler(backEnabled, goBack)
                     val hingeY = with(density) { (fold!!.bounds.top - statusTop).toDp().value }
                     val gap = with(density) { fold!!.bounds.height().toDp().value }
-                    PlayerScreen(vm, true, Modifier.fillMaxSize().navigationBarsPadding(), hingeY, gap)
+                    val open = reader
+                    if (open != null) ReaderScreen(vm, open.book.id, vm::closeReader, open.together, open.fromListening)
+                    else PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding(), hingeY, gap)
                 }
                 expanded -> {
                     BackHandler(backEnabled, goBack)
                     // A landscape phone has width but little height: give an open player the whole canvas.
                     val fullPlayer = maxHeight < 480.dp && playerOpen && state.book != null
-                    Row(Modifier.fillMaxSize().navigationBarsPadding()) {
-                        NavigationRail(containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.width(80.dp), header = { Spacer(Modifier.height(24.dp)) }) {
-                            navItems.forEachIndexed { index, item -> NavigationRailItem(destination == index && !fullPlayer, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }, modifier = Modifier.padding(bottom = 18.dp)) }
-                        }
-                        AnimatedContent(fullPlayer, Modifier.weight(1f).fillMaxHeight(), transitionSpec = { if (targetState) Motion.rise() else Motion.fall() }, label = "full player") { full ->
-                            if (full) PlayerScreen(vm, true, Modifier.fillMaxSize())
-                            else ExpandedPanes(vm, windowWidth, fold, density, destination, bookFor, scrollFor, playerOpen, state.book != null, selected.book?.id)
+                    // The reader takes the whole window, rail included: a book open on the inner display is just the book.
+                    AnimatedContent(reader != null, Modifier.fillMaxSize(), transitionSpec = { Motion.sharedAxisX(targetState) }, label = "reading") { reading ->
+                        if (reading) recentReader?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
+                        else Row(shellInsets.fillMaxSize().navigationBarsPadding()) {
+                            NavigationRail(containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.width(80.dp), header = { Spacer(Modifier.height(24.dp)) }) {
+                                navItems.forEachIndexed { index, item -> NavigationRailItem(destination == index && !fullPlayer, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }, modifier = Modifier.padding(bottom = 18.dp)) }
+                            }
+                            AnimatedContent(fullPlayer, Modifier.weight(1f).fillMaxHeight(), transitionSpec = { if (targetState) Motion.rise() else Motion.fall() }, label = "full canvas") { player ->
+                                if (player) PlayerScreen(vm, true, Modifier.fillMaxSize())
+                                else ExpandedPanes(vm, windowWidth, fold, density, destination, bookFor, scrollFor, playerOpen, state.book != null, selected.book?.id)
+                            }
                         }
                     }
                 }
-                else -> CompactShell(vm, current, destination, state.book != null, bookFor, scrollFor, backEnabled, goBack, barHeight) { barHeight = it }
+                else -> CompactShell(vm, current, destination, state.book != null, bookFor, { recentReader }, scrollFor, backEnabled, goBack, barHeight, shellInsets) { barHeight = it }
             }
-            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).then(
-                if (!expanded && !tabletop && current == Home) Modifier.padding(bottom = barHeight) else Modifier.navigationBarsPadding()))
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).then(when {
+                snackbarLift.value > 0.dp -> Modifier.padding(bottom = snackbarLift.value)
+                !expanded && !tabletop && current == Home -> Modifier.padding(bottom = barHeight)
+                else -> Modifier.navigationBarsPadding()
+            })) { NarrioSnackbar(it) }
         }
         }
+        ebookWebsite.request?.let { request -> EbookWebsiteBrowser(request, ebookWebsite, vm::closeEbookWebsite) { vm.downloadWebsiteEbook(request, it) } }
     }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int, hasPlayback: Boolean, bookFor: (String) -> Audiobook?, scrollFor: (String) -> LazyListState,
-                         backEnabled: Boolean, goBack: () -> Unit, barHeight: Dp, onBarHeight: (Dp) -> Unit) {
+private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int, hasPlayback: Boolean, bookFor: (String) -> Audiobook?, readerFor: () -> ReaderRequest?, scrollFor: (String) -> LazyListState,
+                         backEnabled: Boolean, goBack: () -> Unit, barHeight: Dp, shellInsets: Modifier, onBarHeight: (Dp) -> Unit) {
     val seekState = remember { SeekableTransitionState(current) }
     LaunchedEffect(current) { seekState.animateTo(current) }
     val scope = rememberCoroutineScope()
@@ -181,9 +203,10 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                 }, contentKey = { it }) { screen ->
                     CompositionLocalProvider(LocalNavigationScope provides this) {
                         when (screen) {
-                            Home -> Box(Modifier.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
-                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, Modifier.navigationBarsPadding(), scrollFor(it.id)) }
-                            Listening -> PlayerScreen(vm, true, Modifier.fillMaxSize().navigationBarsPadding())
+                            Home -> Box(shellInsets.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
+                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
+                            Listening -> PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
+                            is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
                         }
                     }
                 }
@@ -191,7 +214,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                     enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
                     exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
                     CompositionLocalProvider(LocalNavigationScope provides this) {
-                        Column(Modifier.onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
+                        Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
                             AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) { MiniPlayer(vm) }
                             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                                 navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
@@ -208,9 +231,12 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
 private fun predictBack(vm: NarrioViewModel, current: Screen): Screen {
     val selected = vm.selection.value.book
     val origin = vm.sourceSearch.value.book
+    val reader = vm.reader.value
     return when {
-        current == Listening -> selected?.let { Details(it.id, it.provider == "catalog") } ?: Home
-        current is Details && origin?.provider == "catalog" && !current.catalog -> Details(origin.id, true)
+        // Back from read along returns to the Listening room, or stays in the reader with read along turned off.
+        current is Reading && reader?.together == true -> if (reader.fromListening && vm.playback.value.book != null) Listening else current
+        current == Listening || current is Reading -> selected?.let { Details(it.id, it.provider == "catalog") } ?: Home
+        current is Details && origin != null && selected?.recordingId?.isNotBlank() == true && selected.recordingId != origin.recordingId -> Details(origin.id, origin.provider == "catalog")
         else -> Home
     }
 }
@@ -267,7 +293,7 @@ private fun WelcomePane() {
         Spacer(Modifier.height(32.dp))
         Text("Choose a book", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(12.dp))
-        Text("Its details and listening sources open here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Text("Its details, ebook, and listening sources open here.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
     }
     }
 }

@@ -10,14 +10,10 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.*
 import okhttp3.*
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 class AddonManager(
     http: OkHttpClient,
@@ -61,13 +57,45 @@ class AddonManager(
     override suspend fun search(query: String, category: String): List<Audiobook> = sources(query, "", "audiobook")
     override suspend fun searchBook(book: Audiobook, title: String): List<Audiobook> = sources(title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), "audiobook")
     suspend fun ebooks(query: String): List<Audiobook> = sources(query, "", "ebook")
+    /** Browser-only providers are offered separately from verified ebook files and need no delivery account. */
+    fun ebookSearchLinks(book: Audiobook): List<EbookSearchLink> {
+        val title = BookIdentity.title(book.title)
+        if (title.isBlank()) return emptyList()
+        val author = book.author.takeUnless(BookMetadata::unknown).orEmpty()
+        val replacements = mapOf("{TITLE}" to title.take(250), "{AUTHOR}" to author.take(200), "{QUERY}" to "$title $author".trim().take(450))
+        return installed.value.filter { it.enabled && it.ebookSearch }.map { addon ->
+            val spec = addon.manifest["adapters"]!!.jsonObject["ebook-search"]!!.jsonObject["request"]!!.jsonObject
+            val url = Regex("\\{(?:TITLE|AUTHOR|QUERY)\\}").replace(spec.text("url")) { match ->
+                java.net.URLEncoder.encode(replacements.getValue(match.value), "UTF-8").replace("+", "%20")
+            }
+            AddonManifest.secureUrl(url)
+            EbookSearchLink(addon.name, url)
+        }
+    }
     override suspend fun recording(id: String): Audiobook = throw ProviderException("Choose a release to inspect its TorBox availability.")
 
     private suspend fun sources(title: String, author: String, type: String): List<Audiobook> = collect(
         installed.value.filter { it.enabled && it.source && it.contentType == type }
-    ) { addon ->
+    ) { addon -> source(addon, title, author) }.distinctBy { it.torrentHash }
+
+    /** One audio add-on, with its existing lock/rate limit and independently reported outcome. */
+    suspend fun searchAddon(id: String, book: Audiobook, title: String, budget: SourceSearchBudget,
+                            status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> {
+        val addon = installed.value.firstOrNull { it.id == id && it.enabled && it.source && it.contentType == "audiobook" }
+            ?: throw ProviderException("This source is disabled or removed.")
+        return try {
+            source(addon, title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), budget, status)
+                .also { statusState.update { previous -> previous + (id to "Available") } }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            statusState.update { it + (id to "Unavailable. Retry later.") }; throw error
+        }
+    }
+
+    private suspend fun source(addon: InstalledAddon, title: String, author: String,
+                               budget: SourceSearchBudget? = null, status: suspend (SourceGroupStatus) -> Unit = {}): List<Audiobook> {
         val adapter = addon.manifest["adapters"]!!.jsonObject["source"]!!.jsonObject
-        rows(addon, adapter, title, author).mapNotNull { row ->
+        return rows(addon, adapter, title, author, budget, status).mapNotNull { row ->
             val fields = mapped(adapter, row)
             val hash = fields["infoHash"].orEmpty().lowercase().ifBlank {
                 Regex("(?i)urn:btih:([0-9a-f]{40})").find(fields["magnetUrl"].orEmpty())?.groupValues?.get(1)?.lowercase().orEmpty()
@@ -83,8 +111,8 @@ class AddonManager(
                 } ?: "magnet:?xt=urn:btih:$hash", provider = "knaben", detailsLoaded = true,
                 releaseSizeBytes = fields["sizeBytes"]?.toLongOrNull()?.coerceAtLeast(0) ?: 0,
                 seeders = fields["seeders"]?.toLongOrNull()?.coerceAtLeast(0) ?: 0, sourceAddonName = addon.name)
-        }
-    }.distinctBy { it.torrentHash }
+        }.distinctBy { it.torrentHash }
+    }
 
     suspend fun catalog(query: String): List<BookDetails> = collect(installed.value.filter { it.enabled && it.catalog }) { addon ->
         val adapter = addon.manifest["adapters"]!!.jsonObject["catalog"]!!.jsonObject["search"]!!.jsonObject
@@ -127,46 +155,44 @@ class AddonManager(
         AddonManifest.values(row, path.stringValue()).joinToString(", ") { it.stringValue() }
     }
 
-    private suspend fun rows(addon: InstalledAddon, adapter: JsonObject, title: String, author: String): List<JsonElement> = locks.getOrPut(addon.id) { Mutex() }.withLock {
-        val rate = addon.manifest["rateLimit"] as? JsonObject
-        val rpm = rate?.number("requestsPerMinute")?.coerceIn(1, 120) ?: 60
-        delay((nextRequest[addon.id]?.minus(androidFreeTime()) ?: 0).coerceAtLeast(0))
-        val interval = maxOf(60_000 / rpm, rate?.number("retryAfterMs")?.coerceIn(0, 60_000) ?: 0)
-        nextRequest[addon.id] = androidFreeTime() + interval
-        val spec = adapter["request"]!!.jsonObject
-        val replacements = mapOf("{TITLE}" to title.take(250), "{AUTHOR}" to author.take(200), "{QUERY}" to title.take(250))
-        fun replace(value: String, encoded: Boolean = false): String = Regex("\\{(?:TITLE|AUTHOR|QUERY)\\}").replace(value) { match ->
-            val replacement = replacements.getValue(match.value)
-            if (encoded) java.net.URLEncoder.encode(replacement, "UTF-8").replace("+", "%20") else replacement
+    private suspend fun rows(addon: InstalledAddon, adapter: JsonObject, title: String, author: String,
+                             budget: SourceSearchBudget? = null, status: suspend (SourceGroupStatus) -> Unit = {}): List<JsonElement> {
+        status(SourceGroupStatus.WAITING)
+        return locks.getOrPut(addon.id) { Mutex() }.withLock {
+            val rate = addon.manifest["rateLimit"] as? JsonObject
+            val rpm = rate?.number("requestsPerMinute")?.coerceIn(1, 120) ?: 60
+            delay((nextRequest[addon.id]?.minus(androidFreeTime()) ?: 0).coerceAtLeast(0))
+            status(SourceGroupStatus.SEARCHING)
+            val interval = maxOf(60_000 / rpm, rate?.number("retryAfterMs")?.coerceIn(0, 60_000) ?: 0)
+            nextRequest[addon.id] = androidFreeTime() + interval
+            val spec = adapter["request"]!!.jsonObject
+            val replacements = mapOf("{TITLE}" to title.take(250), "{AUTHOR}" to author.take(200), "{QUERY}" to title.take(250))
+            fun replace(value: String, encoded: Boolean = false): String = Regex("\\{(?:TITLE|AUTHOR|QUERY)\\}").replace(value) { match ->
+                val replacement = replacements.getValue(match.value)
+                if (encoded) java.net.URLEncoder.encode(replacement, "UTF-8").replace("+", "%20") else replacement
+            }
+            fun body(value: JsonElement): JsonElement = when (value) {
+                is JsonObject -> JsonObject(value.mapValues { body(it.value) })
+                is JsonArray -> JsonArray(value.map { body(it) })
+                is JsonPrimitive -> if (value.isString) JsonPrimitive(replace(value.content)) else value
+            }
+            val url = replace(spec.text("url"), true)
+            if (!allowTestHttp) AddonManifest.secureUrl(url)
+            val request = Request.Builder().url(url)
+            (spec["headers"] as? JsonObject)?.forEach { (key, value) -> request.header(key, value.stringValue()) }
+            if (spec.text("method") == "POST") request.post(body(spec["body"] ?: JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
+            val timeout = spec.number("timeout").takeIf { it > 0 }?.coerceIn(1_000, 40_000) ?: 20_000
+            val result = if (budget == null) fetch(request.build(), timeout) else budget.run { fetch(request.build(), timeout) }
+            val response = adapter["response"]!!.jsonObject
+            AddonManifest.values(result, response.text("resultsPath")).flatMap { if (it is JsonArray) it.toList() else emptyList() }.take(100)
         }
-        fun body(value: JsonElement): JsonElement = when (value) {
-            is JsonObject -> JsonObject(value.mapValues { body(it.value) })
-            is JsonArray -> JsonArray(value.map { body(it) })
-            is JsonPrimitive -> if (value.isString) JsonPrimitive(replace(value.content)) else value
-        }
-        val url = replace(spec.text("url"), true)
-        if (!allowTestHttp) AddonManifest.secureUrl(url)
-        val request = Request.Builder().url(url)
-        (spec["headers"] as? JsonObject)?.forEach { (key, value) -> request.header(key, value.stringValue()) }
-        if (spec.text("method") == "POST") request.post(body(spec["body"] ?: JsonObject(emptyMap())).toString().toRequestBody("application/json".toMediaType()))
-        val result = fetch(request.build(), spec.number("timeout").takeIf { it > 0 }?.coerceIn(1_000, 40_000) ?: 20_000)
-        val response = adapter["response"]!!.jsonObject
-        AddonManifest.values(result, response.text("resultsPath")).flatMap { if (it is JsonArray) it.toList() else emptyList() }.take(100)
     }
 
     private fun androidFreeTime() = System.nanoTime() / 1_000_000
 
     private suspend fun fetch(request: Request, timeout: Long): JsonElement = withContext(Dispatchers.IO) {
         val client = http.newBuilder().callTimeout(timeout, TimeUnit.MILLISECONDS).build()
-        val response = suspendCancellableCoroutine<Response> { continuation ->
-            val call = client.newCall(request)
-            continuation.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) { if (continuation.isActive) continuation.resumeWithException(e) }
-                override fun onResponse(call: Call, response: Response) { continuation.resume(response) { _, value, _ -> value.close() } }
-            })
-        }
-        response.use {
+        client.readCancellable(request) {
             require(it.isSuccessful) { "The add-on request failed." }
             val source = it.body?.source() ?: error("Empty add-on response.")
             require(!source.request(2_000_001)) { "The add-on response is too large." }
@@ -182,17 +208,28 @@ class AddonManager(
             "knaben-audiobooks" to "https://api.npoint.io/bd3157954016bd9fd1ed",
             "audible-audiobooks" to "https://api.npoint.io/112b9e0e87362772f7c3",
             "open-library-metadata" to "https://api.npoint.io/2b23d8b5a9ef68a0090e",
+            "annas-archive-ebooks" to "https://raw.githubusercontent.com/cort-robinson/Narrio/dev/app/src/main/assets/addons/annas-archive-ebooks.json",
         )
+        // Installs predating bundled-provider tracking already knew these six defaults, including removed ones.
+        private val legacyBundledIds = setOf("audiobookbay", "tpb-audiobooks", "knaben-ebooks", "knaben-audiobooks", "audible-audiobooks", "open-library-metadata")
+        internal fun addNewBundled(saved: List<InstalledAddon>, defaults: List<InstalledAddon>, known: Set<String>) =
+            saved + defaults.filter { it.id !in known && saved.none { installed -> installed.id == it.id } }
         fun create(context: Context, http: OkHttpClient): AddonManager {
             val preferences = context.getSharedPreferences("addons.v1", Context.MODE_PRIVATE)
             val defaults = bundledUrls.map { (id, url) -> AddonManifest.parse(context.assets.open("addons/$id.json").bufferedReader().use { it.readText() }, url) }
             val saved = preferences.getString("installed", null)
-            val initial = if (saved == null) defaults else runCatching {
+            val known = preferences.getStringSet("known-bundled", null) ?: legacyBundledIds
+            val restored = if (saved == null) Result.success(defaults) else runCatching {
                 NarrioJson.decodeFromString<List<InstalledAddon>>(saved).map { entry ->
                     AddonManifest.secureUrl(entry.manifestUrl)
                     AddonManifest.parse(entry.manifest.toString(), entry.manifestUrl).copy(enabled = entry.enabled)
-                }
-            }.getOrDefault(emptyList())
+                }.let { addNewBundled(it, defaults, known) }
+            }
+            val initial = restored.getOrDefault(emptyList())
+            if (restored.isSuccess) {
+                check(preferences.edit().putString("installed", NarrioJson.encodeToString(initial))
+                    .putStringSet("known-bundled", known + defaults.map { it.id }).commit()) { "Could not save add-on settings." }
+            }
             return AddonManager(http, initial, persist = { list ->
                 check(preferences.edit().putString("installed", NarrioJson.encodeToString(list)).commit()) { "Could not save add-on settings." }
             })

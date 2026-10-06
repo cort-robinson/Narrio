@@ -39,6 +39,14 @@ class ListeningService : MediaSessionService() {
     private var sleepAtEnd = false
     private var error: String? = null
     private var lastSave = 0L
+    private val activity = ListeningActivityGate()
+    private var activitySequence: Long? = null
+    private var activityJob: Job? = null
+    private var navigationEpoch = 0L
+    private var correctionJob: Job? = null
+    private var correctionWanted: ContentCursor? = null
+    private var undoEpoch = -1L
+    private var syncSeekPosition: Long? = null
     var initialized = false
         private set
 
@@ -67,8 +75,18 @@ class ListeningService : MediaSessionService() {
         graph.playback.service = this
         player.addListener(object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) { publish() }
-            override fun onIsPlayingChanged(isPlaying: Boolean) { scope.launch { save() } }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                publish()
+                if (isPlaying) startCorrection() else correctionJob?.cancel()
+                scope.launch { save() }
+            }
             override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                // Includes media-session/controller seeks, not just Narrio's controls.
+                if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION) {
+                    val syncSeek = reason == Player.DISCONTINUITY_REASON_SEEK && syncSeekPosition?.let { kotlin.math.abs(it - newPosition.positionMs) < 1000 } == true
+                    syncSeekPosition = null
+                    if (!syncSeek) invalidateNavigation()
+                }
                 scope.launch { save() }
                 if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION && sleepAtEnd) { sleepAtEnd = false; player.pause(); publish() }
             }
@@ -99,7 +117,8 @@ class ListeningService : MediaSessionService() {
                 if (sleepUntil > 0 && System.currentTimeMillis() >= sleepUntil) { sleepUntil = 0; player.pause(); save() }
                 if (player.isPlaying && System.currentTimeMillis() - lastSave >= 5000) save()
                 if (graph.playback.visible || player.isPlaying || sleepUntil > 0) publish()
-                delay(if (graph.playback.visible) 1000 else 5000)
+                commitListeningActivity()
+                delay(if (graph.playback.visible || player.isPlaying) 1000 else 5000)
             }
         }
     }
@@ -107,12 +126,17 @@ class ListeningService : MediaSessionService() {
     suspend fun load(book: Audiobook, source: AudioSource, autoplay: Boolean = true, partId: String? = null, positionMs: Long? = null) {
         if (source.parts.isEmpty()) return
         save()
+        invalidateNavigation()
         graph.library.save(book)
+        graph.mappingRepository.register(book.id, source)
         val previous = graph.library.find(book.id)
         val sameLayout = previous?.source()?.id == source.id
         val history = graph.library.position(book.id, source.id)
-        val index = resumeIndex(source.parts, partId ?: history?.partId ?: if (sameLayout) previous?.partId.orEmpty() else "")
-        val position = positionMs ?: history?.positionMs ?: if (sameLayout) previous?.positionMs ?: 0 else 0
+        val previousCursor = AudioCursor(source.id, history?.partId ?: if (sameLayout) previous?.partId.orEmpty() else source.parts.first().id,
+            history?.positionMs ?: if (sameLayout) previous?.positionMs ?: 0 else 0)
+        val jump = if (partId == null && positionMs == null) graph.readingSync.listeningStart(book.id, source, previousCursor) else null
+        val index = resumeIndex(source.parts, partId ?: jump?.destination?.partId ?: history?.partId ?: if (sameLayout) previous?.partId.orEmpty() else "")
+        val position = positionMs ?: jump?.destination?.positionMs ?: history?.positionMs ?: if (sameLayout) previous?.positionMs ?: 0 else 0
         currentBook = book; currentSource = source; error = null; chapters = emptyList()
         parts.clear(); links.clear()
         val items = source.parts.map { part ->
@@ -123,6 +147,8 @@ class ListeningService : MediaSessionService() {
                     .setArtist(book.author).setIsPlayable(true).setArtworkUri(book.coverUrl.takeIf { it.isNotBlank() }?.let(Uri::parse)).build()).build()
         }
         player.setMediaItems(items, index, position.coerceAtLeast(0))
+        if (jump?.confidence == MappingConfidence.ESTIMATED) correctionWanted = graph.sharedPositions.current(book.id)?.text
+        undoEpoch = navigationEpoch
         // Leave a restored session idle until the listener actually resumes.
         if (autoplay) { player.prepare(); player.play() }
         publish(); save()
@@ -134,10 +160,11 @@ class ListeningService : MediaSessionService() {
         publish()
     }
     fun retry() { error = null; links.clear(); player.prepare(); player.play(); publish() }
-    fun seek(position: Long) { player.seekTo(position.coerceAtLeast(0)); publish(); scope.launch { save() } }
+    fun seek(position: Long) { invalidateNavigation(); player.seekTo(position.coerceAtLeast(0)); publish(); scope.launch { save() } }
     fun skip(delta: Long) { seek((player.currentPosition + delta).coerceAtLeast(0).let { if (player.duration > 0) it.coerceAtMost(player.duration) else it }) }
     fun part(index: Int, position: Long = 0) {
         if (index !in 0 until player.mediaItemCount) return
+        invalidateNavigation()
         error = null; player.seekTo(index, position); if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play(); scope.launch { save() }
     }
     fun speed(value: Float) { player.setPlaybackSpeed(value.coerceIn(0.5f, 3f)); graph.preferences.edit().putFloat("speed", value).apply(); publish() }
@@ -151,7 +178,7 @@ class ListeningService : MediaSessionService() {
     }
     suspend fun forget() {
         // Detach first: clearing the player fires listeners that would otherwise save position 0 over the listener's place.
-        save(); currentBook = null; currentSource = null; player.stop(); player.clearMediaItems(); parts.clear(); links.clear(); chapters = emptyList()
+        save(); invalidateNavigation(); currentBook = null; currentSource = null; player.stop(); player.clearMediaItems(); parts.clear(); links.clear(); chapters = emptyList()
         sleepUntil = 0; sleepAtEnd = false; error = null; publish()
     }
     /** Clear Now playing but keep the shelf entry and position; the next launch stays empty until something plays again. */
@@ -164,8 +191,10 @@ class ListeningService : MediaSessionService() {
     suspend fun bookmark(label: String = "") {
         val book = currentBook ?: return; val source = currentSource ?: return
         val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return
-        graph.library.bookmark(BookmarkEntry(bookId = book.id, sourceId = source.id, partId = part.id,
-            positionMs = player.currentPosition, label = label.ifBlank { part.title }))
+        val audio = AudioCursor(source.id, part.id, player.currentPosition.coerceAtLeast(0))
+        // The reading place is kept only when narration confirms it; otherwise the bookmark list maps it each time.
+        val text = runCatching { BookmarkMapping(graph, book.id).textFor(audio) }.getOrNull()
+        graph.library.bookmark(newBookmark(book.id, label.ifBlank { part.title }, audio = audio, mappedText = text))
     }
 
     private suspend fun save() {
@@ -182,9 +211,127 @@ class ListeningService : MediaSessionService() {
     }
 
     private fun publish() {
+        graph.sharedPositions.playingBookId = if (player.isPlaying) currentBook?.id else null
+        val source = currentSource
+        val bookId = currentBook?.id
+        source?.parts?.getOrNull(player.currentMediaItemIndex)?.let { part ->
+            val duration = player.duration
+            if (bookId != null && graph.mappingRepository.duration(bookId, source.id, part.id, duration)) scope.launch {
+                graph.mappingRepository.persistDuration(bookId, source.id, part.id, duration)
+            }
+        }
         graph.playback.state.value = ListeningState(currentBook, currentSource, player.currentMediaItemIndex.coerceAtLeast(0),
             player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: currentSource?.parts?.getOrNull(player.currentMediaItemIndex)?.durationMs ?: 0,
             player.isPlaying, player.playbackState == Player.STATE_BUFFERING, player.playbackParameters.speed, sleepUntil, sleepAtEnd, chapters, error)
+    }
+
+    private fun invalidateNavigation() {
+        navigationEpoch++; correctionJob?.cancel(); correctionJob = null; correctionWanted = null
+        syncSeekPosition = null
+        activityJob?.cancel(); activityJob = null
+        activity.reset(); activitySequence = null
+    }
+
+    private suspend fun commitListeningActivity() {
+        val book = currentBook ?: return
+        val source = currentSource ?: return
+        val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return
+        if (activitySequence == null) activitySequence = graph.sharedPositions.current(book.id)?.sequence ?: 0
+        if (!activity.sample(book.id, source.id, player.isPlaying, android.os.SystemClock.elapsedRealtime())) return
+        val epoch = navigationEpoch
+        val cursor = AudioCursor(source.id, part.id, player.currentPosition.coerceAtLeast(0))
+        val observed = activitySequence ?: return
+        // Mapping/storage suspends. Cancellation on navigation prevents an obsolete callback writing.
+        val commitJob = scope.launch {
+            if (epoch != navigationEpoch) return@launch
+            graph.readingSync.listeningCommit(book.id, cursor, observed)
+            if (epoch == navigationEpoch) activitySequence = graph.sharedPositions.current(book.id)?.sequence ?: 0
+        }
+        activityJob = commitJob
+        commitJob.join()
+    }
+
+    private fun startCorrection() {
+        val wanted = correctionWanted ?: return
+        if (correctionJob?.isActive == true) return
+        val epoch = navigationEpoch
+        correctionJob = scope.launch {
+            val book = currentBook ?: return@launch
+            val source = currentSource ?: return@launch
+            val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return@launch
+            try {
+                val snapshot = graph.mappingRepository.snapshot(book.id, source.id) ?: return@launch
+                if (snapshot.document.id != wanted.editionId) return@launch
+                val duration = player.duration.takeIf { it > 0 } ?: part.durationMs
+                val target = SyncTarget(book, source, part, player.currentPosition, duration, snapshot.document,
+                    snapshot.bindings.firstOrNull { it.sourceId == source.id && it.partId == part.id })
+                val startedAt = android.os.SystemClock.elapsedRealtime()
+                val corrected = graph.readingSync.correct(target, wanted, graph.narrationSync, {
+                    if (epoch != navigationEpoch || !player.isPlaying) null else {
+                        val latest = graph.mappingRepository.snapshot(book.id, source.id)
+                        latest?.let { target.copy(document = it.document, binding = it.bindings.firstOrNull { b -> b.sourceId == source.id && b.partId == part.id }) }
+                    }
+                }) { id, binding -> graph.followAlong.mergeNarration(id, binding, binding.anchors.filter { it.auto }, duration) }
+                if (corrected != null && epoch == navigationEpoch && player.isPlaying) {
+                    // Playback continued during recognition; correct to where the reader start has advanced.
+                    val elapsed = android.os.SystemClock.elapsedRealtime() - startedAt
+                    correctionWanted = null
+                    val destination = (corrected.audio.positionMs + (elapsed * player.playbackParameters.speed).toLong()).coerceAtMost(duration - 1).coerceAtLeast(0)
+                    syncSeekPosition = destination
+                    player.seekTo(destination)
+                    publish()
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Keep the estimated position when model/audio/text cannot be read. */ }
+            finally { if (epoch == navigationEpoch) correctionWanted = null }
+        }
+    }
+
+    /** B/E use this for an explicit sentence tap; browsing alone must never call it. */
+    suspend fun seekFromText(cursor: ContentCursor): Boolean {
+        val book = currentBook ?: return false
+        val source = currentSource ?: return false
+        val snapshot = graph.mappingRepository.snapshot(book.id, source.id) ?: return false
+        val pairing = graph.readingSync.pairing(book.id, snapshot)
+        if (pairing == PairingStatus.MISMATCH) return false
+        val mapped = graph.positionMapper.audioFor(book.id, cursor, source.id) ?: return false
+        invalidateNavigation()
+        player.seekTo(resumeIndex(source.parts, mapped.audio.partId), mapped.audio.positionMs)
+        graph.readingSync.sentenceSeek(book.id, cursor, mapped, pairing)
+        if (mapped.confidence == MappingConfidence.ESTIMATED) correctionWanted = cursor
+        if (player.isPlaying) startCorrection()
+        publish()
+        return true
+    }
+
+    /**
+     * A switch back to listening (leaving read along, or starting it from a page): start at the shared place, as
+     * [load] does, when reading moved it. Large moves offer Undo through [ReadingSync]'s audio jump.
+     */
+    suspend fun alignToSharedPosition(): Boolean {
+        val book = currentBook ?: return false
+        val source = currentSource ?: return false
+        val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return false
+        if (graph.sharedPositions.current(book.id)?.origin != PositionOrigin.READING || player.isPlaying) return false
+        val here = AudioCursor(source.id, part.id, player.currentPosition.coerceAtLeast(0))
+        val jump = graph.readingSync.listeningStart(book.id, source, here)
+        val destination = jump.destination?.takeIf { it != here } ?: return false
+        invalidateNavigation()
+        player.seekTo(resumeIndex(source.parts, destination.partId), destination.positionMs)
+        if (jump.confidence == MappingConfidence.ESTIMATED) correctionWanted = graph.sharedPositions.current(book.id)?.text
+        undoEpoch = navigationEpoch
+        publish(); save()
+        return true
+    }
+
+    fun undoSyncJump() {
+        val jump = graph.readingSync.state.value.audioJump ?: return
+        if (!jump.offerUndo || undoEpoch != navigationEpoch) return
+        val previous = jump.previous ?: return
+        val source = currentSource?.takeIf { it.id == previous.sourceId } ?: return
+        invalidateNavigation()
+        player.seekTo(resumeIndex(source.parts, previous.partId), previous.positionMs)
+        graph.readingSync.clearJump(); publish()
     }
 
     private fun readChapters() {
@@ -217,6 +364,7 @@ class ListeningService : MediaSessionService() {
     override fun onDestroy() {
         runBlocking { save() }
         graph.playback.service = null
+        graph.sharedPositions.playingBookId = null
         chapterJob?.cancel(); scope.cancel(); session?.release(); player.release(); super.onDestroy()
     }
 

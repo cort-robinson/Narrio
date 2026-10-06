@@ -4,6 +4,7 @@ import app.narrio.domain.Audiobook
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import okhttp3.*
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.mockwebserver.*
@@ -22,13 +23,85 @@ class AddonManagerTest {
         return addon.copy(manifest = JsonObject(addon.manifest + ("adapters" to JsonObject(adapters + ("source" to JsonObject(source + ("request" to JsonObject(request + ("url" to JsonPrimitive(url))))))))))
     }
 
-    @Test fun allSixBundledManifestsValidateAndOlderLinksKeepTheSameIds() {
+    @Test fun individualAudioAddonLookupsKeepTheirOwnResultsStatusAndFailures() = runBlocking {
+        val first = at(bundled("knaben-audiobooks"), "https://example.com/first")
+        val second = at(first.copy(manifest = JsonObject(first.manifest + ("id" to JsonPrimitive("second")))), "https://example.com/second")
+        val requested = mutableListOf<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            synchronized(requested) { requested += chain.request().url.encodedPath }
+            assertNull(chain.request().header("Authorization"))
+            if (chain.request().url.encodedPath == "/second") throw java.io.IOException("fixture failure")
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body("""{"hits":[{"title":"Andy Weir - Project Hail Mary","hash":"$hash"}]}""".toResponseBody("application/json".toMediaType())).build()
+        }.build()
+        val manager = AddonManager(client, listOf(first, second))
+        val book = Audiobook("book", "Project Hail Mary", "Andy Weir")
+        val states = mutableListOf<app.narrio.domain.SourceGroupStatus>()
+        val found = manager.searchAddon(first.id, book, book.title, SourceSearchBudget()) { states += it }
+        assertEquals(hash, found.single().torrentHash)
+        assertEquals(first.name, found.single().sourceAddonName)
+        assertEquals(listOf("/first"), requested)
+        assertEquals(listOf(app.narrio.domain.SourceGroupStatus.WAITING, app.narrio.domain.SourceGroupStatus.SEARCHING), states)
+        try { manager.searchAddon(second.id, book, book.title, SourceSearchBudget()) {}; fail("Expected a failure") }
+        catch (_: java.io.IOException) { }
+        assertEquals("Available", manager.status.value[first.id])
+        assertTrue(manager.status.value[second.id]!!.contains("Unavailable"))
+        manager.enable(first.id, false)
+        try { manager.searchAddon(first.id, book, book.title, SourceSearchBudget()) {}; fail("Disabled source must not run") }
+        catch (_: ProviderException) { }
+        assertEquals(listOf("/first", "/second"), requested)
+    }
+
+    @Test fun allBundledManifestsValidateAndOlderLinksKeepTheSameIds() {
         val addons = AddonManager.bundledUrls.keys.map(::bundled)
-        assertEquals(6, addons.size)
+        assertEquals(7, addons.size)
         assertEquals(2, addons.count { it.catalog })
         assertEquals(3, addons.count { it.source && it.contentType == "audiobook" })
-        assertEquals(1, addons.count { it.contentType == "ebook" })
+        assertEquals(2, addons.count { it.contentType == "ebook" })
+        assertEquals(1, addons.count { it.ebookSearch })
         assertEquals("audiobookbay", AddonManifest.parse(bundled("audiobookbay").manifest.toString(), "https://jsonkeeper.com/b/QL9DT").id)
+    }
+
+    @Test fun browserEbookSearchEncodesBookIdentityAndNeedsNoNetworkOrTorbox() = runBlocking {
+        val client = OkHttpClient.Builder().addInterceptor { error("Browser links must not issue network requests") }.build()
+        val manager = AddonManager(client, listOf(bundled("annas-archive-ebooks")))
+        val book = Audiobook("catalog:test", "A & B? #1", "Writer + Co")
+        val link = manager.ebookSearchLinks(book).single()
+        val url = link.url.toHttpUrl()
+        assertEquals("Anna's Archive", link.name)
+        assertEquals("https", url.scheme)
+        assertEquals("annas-archive.gl", url.host)
+        assertEquals("A & B? #1 Writer + Co", url.queryParameter("q"))
+        assertEquals("epub", url.queryParameter("ext"))
+        assertEquals(setOf("q", "ext"), url.queryParameterNames)
+        assertTrue(manager.ebooks(book.title).isEmpty())
+        assertTrue(manager.search(book.title).isEmpty())
+        assertEquals("A & B? #1", manager.ebookSearchLinks(book.copy(author = "Author not verified")).single().url.toHttpUrl().queryParameter("q"))
+        manager.enable("annas-archive-ebooks", false)
+        assertTrue(manager.ebookSearchLinks(book).isEmpty())
+        manager.remove("annas-archive-ebooks")
+        assertTrue(manager.ebookSearchLinks(book).isEmpty())
+    }
+
+    @Test fun browserSearchManifestsRejectNonEbookAndNonBrowserRequests() {
+        val manifest = bundled("annas-archive-ebooks").manifest.toString()
+        for (invalid in listOf(manifest.replace("\"ebook\"", "\"audiobook\""), manifest.replace("\"GET\"", "\"POST\""),
+            manifest.replace("\"method\":\"GET\"", "\"method\":\"GET\",\"headers\":{\"Authorization\":\"secret\"}"),
+            manifest.replace("{QUERY}", "fixed"))) {
+            assertTrue(runCatching { AddonManifest.parse(invalid, "https://example.com/addon.json") }.isFailure)
+        }
+    }
+
+    @Test fun upgradesAddNewBundledProvidersOnceWithoutRestoringRemovedOrDisabledProviders() {
+        val defaults = AddonManager.bundledUrls.keys.map(::bundled)
+        val legacy = defaults.filterNot { it.ebookSearch }
+        val saved = legacy.filterNot { it.id == "audiobookbay" }.map { it.copy(enabled = it.id != "knaben-ebooks") }
+        val upgraded = AddonManager.addNewBundled(saved, defaults, legacy.map { it.id }.toSet())
+        assertEquals(saved.map { it.id } + "annas-archive-ebooks", upgraded.map { it.id })
+        assertFalse(upgraded.first { it.id == "knaben-ebooks" }.enabled)
+        assertEquals(upgraded, AddonManager.addNewBundled(upgraded, defaults, defaults.map { it.id }.toSet()))
+        val removed = upgraded.filterNot { it.ebookSearch }
+        assertEquals(removed, AddonManager.addNewBundled(removed, defaults, defaults.map { it.id }.toSet()))
     }
 
     @Test fun pathsSupportArraysIndexesAndNumericObjectKeys() {
@@ -134,9 +207,13 @@ class AddonManagerTest {
             assertEquals(hash, manager.ebooks("Book").single().torrentHash)
             val body = NarrioJson.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
             assertTrue(body["categories"]!!.jsonArray.any { it.stringValue() == "9001000" })
-            server.enqueue(MockResponse().setBody("{}").setBodyDelay(10, TimeUnit.SECONDS))
+            // Keep the stalled body longer than cancellation, within MockWebServer's shutdown grace period.
+            server.enqueue(MockResponse().setBody("{}").setBodyDelay(3, TimeUnit.SECONDS))
             val job = launch { manager.ebooks("Book") }
-            delay(1100); job.cancelAndJoin(); assertTrue(job.isCancelled)
+            delay(1100)
+            val cancelStarted = System.nanoTime()
+            job.cancelAndJoin(); assertTrue(job.isCancelled)
+            assertTrue("Cancellation must stop the body read immediately", (System.nanoTime() - cancelStarted) / 1_000_000 < 1000)
         } finally { server.shutdown() }
     }
 }

@@ -36,7 +36,7 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
         parseRecording(get("https://archive.org/metadata/$id"))
     }
 
-    private fun get(url: String): JsonObject = http.newCall(Request.Builder().url(url).build()).execute().use { r ->
+    private suspend fun get(url: String): JsonObject = http.readCancellable(Request.Builder().url(url).build()) { r ->
         if (!r.isSuccessful) throw ProviderException("The audiobook catalog is unavailable (${r.code}). Try again in a moment.")
         val root = NarrioJson.parseToJsonElement(r.body?.string().orEmpty()).jsonObject
         if (root.containsKey("error")) throw ProviderException("This recording is unavailable. Choose another edition.")

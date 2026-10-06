@@ -1,0 +1,151 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+:root{--serif:"Newsreader",Georgia,"Times New Roman",serif;--sans:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif}
+.night{--ground:#101B1A;--text:#F4EDDE;--low:#15221F;--surf:#1B2A27;--high:#263832;--muted:#B9C8BD;--outline:#809087;--om:#36483F;--copper:#E8AF79;--oncopper:#342312;--sage:#B1C9AC;--sel:#304739;--onsel:#D3E7CA;--err:#FFB4AB}
+.day{--ground:#F6F0E5;--text:#20332C;--low:#F3EBDC;--surf:#EEE5D5;--high:#E7DCCA;--muted:#536359;--outline:#727C71;--om:#D0D1C3;--copper:#805031;--oncopper:#FFF;--sage:#476447;--sel:#D4E5C9;--onsel:#223B24;--err:#BA1A1A}
+body{margin:0}
+.wrap{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start;font-family:var(--sans)}
+figure{margin:0}
+figcaption{font:600 12px/1.4 var(--sans);color:var(--muted-foreground,#888);margin:0 0 6px 2px;max-width:340px}
+.phone{width:340px;height:720px;overflow:hidden;border-radius:22px;background:var(--ground);color:var(--text);border:1px solid #0003;position:relative}
+.fold{width:700px;height:720px;overflow:hidden;border-radius:18px;background:var(--ground);color:var(--text);border:1px solid #0003;display:flex}
+.rail{width:56px;background:var(--surf);flex:none}
+.left{width:330px;flex:none;border-right:1px solid var(--om);overflow:hidden}
+.right{flex:1;background:var(--low);overflow:hidden}
+.pad{padding:12px 18px}
+.bar{display:flex;align-items:center;gap:10px;font:600 13px var(--sans);padding:12px 14px}
+.bar .save{margin-left:auto;color:var(--copper);font-size:12px}
+.h-title{font:400 25px/28px var(--serif);letter-spacing:-.3px;margin:4px 0 2px}
+.author{font:14px var(--sans);color:var(--muted)}
+.cover{width:64px;height:94px;border-radius:6px;background:linear-gradient(160deg,#c9894f,#5a3a22);flex:none}
+.idrow{display:flex;gap:14px;align-items:center}
+.card{background:var(--surf);border-radius:14px;padding:14px 14px 10px;margin-top:12px}
+.eyebrow{display:flex;align-items:center;gap:6px;font:600 11px var(--sans);color:var(--copper)}
+.reasons{font:600 13.5px/19px var(--sans);color:var(--text);margin:6px 0 2px}
+.release{font:11.5px/16px var(--sans);color:var(--muted)}
+.from{font:500 10.5px/15px var(--sans);color:var(--muted);margin-top:2px}
+.btn{display:flex;justify-content:center;align-items:center;gap:6px;height:38px;border-radius:19px;background:var(--copper);color:var(--oncopper);font:600 13px var(--sans);margin-top:10px}
+.btn.dis{background:color-mix(in srgb,var(--text) 12%,transparent);color:color-mix(in srgb,var(--text) 40%,transparent)}
+.btn.out{background:none;border:1px solid var(--outline);color:var(--copper)}
+.btn.tonal{background:var(--sel);color:var(--onsel)}
+.tbtn{font:600 12.5px var(--sans);color:var(--copper);padding:9px 2px 3px;display:inline-block}
+.row2{display:flex;gap:8px}.row2>*{flex:1}
+.pill{display:flex;align-items:center;gap:8px;background:var(--sel);color:var(--onsel);border-radius:10px;padding:7px 10px;font:600 11.5px var(--sans);margin:-2px 0 8px}
+.pill b{margin-left:auto;color:var(--onsel);text-decoration:underline}
+.skel{height:10px;border-radius:5px;background:color-mix(in srgb,var(--text) 10%,transparent);margin:7px 0}
+.sh{font:400 19px/24px var(--serif);margin:18px 0 2px}
+.sum{font:500 10.5px var(--sans);color:var(--muted)}
+.sec{border-top:1px solid var(--om);padding:10px 0 4px}
+.shead{display:flex;align-items:center;gap:8px;min-height:26px}
+.sname{font:600 13.5px var(--sans)}
+.sstate{margin-left:auto;font:600 11px var(--sans);color:var(--muted);display:flex;align-items:center;gap:6px}
+.sstate.ok{color:var(--sage)}.sstate.bad{color:var(--err)}
+.spin{width:11px;height:11px;border-radius:50%;border:2px solid color-mix(in srgb,var(--copper) 25%,transparent);border-top-color:var(--copper)}
+.rel{padding:8px 0 8px 0;border-radius:10px}
+.rt{font:600 12.5px/17px var(--sans)}
+.rv{font:11px/15px var(--sans);color:var(--sage)}
+.rq{display:flex;flex-wrap:wrap;gap:4px 10px;font:600 10.5px/15px var(--sans);color:var(--muted);margin-top:3px}
+.rq .ready{color:var(--copper)}
+.also{font:500 10px/14px var(--sans);color:var(--muted);font-style:italic}
+.msg{font:11.5px/16px var(--sans);color:var(--muted);margin:2px 0 4px}
+.possible{display:flex;align-items:center;font:600 11.5px var(--sans);color:var(--muted);padding:6px 0}
+.possible span{margin-left:auto}
+.note{font:11px/15px var(--sans);color:var(--muted);margin-top:6px}
+.callout{background:var(--surf);border-radius:14px;padding:14px;margin-top:12px}
+.callout h4{margin:0 0 4px;font:600 14px var(--sans)}
+/* settings */
+.st{font:400 24px var(--serif);margin:4px 0 6px}
+.sr{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--om)}
+.grip{width:22px;text-align:center;color:var(--muted);font-size:15px}
+.sr .nm{font:600 13px var(--sans)}
+.sr .sub{font:11px/15px var(--sans);color:var(--muted)}
+.sr .warn{font:600 10.5px var(--sans);color:var(--copper)}
+.sw{width:34px;height:20px;border-radius:10px;background:var(--copper);position:relative;flex:none}
+.sw::after{content:"";position:absolute;right:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--oncopper)}
+.sw.off{background:none;border:2px solid var(--outline);box-sizing:border-box}
+.sw.off::after{left:2px;right:auto;top:2px;width:12px;height:12px;background:var(--outline)}
+.more{color:var(--muted);width:18px;text-align:center}
+.lifted{background:var(--high);border-radius:12px;box-shadow:0 6px 16px #0004;padding-left:6px;padding-right:6px;margin:0 -6px}
+.sect{font:400 18px var(--serif);margin:16px 0 2px}
+.cols{display:flex;gap:22px}.cols>*{flex:1}
+.legend{font:12px/1.5 var(--sans);color:var(--foreground,#ddd);max-width:1000px;margin:8px 0 0}
+</style></head><body>
+<div class="wrap" id="root"></div>
+<script>
+const I={spark:"✦",play:"▶",cloud:"☁",bolt:"⚡",head:"🎧",clock:"◷",warn:"!",check:"✓",grip:"⋮⋮"};
+const topBar=(t="The book")=>`<div class="bar">←&nbsp; ${t}<span class="save">＋ Save</span></div>`;
+const identity=()=>`<div class="idrow"><div class="cover"></div><div><div class="h-title">Project Hail Mary</div><div class="author">Andy Weir</div></div></div>`;
+const rel=(t,v,q,also)=>`<div class="rel"><div class="rt">${t}</div><div class="rv">${v}</div><div class="rq">${q}</div>${also?`<div class="also">Also found by ${also}</div>`:""}</div>`;
+const sec=(name,state,cls,body="")=>`<div class="sec"><div class="shead"><span class="sname">${name}</span><span class="sstate ${cls||""}">${state}</span></div>${body}</div>`;
+const spin=`<span class="spin"></span>`;
+const q1=`<span class="ready">${I.bolt} Ready to stream</span><span>M4B · 1 file</span><span>412 MB</span><span>English</span>`;
+const q2=`<span class="ready">${I.bolt} Ready to stream</span><span>MP3 · 46 parts</span><span>890 MB</span><span>48 seeders</span>`;
+const q3=`<span>${I.cloud} Needs preparing</span><span>M4B</span><span>402 MB</span><span>12 seeders</span>`;
+const qlv=`<span class="ready">${I.head} Free public recording</span><span>MP3 · 22 parts</span><span>English</span>`;
+const best=(o={})=>`<div class="card">${o.better?`<div class="pill">${I.spark} Better match found<b>Show</b></div>`:""}
+<div class="eyebrow">${I.spark} Best match${o.running?`<span style="margin-left:auto;color:var(--muted);font-weight:500;display:flex;gap:6px;align-items:center">${spin} Still checking 2 sources</span>`:""}</div>
+<div class="reasons">${o.reasons||"Ready to stream · M4B · Read by Ray Porter"}</div>
+<div class="release">${o.release||"Project Hail Mary [Unabridged] – Andy Weir – Ray Porter (2021) M4B"}</div>
+<div class="from">${o.from||"From TorBox search · also found by AudiobookBay"}</div>
+<div class="btn ${o.btn||""}">${o.label||I.play+"&nbsp; Listen"}</div>
+<div class="tbtn">${o.other||"Other choices · 9 found"}</div></div>`;
+const bestWaiting=()=>`<div class="card"><div class="eyebrow">${I.spark} Best match<span style="margin-left:auto;color:var(--muted);font-weight:500;display:flex;gap:6px;align-items:center">${spin} Checking 5 sources</span></div>
+<div class="skel" style="width:78%;margin-top:10px"></div><div class="skel" style="width:92%"></div><div class="skel" style="width:40%"></div>
+<div class="btn dis">${spin}&nbsp; Finding audio…</div><div class="tbtn" style="color:var(--muted)">Ebook · Find ebook</div></div>`;
+const head=(sum)=>`<div class="sh">Listening sources</div><div class="sum">${sum}</div>`;
+
+function detailsInProgress(){return topBar()+`<div class="pad">${identity()}${best({running:true,reasons:"Free public recording · Read by a LibriVox volunteer",release:"Project Hail Mary — LibriVox (solo)",from:"From Internet Archive / LibriVox",btn:"",other:"Other choices · 1 so far"})}
+${head("2 of 5 sources answered · 3 found")}
+${sec("Internet Archive / LibriVox",`${I.check} 1 found`,"ok",rel("Project Hail Mary (solo)","Read by Mark Nelson","" + qlv))}
+${sec("My TorBox library",`${I.check} Nothing for this book`,"")}
+${sec("TorBox search",`${spin} Checking TorBox · 6 found`,"",`<div class="skel" style="width:85%"></div><div class="skel" style="width:60%"></div>`)}
+${sec("AudiobookBay",`${spin} Searching`,"",`<div class="skel" style="width:70%"></div>`)}
+${sec("Knaben audiobooks",`${I.clock} Waiting its turn`,"")}
+</div>`;}
+function detailsDone(better){return topBar()+`<div class="pad">${identity()}${best({better})}
+${head("All 5 sources answered · 9 found")}
+${sec("TorBox search",`${I.check} 4 found`,"ok",rel("Project Hail Mary [Unabridged] – Ray Porter","Read by Ray Porter",q1,"AudiobookBay")+rel("Project Hail Mary – Andy Weir (2021)","Narrator not listed",q2)+`<div class="possible">Possible matches · 2<span>⌄</span></div>`)}
+${sec("AudiobookBay",`${I.check} 2 found`,"ok",rel("Andy Weir – Project Hail Mary (Ray Porter)","Read by Ray Porter",q3))}
+${sec("Knaben audiobooks","! Timed out","bad",`<div class="msg">Didn't answer within 15 seconds.</div><div class="tbtn">↻ Retry</div>`)}
+</div>`;}
+function detailsFailed(){return topBar()+`<div class="pad">${identity()}<div class="callout"><h4>Couldn't reach any source</h4><div class="msg">None of your 5 sources answered. Check your connection, then try again.</div><div class="btn">↻&nbsp; Try again</div></div>
+${head("5 of 5 sources failed")}
+${sec("Internet Archive / LibriVox","! Couldn't connect","bad",`<div class="tbtn">↻ Retry</div>`)}
+${sec("My TorBox library","! TorBox didn't answer","bad",`<div class="tbtn">↻ Retry</div>`)}
+${sec("TorBox search","! Timed out","bad",`<div class="tbtn">↻ Retry</div>`)}
+${sec("AudiobookBay","! Couldn't connect","bad",`<div class="tbtn">↻ Retry</div>`)}
+</div>`;}
+function detailsDisconnected(){return topBar()+`<div class="pad">${identity()}<div class="callout"><h4>No free public recording found</h4><div class="msg">LibriVox has no recording of this book. Connect TorBox to also search your library, TorBox search, and 3 add-ons.</div><div class="btn">Connect TorBox</div><div class="tbtn">Search again</div></div>
+${head("1 source searched · 4 need TorBox")}
+${sec("Internet Archive / LibriVox",`${I.check} Nothing for this book`,"")}
+${sec("My TorBox library","Needs TorBox","")}
+${sec("TorBox search","Needs TorBox","")}
+${sec("AudiobookBay","Needs TorBox","")}
+${sec("The Pirate Bay","Off in settings","")}
+</div>`;}
+function settings(){return `<div class="bar">← &nbsp;Sources &amp; add-ons</div><div class="pad" style="padding-top:0">
+<div class="msg">Choose where Narrio looks for recordings, ebooks, and book details.</div>
+<div class="callout" style="padding:10px 12px;margin-top:6px"><div class="msg" style="margin:0">TorBox isn't connected. 4 audiobook sources need it.</div><div class="tbtn" style="padding-top:4px">Connect TorBox</div></div>
+<div class="sect">Audiobook sources</div><div class="msg">Searched together; this order sets the order on book pages. Drag or use ⋮ to move.</div>
+${srow("Internet Archive / LibriVox","Built in · Free public recordings",true)}
+${srow("My TorBox library","Built in · Recordings already in your TorBox",true,"Needs TorBox")}
+${srow("TorBox search","Built in · Releases TorBox can find",true,"Needs TorBox",true)}
+${srow("AudiobookBay","Add-on 1.2 · Last search: 4 found",true,"Needs TorBox")}
+${srow("The Pirate Bay","Add-on 1.0 · Off",false)}
+<div class="sect">Ebook sources</div>${srow2("Knaben ebooks","Add-on · Cached EPUB and text in TorBox",true)}${srow2("Anna's Archive","Add-on · Opens inside Narrio",true)}
+</div>`;}
+const srow=(n,s,on,warn,lift)=>`<div class="sr ${lift?"lifted":""}"><span class="grip">≡</span><div style="flex:1"><div class="nm">${n}</div><div class="sub">${s}</div>${warn?`<div class="warn">${warn}</div>`:""}</div><div class="sw ${on?"":"off"}"></div><span class="more">⋮</span></div>`;
+const srow2=(n,s,on)=>`<div class="sr"><div style="flex:1"><div class="nm">${n}</div><div class="sub">${s}</div></div><div class="sw ${on?"":"off"}"></div><span class="more">⋮</span></div>`;
+function catalogLeft(){return `<div class="pad"><div style="font:400 22px var(--serif);margin:6px 0 12px">narrio</div><div style="height:38px;border:1px solid var(--outline);border-radius:12px;margin-bottom:14px"></div>${[1,2,3,4,5].map(i=>`<div style="display:flex;gap:12px;margin-bottom:14px"><div class="cover" style="width:44px;height:64px"></div><div><div class="rt">Book ${i}</div><div class="release">Author</div></div></div>`).join("")}</div>`;}
+const frames=[
+ ["night","phone","Phone · Night · In progress — best match shown early (public recording), sections fill independently; slow provider searching, one waiting behind its rate limit.",detailsInProgress()],
+ ["day","phone","Phone · Day · Finished — Best match card, sections in priority order, deduped 'Also found by', collapsed possible matches, a timed-out source with Retry.",detailsDone(false)],
+ ["day","phone","Phone · Day · All failed — specific recovery copy and per-source Retry.",detailsFailed()],
+ ["night","phone","Phone · Night · TorBox disconnected — skipped sections say why; card offers Connect.",detailsDisconnected()],
+ ["night","fold","Unfolded · Night · Better match found while the listener is touching the page — calm pill, no jump.",`<div class="rail"></div><div class="left">${catalogLeft()}</div><div class="right">${detailsDone(true)}</div>`],
+ ["day","phone","Phone · Day · Settings → Sources & add-ons — toggles, drag handle (row lifted mid-drag), ⋮ menu with Move up/down, built-ins can't be removed.",settings()],
+ ["night","fold","Unfolded · Night · Settings in the list pane beside details; same list, TorBox notice.",`<div class="rail"></div><div class="left">${settings()}</div><div class="right">${detailsDone(false)}</div>`],
+];
+document.getElementById("root").innerHTML=frames.map(([t,k,c,h])=>`<figure><figcaption>${c}</figcaption><div class="${k} ${t}">${h}</div></figure>`).join("");
+</script></body></html>
