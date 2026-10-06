@@ -4,7 +4,9 @@ import android.graphics.RectF
 import androidx.annotation.ColorInt
 import app.narrio.domain.ContentCursor
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +15,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.readium.r2.navigator.DecorableNavigator
 import org.readium.r2.navigator.Decoration
@@ -30,8 +35,9 @@ import org.readium.r2.shared.util.AbsoluteUrl
 data class CursorRange(val start: ContentCursor, val end: ContentCursor)
 
 /** A decoration drawn over a content range, such as a narrated sentence or a highlight. */
-data class TextDecoration(val id: String, val range: CursorRange, val style: Style = Style.HIGHLIGHT, @ColorInt val tint: Int, val active: Boolean = false) {
-    enum class Style { HIGHLIGHT, UNDERLINE }
+data class TextDecoration(val id: String, val range: CursorRange, val style: Style = Style.HIGHLIGHT, @ColorInt val tint: Int, val active: Boolean = false, val animated: Boolean = false) {
+    /** NARRATED, ESTIMATED and WORD are read-along narration marks ([NarrationMark]); [animated] fades them in. */
+    enum class Style { HIGHLIGHT, UNDERLINE, NARRATED, ESTIMATED, WORD }
 }
 
 /** The page on screen: its first visible character and the first character after it (null at a resource end). */
@@ -50,6 +56,8 @@ sealed interface ReaderEvent {
     data class DecorationActivated(val group: String, val id: String, val rect: RectF?) : ReaderEvent
     /** A tap away from the page-turn edges: show or hide the reader controls. */
     data object ToggleControls : ReaderEvent
+    /** With [ReaderController.textTaps] on, a tap on text: the character under the finger. */
+    data class TextTapped(val cursor: ContentCursor) : ReaderEvent
 }
 
 /**
@@ -96,6 +104,19 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
     private var targetAttempts = 0
     private var opening = false
     private val decorationGroups = mutableMapOf<String, List<TextDecoration>>()
+    /** Groups whose taps this controller already receives; Readium keeps every listener it's given. */
+    private val listenedGroups = mutableSetOf<String>()
+    private val decorating = Mutex()
+    /** The place [follow] last kept on screen; relayouts restore it instead of [cursor] while following. */
+    private var followAnchor: ContentCursor? = null
+    /** The resource whose page last had decorations redrawn after loading. */
+    private var drawnResource: String? = null
+
+    /**
+     * Read along: taps on text report [ReaderEvent.TextTapped] (play from that sentence) and only taps beside the
+     * text toggle the controls; page-turn edges narrow so most of the page is text.
+     */
+    @Volatile var textTaps: Boolean = false
 
     /** Sets the initial place without treating it as reading activity. */
     fun restore(cursor: ContentCursor?) { _cursor.value = cursor }
@@ -103,7 +124,9 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
     // Navigation
 
     /** Moves to [cursor]. Programmatic moves don't count as reading and don't change [cursor] unless [asReader]. */
-    suspend fun goTo(cursor: ContentCursor, animated: Boolean = false, asReader: Boolean = false): Boolean {
+    suspend fun goTo(cursor: ContentCursor, animated: Boolean = false, asReader: Boolean = false): Boolean = withContext(Dispatchers.Main.immediate) { goToOnMain(cursor, animated, asReader) }
+
+    private suspend fun goToOnMain(cursor: ContentCursor, animated: Boolean, asReader: Boolean): Boolean {
         val locator = book.locator(cursor) ?: return false
         val navigator = navigator ?: run { if (asReader) _cursor.value = cursor; return false }
         if (asReader) {
@@ -120,8 +143,17 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         return accepted
     }
 
-    /** A jump the reader asked for: contents, scrubber, or "Back to". */
-    fun jumpTo(cursor: ContentCursor) { scope.launch { goTo(cursor, asReader = true) } }
+    /**
+     * A jump the reader asked for: contents, scrubber, or "Back to". With [keepReturnPoint], an existing "Back to"
+     * place survives, so stepping through search matches still returns to where reading was before the search.
+     */
+    fun jumpTo(cursor: ContentCursor, keepReturnPoint: Boolean = false) {
+        scope.launch {
+            val back = _returnPoint.value
+            goTo(cursor, asReader = true)
+            if (keepReturnPoint && back != null) _returnPoint.value = back
+        }
+    }
 
     fun jumpTo(place: BookPlace) = jumpTo(book.cursor(place.resource, place.offset))
 
@@ -135,29 +167,72 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
 
     fun goBack() { _returnPoint.value?.let { target -> _returnPoint.value = null; scope.launch { goTo(target, asReader = true); _returnPoint.value = null } } }
 
-    fun next(animated: Boolean = true) { navigator?.goForward(animated) }
-    fun previous(animated: Boolean = true) { navigator?.goBackward(animated) }
+    fun next(animated: Boolean = true) { userTurn(); navigator?.goForward(animated) }
+    fun previous(animated: Boolean = true) { userTurn(); navigator?.goBackward(animated) }
+
+    /** A page turn the reader asked for ends any programmatic settling, so it always counts as theirs. */
+    private fun userTurn() { touched(); programmaticUntil = 0; target = null; restorePending = false; restoreJob?.cancel() }
+
+    @Volatile private var lastInput = 0L
+    /** The reader touched the page (or turned it by key): page changes soon after are theirs, not the navigator's. */
+    fun touched() { lastInput = System.currentTimeMillis() }
+    private fun inputRecently() = System.currentTimeMillis() - lastInput < USER_INPUT_MS
 
     // Together mode hooks
 
     fun startFollowing() { _following.value = true }
-    fun stopFollowing() { _following.value = false }
+    fun stopFollowing() { _following.value = false; followAnchor = null }
 
     /** While [following], turns the page so [cursor] is visible. Returns true when it moved. */
     suspend fun follow(cursor: ContentCursor, animated: Boolean = true): Boolean {
         if (!_following.value) return false
+        followAnchor = cursor
         if (_visible.value?.contains(cursor) == true) return false
-        return goTo(cursor, animated)
+        return goTo(cursor, animated).also { programmaticUntil = minOf(programmaticUntil, System.currentTimeMillis() + FOLLOW_SETTLE_MS) }
+    }
+
+    /** Leaving read along: the followed narration becomes the reader's place (not reading activity), then following stops. */
+    fun leaveFollowing() {
+        if (_following.value) followAnchor?.let { _cursor.value = it }
+        stopFollowing()
     }
 
     // Decorations and selection
 
     suspend fun setDecorations(group: String, decorations: List<TextDecoration>) {
         decorationGroups[group] = decorations
-        val navigator = navigator ?: return
-        navigator.applyDecorations(decorations.flatMap { readiumDecorations(it) }, group)
-        navigator.addDecorationListener(group, this)
+        // The navigator records a group before drawing it; an interrupted call would leave it recorded but undrawn,
+        // so drawing always completes, one group update at a time, with the group's latest list.
+        withContext(NonCancellable) {
+            decorating.withLock { drawGroup(group) }
+        }
     }
+
+    /**
+     * Sends every group again once a resource has been laid out. Decorations applied while its page was still
+     * loading can be recorded by the navigator without being drawn; clearing first makes the navigator redraw them.
+     */
+    private suspend fun redrawDecorations() = withContext(NonCancellable) {
+        decorating.withLock {
+            for ((group, decorations) in decorationGroups.toMap()) if (decorations.isNotEmpty()) drawGroup(group, clearFirst = true)
+        }
+    }
+
+    /** Draws [group]'s latest list on the navigator; call with [decorating] held. */
+    private suspend fun drawGroup(group: String, clearFirst: Boolean = false) {
+        val navigator = navigator ?: return
+        val resolved = decorationGroups[group].orEmpty().flatMap { readiumDecorations(it) }
+        // Resolving ranges can read a chapter off the main thread; the navigator's WebView only accepts the main one.
+        withContext(Dispatchers.Main.immediate) {
+            if (this@ReaderController.navigator !== navigator) return@withContext
+            if (clearFirst) navigator.applyDecorations(emptyList(), group)
+            navigator.applyDecorations(resolved, group)
+            if (listenedGroups.add(group)) navigator.addDecorationListener(group, this@ReaderController)
+        }
+    }
+
+    /** Removes [group]'s decorations; usable where suspending isn't (a disposing screen). */
+    fun clearDecorations(group: String) { scope.launch { setDecorations(group, emptyList()) } }
 
     private suspend fun readiumDecorations(decoration: TextDecoration): List<Decoration> {
         val start = decoration.range.start
@@ -166,6 +241,9 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         val style = when (decoration.style) {
             TextDecoration.Style.HIGHLIGHT -> Decoration.Style.Highlight(decoration.tint, decoration.active)
             TextDecoration.Style.UNDERLINE -> Decoration.Style.Underline(decoration.tint, decoration.active)
+            TextDecoration.Style.NARRATED -> NarrationMark(NarrationMark.SENTENCE, decoration.tint, decoration.animated)
+            TextDecoration.Style.ESTIMATED -> NarrationMark(NarrationMark.ESTIMATED, decoration.tint, decoration.animated)
+            TextDecoration.Style.WORD -> NarrationMark(NarrationMark.WORD, decoration.tint, decoration.animated)
         }
         var part = 0
         return links.flatMap { link ->
@@ -195,6 +273,30 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         return CursorRange(cursor(obj.optJSONObject("start")) ?: return null, cursor(obj.optJSONObject("end")) ?: return null)
     }
 
+    /** The selected text as the page shows it, or null without a selection. For copy, share, and text actions. */
+    suspend fun selectedText(): String? {
+        val navigator = navigator ?: return null
+        val json = runCatching { navigator.evaluateJavascript(ReaderScripts.SELECTION) }.getOrNull()?.takeIf { it != "null" } ?: return null
+        return runCatching { JSONObject(json).optString("text") }.getOrNull()?.takeIf { it.isNotBlank() }
+    }
+
+    /** Ends the page's text selection, after its toolbar action ran. */
+    fun clearSelection() { navigator?.clearSelection() }
+
+    /** The character at [x], [y] (navigator view pixels), or null when the point isn't on text. */
+    suspend fun cursorAt(x: Float, y: Float): ContentCursor? = withContext(Dispatchers.Main.immediate) { cursorAtOnMain(x, y) }
+
+    private suspend fun cursorAtOnMain(x: Float, y: Float): ContentCursor? {
+        val navigator = navigator ?: return null
+        val density = navigator.resources.displayMetrics.density
+        val json = runCatching { navigator.evaluateJavascript(ReaderScripts.at(x / density, y / density)) }.getOrNull()?.takeIf { it != "null" } ?: return null
+        val obj = runCatching { JSONObject(json) }.getOrNull() ?: return null
+        val link = book.linkFor(navigator.currentLocator.value.href) ?: return null
+        val index = book.index(link) ?: return null
+        val position = obj.position().takeIf { it.blockOffset != null } ?: return null
+        return book.cursor(index.resource, CursorMapping.offset(index, position))
+    }
+
     /** Runs [script] in the page on screen; for diagnostics and tests. */
     internal suspend fun evaluate(script: String): String? = navigator?.evaluateJavascript(script)
 
@@ -202,17 +304,25 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
 
     internal fun attach(fragment: EpubNavigatorFragment) {
         navigator = fragment
+        listenedGroups.clear()
         // The first layout settles through several locators; none of them is the reader's own navigation.
         markProgrammatic(4_000)
         opening = true
         restoreAttempts = if (_cursor.value != null) 3 else 0
         fragment.addInputListener(object : InputListener {
+            override fun onKey(event: org.readium.r2.navigator.input.KeyEvent): Boolean { touched(); return false }
             override fun onTap(event: TapEvent): Boolean {
                 (event.targetElement?.content as? Content.ImageElement)?.let { _events.tryEmit(ReaderEvent.Image(it)); return true }
                 val width = fragment.publicationView.width.toFloat()
-                val edge = maxOf(width * .3f, 1f)
+                val edge = maxOf(width * if (textTaps) .12f else .3f, 1f)
                 val scroll = fragment.overflow.value.scroll
-                if (scroll || event.point.x in edge..(width - edge)) { _events.tryEmit(ReaderEvent.ToggleControls); return true }
+                if (!scroll && event.point.x !in edge..(width - edge)) userTurn()
+                if (scroll || event.point.x in edge..(width - edge)) {
+                    if (!textTaps) { _events.tryEmit(ReaderEvent.ToggleControls); return true }
+                    val point = event.point
+                    scope.launch { _events.tryEmit(cursorAt(point.x, point.y)?.let { ReaderEvent.TextTapped(it) } ?: ReaderEvent.ToggleControls) }
+                    return true
+                }
                 return false
             }
         })
@@ -223,11 +333,16 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         scope.launch { decorationGroups.forEach { (group, decorations) -> setDecorations(group, decorations) } }
     }
 
-    internal fun detach() { navigator = null; settleJob?.cancel(); restoreJob?.cancel(); _ready.value = false }
+    internal fun detach() { navigator = null; settleJob?.cancel(); restoreJob?.cancel(); _ready.value = false; drawnResource = null }
+
+    /** The place a relayout puts back on screen: a pending jump, then the followed narration, then the reader's place. */
+    internal fun anchor(): ContentCursor? = followAnchor?.takeIf { _following.value } ?: _cursor.value
 
     /** The page was laid out again (window size, fold, preferences): put the reader's place back on screen. */
     fun relayout() {
-        if (navigator == null || _cursor.value == null) return
+        if (navigator == null || anchor() == null) return
+        // A relayout can redraw the page without the navigator redrawing its decorations.
+        drawnResource = null
         restorePending = true
         restoreJob?.cancel()
         restoreJob = scope.launch { delay(450); if (restorePending) restoreNow() }
@@ -235,7 +350,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
 
     private suspend fun restoreNow() {
         restorePending = false
-        val target = readerTarget ?: this.target ?: _cursor.value ?: return
+        val target = readerTarget ?: this.target ?: anchor() ?: return
         restoreAttempts = 3
         goTo(target)
         scheduleProbe(350)
@@ -252,6 +367,12 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             delay(delayMs)
             if (restorePending) { restoreNow(); return@launch }
             val navigator = navigator ?: return@launch
+            // A resized page view keeps its old line width until refitted; then the place goes back on screen.
+            if (runCatching { navigator.evaluateJavascript(ReaderScripts.FIT_VIEWPORT) }.getOrNull() == "true") {
+                (readerTarget ?: target ?: anchor())?.let { goTo(it) }
+                scheduleProbe(350)
+                return@launch
+            }
             val json = runCatching { navigator.evaluateJavascript(ReaderScripts.VISIBLE) }.getOrNull() ?: return@launch
             val obj = runCatching { JSONObject(json) }.getOrNull() ?: return@launch
             val link = book.linkFor(navigator.currentLocator.value.href) ?: return@launch
@@ -262,6 +383,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             val previous = _visible.value?.first
             val range = VisibleRange(first, end)
             _visible.value = range
+            if (first.resource != drawnResource) { drawnResource = first.resource; redrawDecorations() }
             target?.let { wanted ->
                 if (!range.contains(wanted) && targetAttempts > 0) {
                     targetAttempts--
@@ -281,7 +403,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             if (opening) { opening = false; programmaticUntil = System.currentTimeMillis() + 700 }
             if (System.currentTimeMillis() < programmaticUntil && !jumpPending) {
                 // The navigator may adjust the page after a restore (late reflow); put the reader's place back.
-                val anchor = _cursor.value
+                val anchor = anchor()
                 if (anchor != null && restoreAttempts > 0 && !VisibleRange(first, end).contains(anchor)) {
                     restoreAttempts--
                     goTo(anchor)
@@ -289,16 +411,29 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
                 }
                 return@launch
             }
-            // Locator updates that leave the same page on screen aren't page turns.
+            // Locator updates that leave the same page on screen aren't page turns, and neither is a settle that still
+            // shows the narration being followed.
             if (first == previous) return@launch
+            if (_following.value && followAnchor?.let(range::contains) == true) return@launch
+            // While following, only the reader's own touch, turn, or jump (contents, search, bookmarks) stops it; a page
+            // change without one is the navigator settling after a relayout, so the narration goes back on screen.
+            if (_following.value && !jumpPending && !inputRecently()) { followAnchor?.let { goTo(it); scheduleProbe(350) }; return@launch }
             val jump = jumpPending
             jumpPending = false
             readerTarget = null
             if (!jump && ++turnsSinceJump >= 2) _returnPoint.value = null
             _cursor.value = first
             _following.value = false
+            followAnchor = null
             _events.tryEmit(ReaderEvent.Moved(first, jump))
         }
+    }
+
+    private companion object {
+        /** How long after an automatic narration page turn page changes are still the navigator settling. */
+        const val FOLLOW_SETTLE_MS = 700L
+        /** How long after a touch or key a page change still counts as the reader's own. */
+        const val USER_INPUT_MS = 1_500L
     }
 
     private fun JSONObject.position() = PagePosition(if (isNull("o")) null else optInt("o"), optInt("r"))

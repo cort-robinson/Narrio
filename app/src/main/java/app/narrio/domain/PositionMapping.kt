@@ -80,7 +80,10 @@ object MappingEngine {
         }
         val (map, at, _) = (exact.ifEmpty { bounded }.ifEmpty { fallback }).singleOrNull() ?: return null
         val anchor = map.points.firstOrNull { it.offset == at }
-        val time = anchor?.time ?: interpolate(map.points, at) ?: run {
+        // Between anchors interpolate; beyond them use the timeline's measured pace, as textFor does, so a place
+        // mapped to audio and back lands on the same passage.
+        val bracketed = map.points.size >= 2 && at in map.points.first().offset..map.points.last().offset
+        val time = anchor?.time ?: (if (bracketed) interpolate(map.points, at) else null) ?: run {
             val line = map.lines.indexOfFirst { it.resource == cursor.resource && cursor.offset in it.offset..it.offset + it.text.length }
             if (line < 0) return null
             val fraction = (cursor.offset - map.lines[line].offset).toDouble() / map.lines[line].text.length.coerceAtLeast(1)

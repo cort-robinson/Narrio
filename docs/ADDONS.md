@@ -12,7 +12,7 @@ Catalog add-ons identify books without checking TorBox or creating playable reco
 
 Audio source add-ons run during book-detail source discovery when TorBox is connected. Mapped torrent hashes enter the existing matching, cache, and file-verification pipeline. Remote `debridCache` hints never establish availability. Narrio verifies availability through the listener's TorBox account. Uncached torrents still require explicit preparation; source discovery does not add them to the account. Narrator/language hints are provider claims, not playback verification.
 
-Ebook source add-ons run in automatic follow-along lookup and the text-source chooser. Matching requires the current recording's title and author, and only EPUB/TXT files checked as cached through TorBox are offered. No torrent is prepared automatically. Public Gutenberg lookup, companion files, and local imports remain available.
+Ebook source add-ons run in the book's Find ebook lookup. Matching requires the current recording's title and author, and only EPUB/TXT files checked as cached through TorBox are offered. No torrent is prepared automatically. Public Gutenberg lookup, companion files, and local imports remain available.
 
 Anna's Archive uses the `ebook-search` capability. In a book's **Find ebook** sheet, choose **Search Anna's Archive** to open an EPUB search for its title and author inside Narrio. Select an edition, complete any website verification, and tap its final file download. Narrio intercepts the download and asks before adding it to this book. Opening a search never attaches an unverified edition.
 

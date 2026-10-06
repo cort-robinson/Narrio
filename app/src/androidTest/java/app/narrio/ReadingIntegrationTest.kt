@@ -179,7 +179,7 @@ class ReadingIntegrationTest {
         val book = seeds.book("integration-audio-owns", ReaderFixtures.sampleEpub(), "EPUB", "Audio owns reading")
         clean += book.id
         compose.waitUntil(15_000) { graph.playback.service?.initialized == true }
-        compose.runOnIdle { seeds.vm.setBackgroundAlignment(false); seeds.vm.setFollowAlongAuto(false) }
+        compose.runOnIdle { seeds.vm.setBackgroundAlignment(false); seeds.vm.setReadAlongSync(false) }
         val wave = java.io.File(compose.activity.filesDir, "integration-owned.wav")
         val size = 120 * 8000 * 2
         wave.outputStream().use { stream ->
@@ -206,7 +206,7 @@ class ReadingIntegrationTest {
         } finally {
             withContext(Dispatchers.Main) { graph.playback.service?.forget() }
             wave.delete()
-            compose.runOnIdle { seeds.vm.setBackgroundAlignment(true); seeds.vm.setFollowAlongAuto(true) }
+            compose.runOnIdle { seeds.vm.setBackgroundAlignment(true); seeds.vm.setReadAlongSync(true) }
         }
     }
 

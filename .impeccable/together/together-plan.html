@@ -1,0 +1,131 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>Narrio · Read along (together mode) plan</title>
+<style>
+@font-face { font-family: Newsreader; src: url(../../app/src/main/res/font/newsreader.ttf); font-weight: 200 800; }
+@font-face { font-family: Manrope; src: url(../../app/src/main/res/font/manrope.ttf); font-weight: 200 800; }
+:root { font-family: Manrope, sans-serif; }
+body { margin: 0; padding: 32px; background: #d9d4ca; color: #20332C; width: 2040px; }
+h1 { font: 400 34px/40px Newsreader; margin: 0 0 6px; letter-spacing: -.4px; }
+.lede { font: 400 14px/22px Manrope; max-width: 1180px; margin: 0 0 22px; color: #3d4b44; }
+.row { display: flex; gap: 28px; align-items: flex-start; margin-bottom: 30px; }
+.cap { font: 600 13px/18px Manrope; margin: 0 0 8px; color: #20332C; }
+.note { font: 400 12px/18px Manrope; color: #3d4b44; width: 100%; margin-top: 8px; }
+.night { --ground:#101B1A; --text:#F4EDDE; --low:#15221F; --surf:#1B2A27; --high:#263832; --muted:#B9C8BD; --copper:#E8AF79; --oncopper:#342312;
+  --sage:#B1C9AC; --line:#36483F; --sel:#304739; --onsel:#D3E7CA; --wash: rgba(232,175,121,.24); --word: rgba(232,175,121,.42); }
+.day { --ground:#F6F0E5; --text:#20332C; --low:#F3EBDC; --surf:#EEE5D5; --high:#E7DCCA; --muted:#536359; --copper:#805031; --oncopper:#FFFFFF;
+  --sage:#476447; --line:#D0D1C3; --sel:#D4E5C9; --onsel:#223B24; --wash: rgba(128,80,49,.16); --word: rgba(128,80,49,.30); }
+.frame { position: relative; overflow: hidden; background: var(--ground); color: var(--text); border-radius: 22px; box-shadow: 0 12px 40px rgba(0,0,0,.18); }
+.status { height: 24px; font: 600 11px/24px Manrope; padding: 0 18px; color: var(--muted); display: flex; justify-content: space-between; }
+.head { font: 500 11px/16px Manrope; color: var(--muted); text-align: center; padding: 8px 40px 0; }
+.page { font: 400 17px/28px Newsreader; padding: 14px 26px; text-align: justify; hyphens: auto; }
+.page p { margin: 0 0 10px; text-indent: 1.2em; }
+.page h3 { font: 400 24px/28px Newsreader; margin: 6px 0 14px; text-indent: 0; letter-spacing: -.4px; }
+.narr { background: var(--wash); border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; padding: 1px 0; }
+.word { background: var(--word); border-radius: 3px; box-shadow: inset 0 -2px 0 var(--copper); }
+.est { text-decoration: underline dotted var(--sage) 2px; text-underline-offset: 5px; }
+.foot { font: 500 11px/16px Manrope; color: var(--muted); display: flex; justify-content: space-between; padding: 0 28px; }
+.bar { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surf); }
+.track { height: 2px; background: var(--line); }
+.track i { display: block; height: 2px; width: 38%; background: var(--copper); }
+.tray { display: flex; justify-content: space-evenly; align-items: center; height: 72px; padding: 0 6px; }
+.slot { width: 52px; height: 52px; display: grid; place-items: center; color: var(--text); font: 600 13px/16px Manrope; border-radius: 26px; }
+.slot.label { color: var(--muted); font: 600 12px/14px Manrope; flex-direction: column; text-align: center; }
+.play { width: 56px; height: 56px; border-radius: 17px; background: var(--copper); color: var(--oncopper); display: grid; place-items: center; font-size: 22px; }
+.play.big { width: 72px; height: 72px; border-radius: 22px; font-size: 28px; }
+.navbar { height: 18px; }
+.chip { position: absolute; left: 50%; transform: translateX(-50%); background: var(--sel); color: var(--onsel); font: 600 14px/20px Manrope; padding: 10px 18px; border-radius: 22px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+.meta { font: 600 12px/18px Manrope; color: var(--muted); display: flex; justify-content: space-between; padding: 8px 20px 0; }
+.meta b { color: var(--sage); font-weight: 600; }
+.pulse { display: inline-flex; gap: 2px; align-items: flex-end; height: 10px; margin-right: 6px; }
+.pulse s { display: block; width: 3px; background: var(--copper); border-radius: 2px; }
+.side { position: absolute; top: 0; bottom: 0; right: 0; background: var(--low); border-left: 1px solid var(--line); padding: 20px 22px; box-sizing: border-box; }
+.side h4 { font: 400 22px/26px Newsreader; margin: 0; letter-spacing: -.4px; }
+.side .by { font: 400 12px/19px Manrope; color: var(--muted); }
+.cover { width: 52px; height: 76px; border-radius: 6px; background: linear-gradient(160deg, #3b5a47, #1d2f27); flex: none; }
+.slider { height: 4px; background: var(--line); border-radius: 2px; margin: 16px 0 8px; position: relative; }
+.slider i { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: var(--copper); border-radius: 2px; }
+.slider b { position: absolute; left: 38%; top: -8px; width: 4px; height: 20px; background: var(--copper); border-radius: 2px; }
+.times { display: flex; justify-content: space-between; font: 600 12px/18px Manrope; color: var(--muted); }
+.ctoc { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.ctoc div { font: 400 18px/24px Newsreader; padding: 10px 12px; border-radius: 12px; display: flex; justify-content: space-between; }
+.ctoc div span { font: 600 12px/18px Manrope; color: var(--muted); }
+.ctoc .on { background: var(--sel); color: var(--onsel); }
+.ctoc .on span { color: var(--onsel); }
+.label { font: 600 12px/18px Manrope; color: var(--copper); margin-top: 12px; }
+.hinge { position: absolute; left: 0; right: 0; background: repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 6px, rgba(0,0,0,.18) 6px 12px); }
+.vhinge { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,.35) 0 6px, rgba(0,0,0,.18) 6px 12px); }
+.legend { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 1900px; font: 400 13px/20px Manrope; color: #2c3a33; }
+.legend b { font-weight: 700; }
+</style></head>
+<body>
+<h1>Read along — together mode plan</h1>
+<p class="lede">The reader becomes the listening surface. The page stays the room (Appearance ground and ink, Newsreader body); narration moves through it as a soft copper wash on the narrated sentence, with an optional word mark where narration anchors are exact. Controls are the existing player vocabulary — copper play control that morphs circle↔softened square, 30-second skips, speed and sleep — gathered into a quiet tray (phone), a side panel (unfolded), or the lower half (tabletop). Estimated places are never shown as confident: they get a dotted sage underline and “≈”.</p>
+<div id="frames"></div>
+<div class="legend">
+  <div><b>Phone portrait.</b> Page above, a 72 dp tray docked on <i>surfaceContainer</i> with the mini-player's 2 dp copper progress line. Five even slots: speed · −30 · play · +30 · sleep. The running foot carries chapter, audio time, and status (“≈” when estimated). A centre tap on margins shows the reader's top bar; a tap on text plays from that sentence (keeps play/pause). Manual page turns stop following and float <i>Back to narration</i> above the tray.</div>
+  <div><b>Unfolded.</b> One text column (never a spread while reading along) plus a <i>surfaceContainerLow</i> side panel (300–380 dp, or the pane beyond a separating hinge): book, part, slider with ≈ times, transport (72 dp play), speed/sleep, then Newsreader chapters with the narrated chapter in <i>secondaryContainer</i>. A chapter tap plays from its first sentence.</div>
+  <div><b>Tabletop.</b> Text fills the upper pane down to the hinge; the hinge gap stays empty (≥ 12 dp). The lower pane holds part title, slider, large transport, and speed/sleep, centred to 560 dp and scrolling independently. Rotation and folding keep the narrated sentence on screen and never interrupt playback.</div>
+</div>
+<script>
+const passage = (est) => `
+  <h3>Chapter IV · Martha</h3>
+  <p>When she opened her eyes in the morning it was because a young housemaid had come into her room to light the fire.</p>
+  <p>Mary lay and watched her for a few moments and then began to look about the room. <span class="narr ${est ? 'est' : ''}">She had never seen a room at all like it, and thought it ${est ? 'curious and gloomy' : '<span class="word">curious</span> and gloomy'}.</span> The walls were covered with tapestry with a forest scene embroidered on it.</p>
+  <p>There were fantastically dressed people under the trees and in the distance there was a glimpse of the turrets of a castle.</p>`;
+const pulse = `<span class="pulse"><s style="height:5px"></s><s style="height:9px"></s><s style="height:4px"></s></span>`;
+function phone(theme, est) {
+  return `<div><p class="cap">Phone portrait · ${theme === 'night' ? 'Night' : 'Day'}${est ? ' · estimated place' : ''}</p>
+  <div class="frame ${theme}" style="width:360px;height:780px">
+    <div class="status"><span>9:41</span><span>●●●</span></div>
+    <div class="head">IV · Martha</div>
+    <div class="page">${passage(est)}<p>Out of the deep window Mary could see a great climbing stretch of land which seemed to have no trees on it, and to look rather like an endless, dull, purplish sea.</p></div>
+    ${est ? '' : `<div class="chip" style="bottom:118px">⌖  Back to narration</div>`}
+    <div class="bar">
+      <div class="meta"><span>${pulse}Part 3 · 12:04</span><b>${est ? '≈ Estimated place' : 'Synced with narration'}</b></div>
+      <div class="tray"><div class="slot label">1.25×<br><span style="font-weight:500">Speed</span></div><div class="slot">↺30</div><div class="play">❚❚</div><div class="slot">30↻</div><div class="slot label">☾<br><span style="font-weight:500">Sleep</span></div></div>
+      <div class="navbar"></div>
+    </div>
+  </div>
+  <p class="note">${est ? 'Estimated: dotted sage underline, no wash, no word mark; “≈” in the tray.' : 'After a manual page turn: following pauses, the chip returns to the narrated page.'}</p></div>`;
+}
+function unfolded(theme) {
+  return `<div><p class="cap">Unfolded · ${theme === 'night' ? 'Night' : 'Day'}</p>
+  <div class="frame ${theme}" style="width:840px;height:700px">
+    <div style="position:absolute;left:0;top:0;width:470px">
+      <div class="status"><span>9:41</span><span></span></div><div class="head">IV · Martha</div>
+      <div class="page" style="padding:14px 40px">${passage(false)}</div>
+      <div class="foot" style="position:absolute;top:650px;left:12px;right:12px"><span>p. 41 · 18%</span><span>6 min left in chapter</span></div>
+    </div>
+    <div class="side" style="width:370px">
+      <div style="display:flex;gap:14px"><div class="cover"></div><div><h4>The Secret Garden</h4><div class="by">Frances Hodgson Burnett</div><div class="by" style="color:var(--sage)">${pulse}Synced with narration</div></div></div>
+      <div class="label">Part 3 of 12 · Chapter IV</div>
+      <div class="slider"><i></i><b></b></div><div class="times"><span>12:04</span><span>−19:51</span></div>
+      <div class="tray" style="height:88px"><div class="slot">↺30</div><div class="play big">❚❚</div><div class="slot">30↻</div></div>
+      <div class="tray" style="height:56px;justify-content:center;gap:24px"><div class="slot label" style="width:96px">1.25× Speed</div><div class="slot label" style="width:96px">☾ Sleep</div></div>
+      <div class="ctoc"><div>III · Across the Moor <span>p. 29</span></div><div class="on">IV · Martha <span>Narrating</span></div><div>V · The Cry in the Corridor <span>p. 57</span></div><div>VI · “There Was Some One Crying”<span>p. 66</span></div></div>
+    </div>
+  </div><p class="note">Side panel scrolls on its own; the page keeps its running head and folio. With a separating vertical hinge the panel takes the trailing pane.</p></div>`;
+}
+function tabletop(theme) {
+  return `<div><p class="cap">Tabletop · ${theme === 'night' ? 'Night' : 'Day'}</p>
+  <div class="frame ${theme}" style="width:840px;height:700px">
+    <div style="position:absolute;left:0;right:0;top:0;height:330px;overflow:hidden">
+      <div class="status"><span>9:41</span><span></span></div><div class="head">IV · Martha</div>
+      <div class="page" style="padding:10px 120px;font-size:18px;line-height:30px">${passage(false)}</div>
+    </div>
+    <div class="hinge" style="top:330px;height:22px"></div>
+    <div style="position:absolute;left:0;right:0;top:352px;bottom:0;background:var(--low);padding:22px 140px;box-sizing:border-box">
+      <div style="display:flex;justify-content:space-between;font:600 14px/20px Manrope"><span>Part 3 of 12 · Chapter IV</span><span style="color:var(--sage)">${pulse}Synced with narration</span></div>
+      <div class="slider"><i></i><b></b></div><div class="times"><span>12:04</span><span>−19:51</span></div>
+      <div class="tray" style="height:100px;justify-content:center;gap:40px"><div class="slot">↺30</div><div class="play big">❚❚</div><div class="slot">30↻</div></div>
+      <div class="tray" style="height:56px;justify-content:center;gap:24px"><div class="slot label" style="width:110px">1.25× Speed</div><div class="slot label" style="width:110px">☾ Sleep</div><div class="slot label" style="width:110px">≣ Chapters</div></div>
+    </div>
+  </div><p class="note">Hinge gap kept clear; text above, hands-on controls below.</p></div>`;
+}
+document.getElementById('frames').innerHTML =
+  `<div class="row">${phone('night', false)}${phone('day', false)}${phone('night', true)}${phone('day', true)}</div>` +
+  `<div class="row">${unfolded('night')}${unfolded('day')}</div>` +
+  `<div class="row">${tabletop('night')}${tabletop('day')}</div>`;
+</script>
+</body></html>

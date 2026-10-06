@@ -64,6 +64,7 @@ private fun navigatorConfiguration(selection: ActionMode.Callback?, spread: Bool
     // spread sets the reading-system column count directly. These properties are fixed when the navigator is created.
     if (spread) readiumCssRsProperties = RsProperties(colCount = ColCount.TWO, colWidth = Length.Rem(12.0))
     selectionActionModeCallback = selection
+    decorationTemplates = decorationTemplates.copy().also(NarrationMark::register)
     for ((family, file) in listOf("Newsreader" to "newsreader.ttf", "Manrope" to "manrope.ttf", ReaderDocuments.NARRIO_PAIRING to "manrope.ttf")) {
         addFontFamilyDeclaration(FontFamily(family)) {
             addFontFace { addSource("fonts/$file"); setFontWeight(200..800) }
@@ -84,7 +85,8 @@ fun EpubReaderView(controller: ReaderController, preferences: EpubPreferences, s
     val scope = rememberCoroutineScope()
     val currentPreferences = rememberUpdatedState(preferences)
     AndroidView(
-        factory = { context -> FragmentContainerView(context).apply { id = R.id.narrio_reader_navigator } },
+        // The outer frame notes the reader's touches, which tell their page turns from the navigator's own settling.
+        factory = { context -> TouchNotingFrame(context).apply { touched = controller::touched; addView(FragmentContainerView(context).apply { id = R.id.narrio_reader_navigator }) } },
         modifier = modifier.onSizeChanged { controller.relayout() },
     )
     DisposableEffect(controller, spread) {
@@ -92,7 +94,7 @@ fun EpubReaderView(controller: ReaderController, preferences: EpubPreferences, s
         var fragment: EpubNavigatorFragment? = null
         // Fragment transactions must run on the main thread, whatever dispatcher resumes this effect.
         val job = scope.launch(Dispatchers.Main.immediate) {
-            val initial = controller.cursor.value?.let { controller.book.locator(it) }
+            val initial = controller.anchor()?.let { controller.book.locator(it) }
             val factory = EpubNavigatorFactory(controller.book.publication).createFragmentFactory(
                 initialLocator = initial, initialPreferences = currentPreferences.value, listener = controller,
                 configuration = navigatorConfiguration(selectionActionMode, spread),
@@ -113,6 +115,15 @@ fun EpubReaderView(controller: ReaderController, preferences: EpubPreferences, s
         val navigator = controller.navigator ?: return@LaunchedEffect
         navigator.submitPreferences(preferences)
         controller.relayout()
+    }
+}
+
+private class TouchNotingFrame(context: android.content.Context) : android.widget.FrameLayout(context) {
+    var touched: () -> Unit = {}
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN || event.actionMasked == android.view.MotionEvent.ACTION_MOVE ||
+            event.actionMasked == android.view.MotionEvent.ACTION_UP) touched()
+        return super.dispatchTouchEvent(event)
     }
 }
 

@@ -30,6 +30,29 @@ maps Media3's clock for narration decorations; `seekFromText` is the explicit se
 changed distances conservatively offer Undo. `ReaderSession.undo` restores without an activity commit.
 `undoSyncJump` preserves play/pause and expires after another playback navigation.
 
+### What together mode adds (E)
+
+Read along (`ui/ReadAlong.kt`) is built on the API above without contract changes to `Reading.kt` or Room:
+
+- `ReaderController`: narration styles `TextDecoration.Style.NARRATED/ESTIMATED/WORD` (drawn by `NarrationMark`
+  templates registered in `EpubReaderView`); `textTaps` with `ReaderEvent.TextTapped(cursor)` and `cursorAt(x, y)`;
+  `follow` records the place relayouts restore while following; `leaveFollowing()`; `clearDecorations(group)`;
+  `touched()` (the page container reports touches so a navigator settle is never mistaken for a page turn).
+  Decorations are applied without cancellation, serialized, and redrawn after each resource layout or relayout.
+  The page's Readium viewport width is refitted when the page view resizes without a configuration change.
+- `ReaderSession.commitNow(cursor)`: an explicit "listen from this page" commit. `ListeningService.alignToSharedPosition()`:
+  start the audio at a newer reading place with the usual Undo. `NarrioViewModel.seekFromText` now reports success.
+- `ReaderRequest.together/fromListening`, `NarrioViewModel.readAlong()/setReadAlong()/listenFromPage()`;
+  `ReaderSettings.wordHighlight` (default off); `LocalFold` carries the hinge to the reader.
+- `MappingEngine.audioFor` uses the timeline's measured pace beyond the outermost anchors, as `textFor` already did,
+  so an estimated place mapped to audio and back stays on its sentence (C's engine; covered by `NarrationTest`).
+
+With F: narration uses its own groups (`narration`, `narration-word`, `narration-selected`) beside F's
+`narrio-highlights` and `narrio-search`, through F's main-thread application and once-per-navigator tap listener;
+E adds serialized, non-cancellable drawing and redraws. Readium hit-tests every group before a tap reaches the page,
+so narration marks expose only an off-page activable element: a highlight under the narration still opens F's tray,
+and other taps on text seek. The top bar's actions slot holds F's Search and E's read-along action.
+
 ## Annotations and search (F)
 
 Reuse `ReaderController.selection(): CursorRange?` and the navigator's optional
@@ -41,6 +64,26 @@ cursors at `normalizationVersion = 1`; passage ranges span `[offset, offset + te
 `LibraryDao.bookmarks(bookId)` returns the unified rows; `BookmarkEntry.contentCursor()` returns
 an optional reader cursor, while audio source/part/time stay available. Add the UI on these rows;
 do not introduce another annotation/bookmark store.
+
+Delivered (F):
+
+- `ReaderViewModel.marks` is the open edition's `ReaderMarks`: `highlights` in book order, `bookmarks`
+  (both modes, resolved), `search` (`BookSearch`), and the highlight/bookmark edits. Highlights draw in
+  `HIGHLIGHT_GROUP`, the current search match in `SEARCH_GROUP`; narration should use its own group.
+- Search runs over the served `ResourceTextIndex` text, so every hit is an exact parser `CursorRange`
+  (case, accents and typographic quotes fold one-to-one). Readium's string search reports its own text
+  extraction, which would need mapping back.
+- `AnnotationEntry` rows store durable cursors (no progression/locator cache), the colour by name
+  (`yellow`, `green`, `blue`, `pink`), a plain-text note, and the parser text of the range: export-ready.
+- A bookmark stores the place where it was made and the other mode's place only when narration
+  confirms it exactly. `playback.BookmarkMapping` maps a missing place whenever a list is shown (never
+  across a MISMATCH pair), so estimates improve with alignment and carry "≈". Text-only rows keep blank
+  source/part ids; pre-ebook audio rows need no change.
+- `ReaderController` additions: `jumpTo(cursor, keepReturnPoint)`, `selectedText()`,
+  `clearSelection()`. `setDecorations` now applies on the main thread and registers each group's tap
+  listener once per navigator (Readium keeps every listener it's given).
+- The selection toolbar replaces the WebView's own, so it re-adds Copy, Share, and installed
+  `PROCESS_TEXT` actions (Translate, dictionaries); the manifest declares that query.
 
 ## Contracts resolved
 
@@ -62,8 +105,8 @@ do not introduce another annotation/bookmark store.
 
 ## Remaining scope
 
-No open product identity decision. Together mode and annotations/search UI remain E/F's work.
-Fixed-layout/PDF/DRM remain unsupported. Window-size spreads do not yet use a real separating hinge.
+No open product identity decision. Together mode (E) and annotations/search (F) are delivered. Read along can't show WebVTT-only text, so VTT import was retired with the passage list.
+Fixed-layout/PDF/DRM remain unsupported. Two-page spreads do not yet use a real separating hinge; read along places its panel beyond one.
 Real narration accuracy, battery/background behavior, physical devices, live delivery providers,
 TalkBack and minified-release runtime acceptance remain separate from controlled integration checks.
 

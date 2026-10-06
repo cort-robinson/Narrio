@@ -106,7 +106,6 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     var sleepOpen by remember { mutableStateOf(false) }
     var partsOpen by remember { mutableStateOf(false) }
     var bookmarksOpen by remember { mutableStateOf(false) }
-    var followOpen by rememberSaveable(book.id) { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -127,12 +126,13 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     val heading: @Composable (Boolean) -> Unit = { dense ->
         if (dense) Row(pullDown, verticalAlignment = Alignment.CenterVertically) {
             if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
-            Box(Modifier.weight(1f)) { PlayerMode(followOpen) { followOpen = it } }
+            Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            ReadAlongEntry(vm, book, dense = true)
             BookmarkNow(vm)
             ClosePlayback(vm)
         } else Column(pullDown) {
             PlayerHeading(vm, compact)
-            PlayerMode(followOpen) { followOpen = it }
+            ReadAlongEntry(vm, book, dense = false, modifier = Modifier.padding(start = if (compact) 12.dp else 0.dp, bottom = 4.dp))
         }
     }
     val controls: @Composable (Boolean) -> Unit = { dense ->
@@ -141,33 +141,24 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     if (hingeY != null) {
         // Tabletop: artwork and words above the hinge, hands-on controls below it.
         Column(modifier.fillMaxSize()) {
-            if (followOpen) {
-                Column(Modifier.fillMaxWidth().height(hingeY.dp.coerceAtLeast(0.dp)).clipToBounds()) {
-                    Column(Modifier.padding(horizontal = 16.dp)) { heading(false) }
-                    FollowAlongScreen(vm, state, Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(hingeGap.dp.coerceAtLeast(12.dp)))
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) { FollowTransport(vm, state) }
-            } else {
-                Column(Modifier.fillMaxWidth().height(hingeY.dp.coerceAtLeast(0.dp)).clipToBounds().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    heading(false)
-                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
-                        val coverHeight = minOf(maxHeight, maxWidth * .55f * 1.45f).coerceAtLeast(1.dp)
-                        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                            ListeningCover(book, state.playing, Modifier.width(coverHeight / 1.45f).height(coverHeight))
-                            Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                                Text(book.title, style = MaterialTheme.typography.headlineLarge)
-                                Spacer(Modifier.height(12.dp))
-                                Text(book.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Spacer(Modifier.height(8.dp))
-                                Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
-                            }
+            Column(Modifier.fillMaxWidth().height(hingeY.dp.coerceAtLeast(0.dp)).clipToBounds().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                heading(false)
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
+                    val coverHeight = minOf(maxHeight, maxWidth * .55f * 1.45f).coerceAtLeast(1.dp)
+                    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                        ListeningCover(book, state.playing, Modifier.width(coverHeight / 1.45f).height(coverHeight))
+                        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                            Text(book.title, style = MaterialTheme.typography.headlineLarge)
+                            Spacer(Modifier.height(12.dp))
+                            Text(book.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
+                            Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                         }
                     }
                 }
-                Spacer(Modifier.height(hingeGap.dp.coerceAtLeast(12.dp)))
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp)) { controls(false) }
             }
+            Spacer(Modifier.height(hingeGap.dp.coerceAtLeast(12.dp)))
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(24.dp)) { controls(false) }
         }
     } else {
         // Compact: an opaque room that rises over the catalog rather than a ghost layered on top of it.
@@ -180,34 +171,12 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             scaleX = 1f - drag * .08f; scaleY = scaleX
         }) {
             Column(Modifier.padding(horizontal = if (compact) 16.dp else 24.dp).padding(top = if (dense) 0.dp else 8.dp)) { heading(dense) }
-            AnimatedContent(followOpen, Modifier.weight(1f), transitionSpec = { Motion.sharedAxisX(targetState) }, label = "player mode") { follow ->
-                if (follow) Column(Modifier.fillMaxSize()) {
-                    FollowAlongScreen(vm, state, Modifier.weight(1f))
-                    Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) { FollowTransport(vm, state, Modifier.padding(horizontal = 24.dp, vertical = 12.dp)) }
-                } else AudioStage(book, state, compact, pullDown) { controls(dense) }
-            }
+            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown) { controls(dense) } }
         }
         }
     }
-    if (speedOpen) ChoiceDialog("Playback speed", { speedOpen = false }) {
-        Column(Modifier.selectableGroup()) {
-            listOf(.5f, .75f, 1f, 1.1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f).forEach { speed ->
-                OptionRow("${speedLabel(speed)} speed", state.speed == speed) { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); vm.graph.playback.service?.speed(speed); speedOpen = false }
-            }
-        }
-    }
-    if (sleepOpen) ChoiceDialog("Sleep timer", { sleepOpen = false }) {
-        Text(when {
-            state.sleepAtEnd -> "Playback pauses at the end of this audio part."
-            state.sleepUntil > 0 -> "Playback pauses in about ${((state.sleepUntil - System.currentTimeMillis()).coerceAtLeast(0) / 60_000) + 1} minutes."
-            else -> "Choose when playback pauses."
-        }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 12.dp))
-        Column(Modifier.selectableGroup()) {
-            listOf(15, 30, 45, 60, 90).forEach { minutes -> OptionRow("In $minutes minutes", false) { vm.graph.playback.service?.sleep(minutes); sleepOpen = false } }
-            OptionRow("At the end of this audio part", state.sleepAtEnd) { vm.graph.playback.service?.sleep(0, true); sleepOpen = false }
-            OptionRow("Turn timer off", !state.sleepAtEnd && state.sleepUntil == 0L) { vm.graph.playback.service?.sleep(0); sleepOpen = false }
-        }
-    }
+    if (speedOpen) SpeedDialog(vm, state) { speedOpen = false }
+    if (sleepOpen) SleepDialog(vm, state) { sleepOpen = false }
     if (partsOpen) {
         val partsSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val closeParts = rememberSheetCloser(partsSheet) { partsOpen = false }
@@ -237,24 +206,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
         }
         }
     }
-    if (bookmarksOpen) {
-        val bookmarkFlow = remember(book.id) { vm.graph.library.bookmarks(book.id) }
-        val bookmarks by bookmarkFlow.collectAsStateWithLifecycle(emptyList())
-        val bookmarksSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val closeBookmarks = rememberSheetCloser(bookmarksSheet) { bookmarksOpen = false }
-        ModalBottomSheet(onDismissRequest = { bookmarksOpen = false }, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = bookmarksSheet) {
-            LazyColumn(contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.heightIn(max = 480.dp)) {
-                item { Text("Bookmarks", style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp)); FilledTonalButton({ haptics.performHapticFeedback(HapticFeedbackType.Confirm); vm.bookmark() }) { Icon(Icons.Rounded.BookmarkAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add bookmark") } }
-                if (bookmarks.isEmpty()) item { Text("No bookmarks yet. Each one saves the exact audio part and time.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(bookmarks, key = { it.id }) { bookmark ->
-                    Row(Modifier.fillMaxWidth().animateItem(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).clickable { closeBookmarks { vm.jumpBookmark(bookmark) } }.padding(vertical = 12.dp)) { Text(formatTime(bookmark.positionMs), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary); Text(bookmark.label, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                        IconButton({ vm.deleteBookmark(bookmark.id) }) { Icon(Icons.Rounded.DeleteOutline, "Delete bookmark at ${formatTime(bookmark.positionMs)}") }
-                    }
-                }
-            }
-        }
-    }
+    if (bookmarksOpen) ListeningBookmarksSheet(vm, state, book) { bookmarksOpen = false }
 }
 
 /**
@@ -331,36 +283,6 @@ private fun ListeningCover(book: Audiobook, playing: Boolean, modifier: Modifier
 }
 
 @Composable
-private fun PlayerMode(follow: Boolean, select: (Boolean) -> Unit) {
-    TabRow(selectedTabIndex = if (follow) 1 else 0, containerColor = Color.Transparent, divider = {}) {
-        Tab(selected = !follow, onClick = { select(false) }, text = { Text("Audio") })
-        Tab(selected = follow, onClick = { select(true) }, text = { Text("Follow along") })
-    }
-}
-
-@Composable
-private fun FollowTransport(vm: NarrioViewModel, state: ListeningState, modifier: Modifier = Modifier) {
-    val sync by vm.readingSync.collectAsStateWithLifecycle()
-    val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
-    var dragging by remember { mutableStateOf(false) }
-    var position by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(state.positionMs, state.partIndex) { if (!dragging) position = state.positionMs.toFloat() }
-    Column(modifier.fillMaxWidth()) {
-        Text(state.part?.title.orEmpty(), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Slider(value = position.coerceIn(0f, state.durationMs.coerceAtLeast(1).toFloat()), onValueChange = { dragging = true; position = it },
-            onValueChangeFinished = { vm.graph.playback.service?.seek(position.toLong()); dragging = false }, valueRange = 0f..state.durationMs.coerceAtLeast(1).toFloat(), enabled = state.durationMs > 0,
-            modifier = Modifier.semantics { contentDescription = "Listening position" })
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            EstimatedPlace("${formatTime(if (dragging) position.toLong() else state.positionMs)} / ${formatTime(state.durationMs)}", if (dragging) MappingConfidence.EXACT else confidence, Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            SkipButton(false, 48.dp, 24.dp) { vm.graph.playback.service?.skip(-30_000) }
-            PlayButton(state, 56.dp, 32.dp) { vm.graph.playback.service?.toggle() }
-            SkipButton(true, 48.dp, 24.dp) { vm.graph.playback.service?.skip(30_000) }
-        }
-        state.error?.let { RecoveryState("Playback stopped", it) { vm.graph.playback.service?.retry() } }
-    }
-}
-
-@Composable
 private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
@@ -421,7 +343,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent(speedLabel(state.speed), transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { FitLabel(it) } }
             ToolSlot(Icons.Rounded.Bedtime, sleep, active = state.sleepAtEnd || state.sleepUntil > 0) {
-                FitLabel(if (state.sleepAtEnd) "End of part" else if (state.sleepUntil > 0) "${((state.sleepUntil - System.currentTimeMillis()).coerceAtLeast(0) / 60_000) + 1}m" else "Sleep")
+                FitLabel(sleepLabel(state))
             }
             ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel("Parts") }
             ToolSlot(Icons.Rounded.Bookmarks, bookmarks) { FitLabel("Bookmarks") }
@@ -432,9 +354,44 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
     }
 }
 
+/** Playback speed choices, shared by the Listening room and read along. */
+@Composable
+internal fun SpeedDialog(vm: NarrioViewModel, state: ListeningState, dismiss: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    ChoiceDialog("Playback speed", dismiss) {
+        Column(Modifier.selectableGroup()) {
+            listOf(.5f, .75f, 1f, 1.1f, 1.25f, 1.5f, 1.75f, 2f, 2.5f, 3f).forEach { speed ->
+                OptionRow("${speedLabel(speed)} speed", state.speed == speed) { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); vm.graph.playback.service?.speed(speed); dismiss() }
+            }
+        }
+    }
+}
+
+/** Sleep timer choices, shared by the Listening room and read along. */
+@Composable
+internal fun SleepDialog(vm: NarrioViewModel, state: ListeningState, dismiss: () -> Unit) {
+    ChoiceDialog("Sleep timer", dismiss) {
+        Text(when {
+            state.sleepAtEnd -> "Playback pauses at the end of this audio part."
+            state.sleepUntil > 0 -> "Playback pauses in about ${sleepMinutes(state)} minutes."
+            else -> "Choose when playback pauses."
+        }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 12.dp))
+        Column(Modifier.selectableGroup()) {
+            listOf(15, 30, 45, 60, 90).forEach { minutes -> OptionRow("In $minutes minutes", false) { vm.graph.playback.service?.sleep(minutes); dismiss() } }
+            OptionRow("At the end of this audio part", state.sleepAtEnd) { vm.graph.playback.service?.sleep(0, true); dismiss() }
+            OptionRow("Turn timer off", !state.sleepAtEnd && state.sleepUntil == 0L) { vm.graph.playback.service?.sleep(0); dismiss() }
+        }
+    }
+}
+
+internal fun sleepMinutes(state: ListeningState) = ((state.sleepUntil - System.currentTimeMillis()).coerceAtLeast(0) / 60_000) + 1
+
+/** The sleep slot's short label: "Sleep", minutes left, or the end of the part. */
+internal fun sleepLabel(state: ListeningState) = if (state.sleepAtEnd) "End of part" else if (state.sleepUntil > 0) "${sleepMinutes(state)}m" else "Sleep"
+
 /** Circle while paused, a softened square while playing: the control's shape tells you the state. */
 @Composable
-private fun PlayButton(state: ListeningState, size: Dp, iconSize: Dp, toggle: () -> Unit) {
+internal fun PlayButton(state: ListeningState, size: Dp, iconSize: Dp, toggle: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val haptics = LocalHapticFeedback.current
     val corner by animateIntAsState(if (state.playing) 30 else 50, Motion.responsive(), label = "play shape")
@@ -460,7 +417,7 @@ private fun PlayGlyph(state: ListeningState, iconSize: Dp, tint: Color, spinner:
 
 /** Skips give a small turn in their direction, so thirty seconds feels like a physical nudge. */
 @Composable
-private fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: () -> Unit) {
+internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: () -> Unit) {
     val turn = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -474,7 +431,7 @@ private fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: () -> Uni
 }
 
 @Composable
-private fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVector, open: () -> Unit, active: Boolean = false, label: @Composable () -> Unit) {
+internal fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVector, open: () -> Unit, active: Boolean = false, label: @Composable () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val tint by animateColorAsState(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, label = "tool")
     Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 56.dp).pressScale(interaction, .94f).clip(RoundedCornerShape(14.dp))
@@ -487,7 +444,7 @@ private fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVec
 
 /** Tool labels shrink a step or two at large text sizes rather than truncating mid-word. */
 @Composable
-private fun FitLabel(text: String) {
+internal fun FitLabel(text: String) {
     val style = LocalTextStyle.current
     BasicText(text, style = style.copy(color = LocalContentColor.current), maxLines = 1,
         autoSize = TextAutoSize.StepBased(minFontSize = (style.fontSize.value * .7f).sp, maxFontSize = style.fontSize, stepSize = .5.sp))
@@ -504,7 +461,7 @@ private fun OptionRow(label: String, selected: Boolean, choose: () -> Unit) {
     }
 }
 
-private fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}×"
+internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}×"
 @Composable
 private fun ChoiceDialog(title: String, dismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) }, confirmButton = { TextButton(dismiss) { Text("Done") } })

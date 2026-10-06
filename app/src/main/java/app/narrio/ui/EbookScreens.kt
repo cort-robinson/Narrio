@@ -152,8 +152,10 @@ fun PairingLine(status: PairingStatus, copy: PairingCopy, modifier: Modifier = M
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, connected: Boolean, retry: () -> Unit, add: (BookTextSource) -> Unit,
-               chooseFile: () -> Unit, activate: (EbookEdition) -> Unit, dismiss: () -> Unit, searchLinks: List<EbookSearchLink> = emptyList(), openSearch: (EbookSearchLink) -> Unit = {}) {
+               chooseFile: () -> Unit, activate: (EbookEdition) -> Unit, remove: (EbookEdition) -> Unit, dismiss: () -> Unit,
+               searchLinks: List<EbookSearchLink> = emptyList(), openSearch: (EbookSearchLink) -> Unit = {}) {
     val state = search.takeIf { it.bookId == book.id } ?: EbookSearchState(book.id)
+    var removing by remember { mutableStateOf<EbookEdition?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val close = rememberSheetCloser(sheetState, dismiss)
     // A successful add slides the sheet away, revealing Read in its place.
@@ -186,6 +188,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                             Text(listOf(edition.format, edition.attribution).filter(String::isNotBlank).joinToString(" · ").ifBlank { "Saved on this phone" },
                                 style = MaterialTheme.typography.bodySmall, color = muted)
                         }
+                        IconButton({ removing = edition }, enabled = !busy) { Icon(Icons.Rounded.DeleteOutline, "Remove ${edition.title} from this phone", tint = muted) }
                     }
                 }
             }
@@ -243,6 +246,12 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                 Text("Ebooks stay on this phone. Kindle, PDF, and DRM-protected files can't be opened.", style = MaterialTheme.typography.bodySmall, color = muted)
             }
         }
+    }
+    removing?.let { edition ->
+        AlertDialog(onDismissRequest = { removing = null }, title = { Text("Remove this ebook?") },
+            text = { Text("${edition.title} and its narration timing are removed from this phone. Audio, bookmarks, and listening progress stay saved.") },
+            confirmButton = { TextButton({ remove(edition); removing = null }) { Text("Remove ebook") } },
+            dismissButton = { TextButton({ removing = null }) { Text("Keep ebook") } })
     }
 }
 

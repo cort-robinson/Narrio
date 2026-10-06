@@ -191,8 +191,10 @@ class ListeningService : MediaSessionService() {
     suspend fun bookmark(label: String = "") {
         val book = currentBook ?: return; val source = currentSource ?: return
         val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return
-        graph.library.bookmark(BookmarkEntry(bookId = book.id, sourceId = source.id, partId = part.id,
-            positionMs = player.currentPosition, label = label.ifBlank { part.title }))
+        val audio = AudioCursor(source.id, part.id, player.currentPosition.coerceAtLeast(0))
+        // The reading place is kept only when narration confirms it; otherwise the bookmark list maps it each time.
+        val text = runCatching { BookmarkMapping(graph, book.id).textFor(audio) }.getOrNull()
+        graph.library.bookmark(newBookmark(book.id, label.ifBlank { part.title }, audio = audio, mappedText = text))
     }
 
     private suspend fun save() {
@@ -299,6 +301,26 @@ class ListeningService : MediaSessionService() {
         if (mapped.confidence == MappingConfidence.ESTIMATED) correctionWanted = cursor
         if (player.isPlaying) startCorrection()
         publish()
+        return true
+    }
+
+    /**
+     * A switch back to listening (leaving read along, or starting it from a page): start at the shared place, as
+     * [load] does, when reading moved it. Large moves offer Undo through [ReadingSync]'s audio jump.
+     */
+    suspend fun alignToSharedPosition(): Boolean {
+        val book = currentBook ?: return false
+        val source = currentSource ?: return false
+        val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return false
+        if (graph.sharedPositions.current(book.id)?.origin != PositionOrigin.READING || player.isPlaying) return false
+        val here = AudioCursor(source.id, part.id, player.currentPosition.coerceAtLeast(0))
+        val jump = graph.readingSync.listeningStart(book.id, source, here)
+        val destination = jump.destination?.takeIf { it != here } ?: return false
+        invalidateNavigation()
+        player.seekTo(resumeIndex(source.parts, destination.partId), destination.positionMs)
+        if (jump.confidence == MappingConfidence.ESTIMATED) correctionWanted = graph.sharedPositions.current(book.id)?.text
+        undoEpoch = navigationEpoch
+        publish(); save()
         return true
     }
 
