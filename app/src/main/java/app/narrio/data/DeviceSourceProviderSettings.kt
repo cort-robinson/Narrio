@@ -22,8 +22,7 @@ class SourceCatalog(val contentType: String, val leading: List<SourceProvider>, 
         private fun builtIn(id: String, name: String, torBox: Boolean) = SourceProvider(id, name, SourceProviderKind.BUILT_IN, true, 0, torBox, false)
         val AUDIOBOOK = SourceCatalog("audiobook", listOf(
             builtIn(DeviceSourceProviderSettings.ARCHIVE, "Internet Archive / LibriVox", false),
-            builtIn(DeviceSourceProviderSettings.LIBRARY, "My TorBox library", true),
-            builtIn(DeviceSourceProviderSettings.TORBOX_SEARCH, "TorBox search", true)))
+            builtIn(DeviceSourceProviderSettings.LIBRARY, "My TorBox library", true)))
         val EBOOK = SourceCatalog("ebook", listOf(
             builtIn(DeviceSourceProviderSettings.RECORDING_FILES, "This recording's files", false),
             builtIn(DeviceSourceProviderSettings.TORBOX_EBOOKS, "My TorBox ebooks", true)),
@@ -82,7 +81,6 @@ class DeviceSourceProviderSettings(
     companion object {
         const val ARCHIVE = "archive"
         const val LIBRARY = "torbox-library"
-        const val TORBOX_SEARCH = "torbox-search"
         const val RECORDING_FILES = "recording-files"
         const val TORBOX_EBOOKS = "torbox-ebooks"
         const val GUTENBERG = "gutenberg"

@@ -43,7 +43,7 @@ class AppGraph(application: Application) {
     val webEbooks = TorBoxWebEbooks(torbox)
     val webEbookAcquisition = EbookWebAcquisition(http, webEbooks::acquire, { source -> torbox.webTextLink(source.torrentId!!, source.fileId!!) })
     val torrentFiles = TorrentFileDiscovery(http)
-    val bookSources = BookSourceDiscovery(catalog, listOf(addons, TorBoxSearchDiscovery(http, credentials::read)), torbox::library, torbox::checkCached, torrentFiles::recording)
+    val bookSources = BookSourceDiscovery(catalog, listOf(addons), torbox::library, torbox::checkCached, torrentFiles::recording)
     val textDiscovery = GutenbergTextDiscovery(http)
     val followAlong = FollowAlongStore(application, library, http, torbox)
     val editionFiles: app.narrio.domain.EditionFiles = followAlong
@@ -55,7 +55,6 @@ class AppGraph(application: Application) {
         when (provider.id) {
             DeviceSourceProviderSettings.ARCHIVE -> RecordingSourceLookup(catalog)
             DeviceSourceProviderSettings.LIBRARY -> AccountSourceLookup(torbox::library)
-            DeviceSourceProviderSettings.TORBOX_SEARCH -> RecordingSourceLookup(TorBoxSearchDiscovery(http, credentials::read))
             else -> if (provider.kind == app.narrio.domain.SourceProviderKind.ADDON) AddonSourceLookup(addons, provider.id.removePrefix("addon:")) else null
         }
     }, torbox::checkCached, torrentFiles::recording, sourceProviderSettings::recordStatus,

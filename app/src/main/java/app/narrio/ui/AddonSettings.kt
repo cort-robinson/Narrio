@@ -234,7 +234,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.providerRows(
 private fun providerSubtitle(provider: SourceProvider, addon: InstalledAddon?): String = when (provider.id) {
     DeviceSourceProviderSettings.ARCHIVE -> "Built in · Free public recordings from LibriVox"
     DeviceSourceProviderSettings.LIBRARY -> "Built in · Recordings already in your TorBox"
-    DeviceSourceProviderSettings.TORBOX_SEARCH -> "Built in · Releases TorBox can find"
     DeviceSourceProviderSettings.RECORDING_FILES -> "Built in · Ebook files that come with a recording"
     DeviceSourceProviderSettings.TORBOX_EBOOKS -> "Built in · Ebooks already in your TorBox"
     DeviceSourceProviderSettings.GUTENBERG -> "Built in · Free public-domain ebooks"

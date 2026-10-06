@@ -110,7 +110,8 @@ class AddonManager(
                 Regex("(?i)urn:btih:([0-9a-f]{40})").find(fields["magnetUrl"].orEmpty())?.groupValues?.get(1)?.lowercase().orEmpty()
             }
             val name = fields["title"].orEmpty().trim()
-            if (!hash.matches(Regex("[0-9a-f]{40}")) || name.isBlank()) return@mapNotNull null
+            // The Pirate Bay answers an empty search with a placeholder row whose hash is all zeros.
+            if (!hash.matches(Regex("[0-9a-f]{40}")) || hash.all { it == '0' } || name.isBlank()) return@mapNotNull null
             // Keep the existing hash identity and torrent delivery route for saved recordings.
             Audiobook("knaben:$hash", name, fields["author"].orEmpty().ifBlank { "Author not verified" },
                 narrator = fields["narrator"].orEmpty().ifBlank { "Narrator not verified" }, language = fields["language"].orEmpty().ifBlank { "Language not verified" },
@@ -212,7 +213,7 @@ class AddonManager(
     companion object {
         val bundledUrls = linkedMapOf(
             "audiobookbay" to "https://api.npoint.io/dee75259b6b8e0630dce",
-            "tpb-audiobooks" to "https://api.npoint.io/526af6fc28a90bed10c8",
+            "tpb-audiobooks" to "https://raw.githubusercontent.com/cort-robinson/Narrio/dev/app/src/main/assets/addons/tpb-audiobooks.json",
             "knaben-ebooks" to "https://api.npoint.io/3356bd187611b2a29f40",
             "knaben-audiobooks" to "https://api.npoint.io/bd3157954016bd9fd1ed",
             "audible-audiobooks" to "https://api.npoint.io/112b9e0e87362772f7c3",
@@ -221,6 +222,11 @@ class AddonManager(
         )
         // Installs predating bundled-provider tracking already knew these six defaults, including removed ones.
         private val legacyBundledIds = setOf("audiobookbay", "tpb-audiobooks", "knaben-ebooks", "knaben-audiobooks", "audible-audiobooks", "open-library-metadata")
+        // Saved copies from these hosted definitions point at endpoints that stopped working; the bundled copy replaces them.
+        private val retiredBundledUrls = mapOf("tpb-audiobooks" to "https://api.npoint.io/526af6fc28a90bed10c8")
+        internal fun replaceRetiredBundled(saved: List<InstalledAddon>, defaults: List<InstalledAddon>) = saved.map { entry ->
+            defaults.firstOrNull { it.id == entry.id && retiredBundledUrls[it.id] == entry.manifestUrl }?.copy(enabled = entry.enabled) ?: entry
+        }
         internal fun addNewBundled(saved: List<InstalledAddon>, defaults: List<InstalledAddon>, known: Set<String>) =
             saved + defaults.filter { it.id !in known && saved.none { installed -> installed.id == it.id } }
         fun create(context: Context, http: OkHttpClient): AddonManager {
@@ -232,7 +238,7 @@ class AddonManager(
                 NarrioJson.decodeFromString<List<InstalledAddon>>(saved).map { entry ->
                     AddonManifest.secureUrl(entry.manifestUrl)
                     AddonManifest.parse(entry.manifest.toString(), entry.manifestUrl).copy(enabled = entry.enabled)
-                }.let { addNewBundled(it, defaults, known) }
+                }.let { addNewBundled(replaceRetiredBundled(it, defaults), defaults, known) }
             }
             val initial = restored.getOrDefault(emptyList())
             if (restored.isSuccess) {

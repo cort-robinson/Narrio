@@ -175,6 +175,6 @@ class ProviderEbookSearchTest {
         assertFalse(restored.providers.value.first().enabled)
         // Listening sources are a separate list and keep their own order.
         val audio = DeviceSourceProviderSettings(addons, backgroundScope, SourceProviderPreferences()); runCurrent()
-        assertEquals(listOf("archive", "torbox-library", "torbox-search", "addon:audio"), audio.providers.value.map { it.id })
+        assertEquals(listOf("archive", "torbox-library", "addon:audio"), audio.providers.value.map { it.id })
     }
 }
