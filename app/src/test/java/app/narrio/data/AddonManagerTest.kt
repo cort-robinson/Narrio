@@ -23,6 +23,35 @@ class AddonManagerTest {
         return addon.copy(manifest = JsonObject(addon.manifest + ("adapters" to JsonObject(adapters + ("source" to JsonObject(source + ("request" to JsonObject(request + ("url" to JsonPrimitive(url))))))))))
     }
 
+    @Test fun individualAudioAddonLookupsKeepTheirOwnResultsStatusAndFailures() = runBlocking {
+        val first = at(bundled("knaben-audiobooks"), "https://example.com/first")
+        val second = at(first.copy(manifest = JsonObject(first.manifest + ("id" to JsonPrimitive("second")))), "https://example.com/second")
+        val requested = mutableListOf<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            synchronized(requested) { requested += chain.request().url.encodedPath }
+            assertNull(chain.request().header("Authorization"))
+            if (chain.request().url.encodedPath == "/second") throw java.io.IOException("fixture failure")
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body("""{"hits":[{"title":"Andy Weir - Project Hail Mary","hash":"$hash"}]}""".toResponseBody("application/json".toMediaType())).build()
+        }.build()
+        val manager = AddonManager(client, listOf(first, second))
+        val book = Audiobook("book", "Project Hail Mary", "Andy Weir")
+        val states = mutableListOf<app.narrio.domain.SourceGroupStatus>()
+        val found = manager.searchAddon(first.id, book, book.title, SourceSearchBudget()) { states += it }
+        assertEquals(hash, found.single().torrentHash)
+        assertEquals(first.name, found.single().sourceAddonName)
+        assertEquals(listOf("/first"), requested)
+        assertEquals(listOf(app.narrio.domain.SourceGroupStatus.WAITING, app.narrio.domain.SourceGroupStatus.SEARCHING), states)
+        try { manager.searchAddon(second.id, book, book.title, SourceSearchBudget()) {}; fail("Expected a failure") }
+        catch (_: java.io.IOException) { }
+        assertEquals("Available", manager.status.value[first.id])
+        assertTrue(manager.status.value[second.id]!!.contains("Unavailable"))
+        manager.enable(first.id, false)
+        try { manager.searchAddon(first.id, book, book.title, SourceSearchBudget()) {}; fail("Disabled source must not run") }
+        catch (_: ProviderException) { }
+        assertEquals(listOf("/first", "/second"), requested)
+    }
+
     @Test fun allBundledManifestsValidateAndOlderLinksKeepTheSameIds() {
         val addons = AddonManager.bundledUrls.keys.map(::bundled)
         assertEquals(7, addons.size)
@@ -178,9 +207,13 @@ class AddonManagerTest {
             assertEquals(hash, manager.ebooks("Book").single().torrentHash)
             val body = NarrioJson.parseToJsonElement(server.takeRequest().body.readUtf8()).jsonObject
             assertTrue(body["categories"]!!.jsonArray.any { it.stringValue() == "9001000" })
-            server.enqueue(MockResponse().setBody("{}").setBodyDelay(10, TimeUnit.SECONDS))
+            // Keep the stalled body longer than cancellation, within MockWebServer's shutdown grace period.
+            server.enqueue(MockResponse().setBody("{}").setBodyDelay(3, TimeUnit.SECONDS))
             val job = launch { manager.ebooks("Book") }
-            delay(1100); job.cancelAndJoin(); assertTrue(job.isCancelled)
+            delay(1100)
+            val cancelStarted = System.nanoTime()
+            job.cancelAndJoin(); assertTrue(job.isCancelled)
+            assertTrue("Cancellation must stop the body read immediately", (System.nanoTime() - cancelStarted) / 1_000_000 < 1000)
         } finally { server.shutdown() }
     }
 }

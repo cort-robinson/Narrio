@@ -95,7 +95,7 @@ class TorBoxDelivery(
     suspend fun checkCached(books: List<Audiobook>): List<Audiobook> = withContext(Dispatchers.IO) {
         val hashes = books.map { it.torrentHash.lowercase() }.filter { it.matches(Regex("[a-f0-9]{40}")) }.distinct()
         val cached = hashes.chunked(100).flatMap { batch ->
-            parseCached(request("torrents/checkcached", mapOf("hash" to batch.joinToString(","), "format" to "object", "list_files" to "true"))["data"]).entries
+            parseCached(searchRequest("torrents/checkcached", mapOf("hash" to batch.joinToString(","), "format" to "object", "list_files" to "true"))["data"]).entries
         }.associate { it.toPair() }
         books.map { book ->
             val item = cached[book.torrentHash.lowercase()]
@@ -163,18 +163,27 @@ class TorBoxDelivery(
         return url
     }
 
-    private fun list(): List<JsonObject> = request("torrents/mylist", params = mapOf("bypass_cache" to "true"))["data"].let {
+    private suspend fun list(): List<JsonObject> = searchRequest("torrents/mylist", mapOf("bypass_cache" to "true"))["data"].let {
         when (it) { is JsonArray -> it.mapNotNull { x -> x as? JsonObject }; is JsonObject -> listOf(it); else -> emptyList() }
     }
 
     internal fun webTextLink(webId: Long, fileId: Long): String = request("webdl/requestdl", params = mapOf(
         "token" to token(), "web_id" to webId.toString(), "file_id" to fileId.toString(), "redirect" to "false"))["data"].stringValue()
 
+    /** Read-only search delivery calls are cancellable; synchronous playback resolution stays synchronous. */
+    private suspend fun searchRequest(path: String, params: Map<String, String>): JsonObject {
+        val url = (baseUrl + path).toHttpUrl().newBuilder().apply { params.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
+        return http.readCancellable(Request.Builder().url(url).header("Authorization", "Bearer ${token()}").build(), ::readResponse)
+    }
+
     internal fun request(path: String, params: Map<String, String> = emptyMap(), body: RequestBody? = null, overrideToken: String? = null): JsonObject {
         val url = (baseUrl + path).toHttpUrl().newBuilder().apply { params.forEach { (k, v) -> addQueryParameter(k, v) } }.build()
         val builder = Request.Builder().url(url).header("Authorization", "Bearer ${overrideToken ?: token()}")
         if (body != null) builder.post(body)
-        return http.newCall(builder.build()).execute().use { r ->
+        return http.newCall(builder.build()).execute().use(::readResponse)
+    }
+
+    private fun readResponse(r: Response): JsonObject {
             if (r.code == 401 || r.code == 403) throw ProviderException("TorBox could not authorize this request. Check your API key and account's API access in Settings.")
             if (r.code == 429) throw ProviderException("TorBox needs a moment between requests. Please retry shortly.")
             if (!r.isSuccessful) throw ProviderException("TorBox is unavailable (${r.code}). Retry when your connection returns.")
@@ -182,8 +191,7 @@ class TorBoxDelivery(
                 .getOrElse { throw ProviderException("TorBox returned an unreadable response. Try again.") }
             // Do not expose raw provider responses: they can echo credentials or sensitive URLs.
             if (!root.flag("success")) throw ProviderException("TorBox couldn't complete this request. Check your plan, available download slots, and source in the TorBox dashboard.")
-            root
-        }
+            return root
     }
 
     companion object {

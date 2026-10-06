@@ -3,6 +3,7 @@ package app.narrio
 import android.content.Context
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
@@ -57,10 +58,15 @@ class BookDiscoveryExperienceTest {
             }
             override suspend fun recording(id: String): Audiobook = error("The fixture is already hydrated")
         }
-        val discovery = BookSourceDiscovery(archive, emptyList(), { error("Disconnected") }, { error("No torrents") })
+        val settings = object : SourceProviderSettings {
+            override val providers = MutableStateFlow(listOf(SourceProvider("archive", "Fixture", SourceProviderKind.BUILT_IN, true, 0, false, false)))
+            override fun setEnabled(id: String, enabled: Boolean) = Unit
+            override fun move(id: String, index: Int) = Unit
+        }
+        val discovery = ProviderSourceSearch(settings, { RecordingSourceLookup(archive) }, { error("No torrents") })
         lateinit var fixture: NarrioViewModel
         compose.runOnIdle {
-            fixture = NarrioViewModel(compose.activity.application, discovery::search)
+            fixture = NarrioViewModel(compose.activity.application, discovery)
             fixtureStore.put("lookup", fixture)
             fixture.connected.value = false
             compose.activity.setContent { NarrioApp(compose.activity, fixture) }
@@ -156,6 +162,65 @@ class BookDiscoveryExperienceTest {
         compose.waitUntil(5_000) { fixture.sourceSearch.value.choice != null }
         assertEquals(1, calls.get())
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
+    @Test fun automaticStreamDoesNotWaitForEbookFormatsAndSettingsInvalidateCachedResults() {
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val recording = recording("automatic-stream", "Project Hail Mary", "Fixture Reader")
+        val provider = SourceProvider("archive", "Fixture", SourceProviderKind.BUILT_IN, true, 0, false, false)
+        val settings = object : SourceProviderSettings {
+            override val providers = MutableStateFlow(listOf(provider))
+            override fun setEnabled(id: String, enabled: Boolean) = Unit
+            override fun move(id: String, index: Int) = Unit
+        }
+        val discovery = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String): List<Audiobook> { calls.incrementAndGet(); return listOf(recording) }
+            override suspend fun recording(id: String) = recording
+        }
+        val store = androidx.lifecycle.ViewModelStore()
+        lateinit var fixture: NarrioViewModel
+        val graph = (compose.activity.application as NarrioApplication).graph
+        val original = graph.sourceProviderSettings.providers.value.first { it.id == "archive" }.enabled
+        try {
+            compose.runOnIdle {
+                fixture = NarrioViewModel(compose.activity.application, ProviderSourceSearch(settings, { RecordingSourceLookup(discovery) }, { it }))
+                store.put("stream-fixture", fixture)
+                fixture.connected.value = false
+                fixture.readingLibrary.value = object : ReadingLibrary by fixture.readingLibrary.value {
+                    override fun observeBook(book: Audiobook): Flow<BookFormats> = flow { awaitCancellation() }
+                }
+                fixture.open(book)
+            }
+            compose.waitUntil(5_000) { fixture.sourceSearch.value.streamed?.complete == true }
+            compose.runOnIdle { assertEquals(recording, fixture.sourceSearch.value.choice); fixture.open(book) }
+            compose.waitUntil(5_000) { fixture.sourceSearch.value.streamed?.complete == true }
+            assertEquals(1, calls.get())
+            compose.runOnIdle { graph.sourceProviderSettings.setEnabled("archive", !original) }
+            compose.waitUntil(5_000) { calls.get() == 2 && fixture.sourceSearch.value.streamed?.complete == true }
+            assertEquals(recording, fixture.sourceSearch.value.choice)
+        } finally {
+            compose.runOnIdle { store.clear(); graph.sourceProviderSettings.setEnabled("archive", original) }
+        }
+    }
+
+    @Test fun streamedBestKeepsDetailsAndExplicitVersionChoiceCompatible() {
+        val fast = recording("streamed-fast", "Project Hail Mary", "Fixture Reader")
+        val better = recording("streamed-better", "Project Hail Mary (version 2)", "Second Reader")
+        fun snapshot(best: Audiobook, complete: Boolean) = StreamedSourceSearch(book,
+            listOf(SourceGroup("archive", "LibriVox", SourceGroupStatus.DONE, if (best == fast) listOf(fast) else listOf(better, fast))),
+            BestMatch(best, listOf(BestMatchReason.READY_TO_STREAM, BestMatchReason.FREE_PUBLIC_RECORDING), "archive"), complete)
+        show(SourceSearchState(book = book).withSnapshot(snapshot(fast, false)))
+        compose.runOnIdle { assertEquals(fast, vm.sourceSearch.value.choice); vm.chooseVersion(fast) }
+        compose.runOnIdle { vm.sourceSearch.value = vm.sourceSearch.value.withSnapshot(snapshot(better, true)) }
+        compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
+        compose.onNodeWithText("Read by Fixture Reader", substring = true).performScrollTo().assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(fast, vm.sourceSearch.value.choice)
+            assertEquals(better, vm.sourceSearch.value.streamed!!.best!!.recording)
+        }
+        val bitmap = compose.onRoot().captureToImage()
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        java.io.File(context.filesDir, "streamed-sources.png").outputStream().use {
+            bitmap.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+        }
     }
 
     @Test fun verifiedUncachedSourceIsLabelledAndRequiresExplicitPreparation() {

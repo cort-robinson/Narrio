@@ -4,6 +4,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.narrio.data.*
 import app.narrio.domain.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -11,6 +13,31 @@ import org.junit.runner.RunWith
 /** Exercise release matching on Android's regex runtime, with controlled public-release fixtures. */
 @RunWith(AndroidJUnit4::class)
 class BookSourceDiscoveryAndroidTest {
+    @Test fun streamingChecksUseAndroidMatchingAndKeepUnavailableReleasesForReview() = runBlocking {
+        val book = Audiobook("catalog:eragon", "Eragon", "Christopher Paolini", provider = "catalog")
+        val release = Audiobook("knaben:fixture", "Eragon - Christopher Paolini", "Author not verified", provider = "knaben",
+            torrentHash = "a".repeat(40), seeders = 3)
+        val settings = object : SourceProviderSettings {
+            override val providers = MutableStateFlow(listOf(SourceProvider("test", "Test", SourceProviderKind.ADDON, true, 0, true, true)))
+            override fun setEnabled(id: String, enabled: Boolean) = Unit
+            override fun move(id: String, index: Int) = Unit
+        }
+        val discovery = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String) = listOf(release)
+            override suspend fun recording(id: String) = release
+        }
+        val job = SupervisorJob(coroutineContext[Job])
+        try {
+            val session = ProviderSourceSearch(settings, { RecordingSourceLookup(discovery) }, { throw ProviderException("Unavailable") })
+                .start(book, true, CoroutineScope(coroutineContext + job))
+            val snapshot = withTimeout(5_000) { session.state.first { it.complete } }
+            assertNull(snapshot.best)
+            assertEquals(SourceGroupStatus.FAILED, snapshot.groups.single().status)
+            assertEquals(listOf(release.id), snapshot.groups.single().possible.map { it.id })
+            assertTrue(snapshot.groups.single().recordings.isEmpty())
+        } finally { job.cancel() }
+    }
+
     @Test fun titleOnlyAndTaggedReleaseNamesUseAndroidCompatibleMatching() {
         val book = Audiobook("catalog:eragon", "Eragon", "Christopher Paolini", provider = "catalog")
         for (name in listOf("01_ERAGON Audiobook", "Eragon [M4B]", "Eragon (Unabridged)", "Eragon {Retail}", "Eragon [M4B")) {

@@ -16,8 +16,6 @@ import app.narrio.playback.ListeningState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-private const val SOURCE_RESULTS_MS = 10 * 60_000L
-
 data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null)
 data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
 data class EbookWebsiteRequest(val book: Audiobook, val link: EbookSearchLink)
@@ -29,11 +27,26 @@ data class EbookWebsiteState(val request: EbookWebsiteRequest? = null, val worki
 data class SourceSearchState(
     val book: Audiobook? = null, val recordings: List<Audiobook> = emptyList(), val loading: Boolean = false, val searched: Boolean = false,
     val error: String? = null, val possible: List<Audiobook> = emptyList(), val chosenId: String? = null,
+    val streamed: StreamedSourceSearch? = null,
 ) {
     /** The listener may pick any match, including a possible one; otherwise the best verified recording leads. */
-    val choice: Audiobook? get() = results.firstOrNull { it.id == chosenId } ?: recordings.firstOrNull()
+    val choice: Audiobook? get() = results.firstOrNull { it.id == chosenId } ?: streamed?.best?.recording ?: recordings.firstOrNull()
     val versions: List<Audiobook> by lazy { SourceQuality.versions(recordings) }
     val results: List<Audiobook> get() = recordings + possible
+
+    fun withSnapshot(snapshot: StreamedSourceSearch): SourceSearchState {
+        val all = snapshot.groups.flatMap { it.recordings }
+        val best = snapshot.best?.recording
+        val recordings = if (best == null) all else listOf(best) + all.filter { it.id != best.id }
+        val possible = snapshot.groups.flatMap { it.possible }
+        val picked = results.firstOrNull { it.id == chosenId }
+        val chosen = (recordings + possible).firstOrNull {
+            picked != null && (it.id == picked.id || picked.torrentHash.isNotBlank() && it.torrentHash.equals(picked.torrentHash, true))
+        }?.id ?: chosenId
+        return SourceSearchState(snapshot.book, recordings, loading = !snapshot.complete, searched = true,
+            error = snapshot.groups.filter { it.status == SourceGroupStatus.FAILED }.mapNotNull { it.message }.distinct().joinToString(" ").ifBlank { null },
+            possible = possible, chosenId = chosen, streamed = snapshot)
+    }
 }
 /** The playing book's active text and its timing bindings, for narration sync and read along. */
 data class BookTextState(
@@ -62,8 +75,7 @@ data class ReaderRequest(val book: Audiobook, val edition: EbookEdition, val pla
 @OptIn(ExperimentalCoroutinesApi::class)
 class NarrioViewModel @JvmOverloads constructor(
     application: Application,
-    private val discoverSources: suspend (Audiobook, Boolean) -> BookSourceResults =
-        (application as NarrioApplication).graph.bookSources::search,
+    private val sourceEngine: StreamingSourceSearch = (application as NarrioApplication).graph.streamingSourceSearch,
 ) : AndroidViewModel(application) {
     val graph = (application as NarrioApplication).graph
     val catalog = MutableStateFlow(CatalogState())
@@ -82,6 +94,9 @@ class NarrioViewModel @JvmOverloads constructor(
     private val appearanceState = MutableStateFlow(appearanceStore.read())
     val appearance = appearanceState.asStateFlow()
     val sourceSearch = MutableStateFlow(SourceSearchState())
+    val sourceProviderSettings: SourceProviderSettings = graph.sourceProviderSettings
+    val streamedSourceSearch: StateFlow<StreamedSourceSearch?> = sourceSearch.map { it.streamed }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val downloads = graph.offline.books
     val wifiOnly = MutableStateFlow(graph.preferences.getBoolean("downloadWifi", true))
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
@@ -135,7 +150,8 @@ class NarrioViewModel @JvmOverloads constructor(
     private var searchJob: Job? = null
     private var detailJob: Job? = null
     private var sourceSearchJob: Job? = null
-    private val sourceResults = mutableMapOf<String, Pair<Long, SourceSearchState>>()
+    private var sourceSession: SourceSearchSession? = null
+    private val sourceResults = RecentSourceResults<SourceSearchState>()
     private var detailMetadataJob: Job? = null
     private var metadataRequest = 0
     private var controller: MediaController? = null
@@ -144,6 +160,21 @@ class NarrioViewModel @JvmOverloads constructor(
     init {
         controllerFuture.addListener({ runCatching { controller = controllerFuture.get() } }, ContextCompat.getMainExecutor(application))
         search()
+        viewModelScope.launch {
+            downloads.map { list -> list.filter { it.complete }.map { it.source.id }.toSet() }.distinctUntilChanged().drop(1)
+                .collect { sourceResults.clear() }
+        }
+        viewModelScope.launch {
+            combine(sourceProviderSettings.providers.map { list -> list.map { listOf(it.id, it.enabled, it.order) } }.distinctUntilChanged(),
+                graph.addons.installed) { providers, addons -> providers to addons }.drop(1).collect {
+                val book = sourceSearch.value.book
+                val active = sourceSearch.value.searched
+                sourceResults.clear()
+                sourceSearchJob?.cancel(); sourceSession = null
+                sourceSearch.value = SourceSearchState(book = book)
+                if (active && book != null && selection.value.book?.provider == "catalog") findSources(book, force = true)
+            }
+        }
         viewModelScope.launch {
             readingSync.map { it.audioJump }.distinctUntilChanged().collect { jump ->
                 val target = jump?.destination
@@ -223,6 +254,7 @@ class NarrioViewModel @JvmOverloads constructor(
     fun addonsChanged() {
         sourceResults.clear()
         sourceSearchJob?.cancel()
+        sourceSession = null
         sourceSearch.value = SourceSearchState(book = sourceSearch.value.book)
         search()
     }
@@ -230,18 +262,23 @@ class NarrioViewModel @JvmOverloads constructor(
     /** Runs automatically when a book opens. Complete results are reused briefly so returning to a book is instant. */
     fun findSources(book: Audiobook, force: Boolean = false) {
         sourceSearchJob?.cancel()
+        sourceSession = null
         val key = "${book.id}|${connected.value}"
-        sourceResults[key]?.takeIf { !force && System.currentTimeMillis() - it.first < SOURCE_RESULTS_MS }?.let { sourceSearch.value = it.second; return }
+        sourceResults.get(key, force)?.let { sourceSearch.value = it; return }
         sourceSearch.value = SourceSearchState(book = book, loading = true, searched = true)
         sourceSearchJob = viewModelScope.launch {
             try {
-                val results = discoverSources(book, connected.value)
-                sourceSearch.value = SourceSearchState(book, results.recordings, searched = true, error = results.error, possible = results.possible)
-                if (results.error == null) sourceResults[key] = System.currentTimeMillis() to sourceSearch.value
+                sourceSession = sourceEngine.start(book, connected.value, this)
+                sourceSession!!.state.collect { snapshot ->
+                    sourceSearch.update { it.withSnapshot(snapshot) }
+                    if (snapshot.complete && sourceSearch.value.error == null) sourceResults.put(key, sourceSearch.value)
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { sourceSearch.value = SourceSearchState(book, searched = true, error = friendly(error)) }
         }
     }
+
+    fun retrySource(providerId: String) { sourceSession?.retry(providerId) }
 
     /** Opens a recording's own page, where its formats, files, downloads, and preparation are available. */
     fun chooseRecording(recording: Audiobook) {
@@ -266,6 +303,17 @@ class NarrioViewModel @JvmOverloads constructor(
         val book = search.book ?: return@launch
         val recording = search.choice ?: return@launch
         val described = graph.followAlong.adoptRecording(SourceQuality.describe(recording, book), book)
+        val offlineSources = downloads.value.filter { it.complete }.filter {
+            it.book.recordingId.ifBlank { it.book.id } == recording.recordingId.ifBlank { recording.id } ||
+                recording.torrentHash.isNotBlank() && it.book.torrentHash.equals(recording.torrentHash, true)
+        }.flatMap { SourceQuality.filter(book, listOf(it.book.copy(sources = listOf(it.source))), setOf(it.source.id)).flatMap { recording -> recording.sources } }
+        if (offlineSources.isNotEmpty()) {
+            val wanted = format ?: savedFormat(described.id)
+            val source = offlineSources.firstOrNull { it.format == wanted } ?: offlineSources.firstOrNull { it.format == "M4B" } ?: offlineSources.first()
+            if (format != null) chooseFormat(described, format)
+            start(described, source, source.delivery)
+            return@launch
+        }
         val formats = if (recording.provider == "archive") recording.sources else recording.sources.filter { it.format in recording.cachedFormats }
         if (!SourceQuality.ready(recording) || formats.isEmpty()) return@launch open(described, keepSources = true)
         val wanted = format ?: savedFormat(described.id)
@@ -560,7 +608,7 @@ class NarrioViewModel @JvmOverloads constructor(
         finally { busy.value = false }
     }
     fun setWifiOnly(value: Boolean) { wifiOnly.value = value; graph.preferences.edit().putBoolean("downloadWifi", value).apply(); graph.offline.setWifiOnly(value) }
-    fun chooseFormat(book: Audiobook, format: String) { preferredFormat.value = format; graph.preferences.edit().putString("format:${book.id}", format).apply() }
+    fun chooseFormat(book: Audiobook, format: String) { preferredFormat.value = format; graph.preferences.edit().putString("format:${book.id}", format).apply(); sourceResults.clear() }
     fun pauseDownload(download: OfflineBook) = graph.offline.pause(download.source)
     fun resumeDownload(download: OfflineBook) = graph.offline.resume(download.book, download.source)
     fun removeDownload(download: OfflineBook) {
