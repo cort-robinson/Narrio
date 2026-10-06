@@ -4,6 +4,8 @@ import app.narrio.domain.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.test.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -56,6 +58,122 @@ class ProviderSourceSearchTest {
         assertEquals(SourceGroupStatus.FAILED, session.state.value.groups[2].status)
         assertEquals(30_000L, beforeMs); assertEquals(250L, firstMs); assertEquals(15_000L, currentTime - start)
         println("Controlled timing: old first/complete=${beforeMs}ms; streamed first=${firstMs}ms, complete=${currentTime - start}ms")
+    }
+
+    @Test fun confidentMatchAvoidsAnotherSerializedRateLimitedTitleRequest() = runTest {
+        val detailed = book.copy(title = "Project Hail Mary: A Novel")
+        val release = recording("addon", "knaben", "a".repeat(40))
+        fun limitedRequest(): suspend (SourceSearchBudget?) -> List<Audiobook> {
+            val lock = Mutex()
+            var requests = 0
+            return { budget -> lock.withLock {
+                if (requests++ > 0) delay(60_000)
+                if (budget == null) { delay(250); listOf(release) }
+                else budget.run { delay(250); listOf(release) }
+            } }
+        }
+        val oldRequest = limitedRequest()
+        val emptyArchive = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String) = emptyList<Audiobook>()
+            override suspend fun recording(id: String): Audiobook = error("No public results")
+        }
+        val addon = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String) = oldRequest(null)
+            override suspend fun recording(id: String) = release
+        }
+        val beforeStart = currentTime
+        assertEquals(release.id, BookSourceDiscovery(emptyArchive, listOf(addon), { emptyList() }, { it }).search(detailed, true).recordings.single().id)
+        val beforeMs = currentTime - beforeStart
+        val newRequest = limitedRequest()
+        var calls = 0
+        val source = object : SourceLookup {
+            override suspend fun search(book: Audiobook, title: String, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> {
+                calls++
+                // The fixture's declared delay is outside the active request budget, as in AddonManager.
+                return newRequest(budget)
+            }
+        }
+        val start = currentTime
+        val session = ProviderSourceSearch(settings(provider("addon")), { source }, { it }, now = { currentTime }).start(detailed, true, backgroundScope)
+        advanceTimeBy(250); runCurrent()
+        assertTrue(session.state.value.complete); assertEquals(1, calls)
+        assertEquals(release.id, session.state.value.best!!.recording.id)
+        assertEquals(60_500L, beforeMs); assertEquals(250L, currentTime - start)
+        println("Controlled title variants: old=${beforeMs}ms/two requests; streamed=${currentTime - start}ms/one request; declared 60000ms wait unchanged")
+    }
+
+    @Test fun hydrationAndCacheChecksOverlapOtherProviderSearches() = runTest {
+        val public = recording("public").copy(detailsLoaded = false, sources = emptyList())
+        val indexed = recording("index", "knaben", "a".repeat(40))
+        val archive = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String): List<Audiobook> { delay(250); return listOf(public) }
+            override suspend fun recording(id: String): Audiobook { delay(500); return this@ProviderSourceSearchTest.recording("public") }
+        }
+        fun index(slow: Boolean) = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String): List<Audiobook> { delay(if (slow) 10_000 else 100); return if (slow) emptyList() else listOf(indexed) }
+            override suspend fun recording(id: String) = indexed
+        }
+        val beforeStart = currentTime
+        val old = BookSourceDiscovery(archive, listOf(index(false), index(true)), { emptyList() }, { delay(750); it }).search(book, true)
+        val beforeMs = currentTime - beforeStart
+        assertEquals(2, old.recordings.size)
+        val start = currentTime
+        var hydrationStarted = -1L
+        var cacheStarted = -1L
+        var fileCalls = 0
+        val engine = ProviderSourceSearch(settings(provider("archive"), provider("index", 1), provider("slow", 2)), { source ->
+            if (source.id == "archive") object : SourceLookup {
+                override suspend fun search(book: Audiobook, title: String, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit) = budget.run { archive.search(title) }
+                override suspend fun hydrate(recording: Audiobook): Audiobook { hydrationStarted = currentTime - start; return archive.recording(recording.id) }
+            } else lookup { delay(if (source.id == "slow") 10_000 else 100); if (source.id == "slow") emptyList() else listOf(indexed) }
+        }, { cacheStarted = currentTime - start; delay(750); it }, { fileCalls++; error("Ready recordings skip the optional file phase") }, now = { currentTime })
+        val session = engine.start(book, true, backgroundScope)
+        advanceTimeBy(750); runCurrent()
+        assertEquals("public", session.state.value.best!!.recording.id)
+        assertEquals(SourceGroupStatus.SEARCHING, session.state.value.groups.last().status)
+        assertEquals(250L, hydrationStarted); assertEquals(100L, cacheStarted)
+        advanceTimeBy(100); runCurrent()
+        assertEquals(2, session.state.value.groups.sumOf { it.recordings.size })
+        advanceTimeBy(9_150); runCurrent()
+        assertTrue(session.state.value.complete); assertEquals(0, fileCalls)
+        assertEquals(11_250L, beforeMs); assertEquals(10_000L, currentTime - start)
+        println("Controlled checking: old first/complete=${beforeMs}ms; streamed public=750ms, cloud=850ms, complete=${currentTime - start}ms; optional file calls=$fileCalls")
+    }
+
+    @Test fun retryAvoidsRepeatingSlowSuccessfulProviderAfterPartialFailure() = runTest {
+        var oldFastCalls = 0
+        var oldAttempts = 0
+        val archive = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String): List<Audiobook> { oldFastCalls++; delay(5_000); return listOf(recording()) }
+            override suspend fun recording(id: String) = recording()
+        }
+        val index = object : RecordingDiscovery {
+            override suspend fun search(query: String, category: String): List<Audiobook> { delay(1_000); if (++oldAttempts == 1) error("Failure"); return emptyList() }
+            override suspend fun recording(id: String): Audiobook = error("No indexed results")
+        }
+        val old = BookSourceDiscovery(archive, listOf(index), { emptyList() }, { it })
+        assertNotNull(old.search(book, true).error)
+        val beforeStart = currentTime
+        assertNull(old.search(book, true).error)
+        val beforeMs = currentTime - beforeStart
+        var goodCalls = 0
+        var attempts = 0
+        val engine = ProviderSourceSearch(settings(provider("good"), provider("retry", 1)), { source -> lookup {
+            if (source.id == "good") { goodCalls++; delay(5_000); listOf(recording()) }
+            else { delay(1_000); if (++attempts == 1) error("Failure"); emptyList() }
+        } }, { it }, now = { currentTime })
+        val session = engine.start(book, true, backgroundScope)
+        advanceTimeBy(5_000); runCurrent()
+        assertTrue(session.state.value.complete)
+        val start = currentTime
+        session.retry("retry"); runCurrent()
+        assertEquals("fast", session.state.value.best!!.recording.id)
+        advanceTimeBy(1_000); runCurrent()
+        assertTrue(session.state.value.complete)
+        assertTrue(session.state.value.groups.none { it.status == SourceGroupStatus.FAILED })
+        assertEquals(2, oldFastCalls); assertEquals(1, goodCalls)
+        assertEquals(5_000L, beforeMs); assertEquals(1_000L, currentTime - start)
+        println("Controlled failure recovery: old full lookup=${beforeMs}ms; provider retry=${currentTime - start}ms; successful provider calls old=$oldFastCalls/streamed=$goodCalls")
     }
 
     @Test fun retrySearchesOnlyFailedProviderAndRetainsOtherGroups() = runTest {
