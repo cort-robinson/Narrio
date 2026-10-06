@@ -32,61 +32,49 @@ class BookTextFinder(
         if (attempt(companions(source).sortedBy { !EbookMatch.matches(book, it.title) })) return true
         if (connected && !BookMetadata.unknown(book.author)) {
             step("Checking your TorBox ebooks")
-            if (attempt(read { accountMatches(book) })) return true
-            if (attempt(read { webAccountMatches(book) })) return true
+            if (attempt(read { accountMatches(book).strong() })) return true
+            if (attempt(read { webAccountMatches(book).strong() })) return true
             step("Checking TorBox for a cached ebook")
-            if (attempt(read { cachedReleases(book) })) return true
+            if (attempt(read { cachedReleases(book).strong() })) return true
         }
         step("Checking Project Gutenberg")
-        return attempt(read { publicMatches(book) })
+        return attempt(read { publicMatches(book).strong() })
     }
 
-    /** Matching ebooks found by a lookup, and whether a provider failed so the list may be incomplete. */
-    data class Candidates(val results: List<BookTextSource>, val incomplete: Boolean)
+    /** Ebook files already in the TorBox account's torrents, with how well each names this book. */
+    suspend fun accountMatches(book: Audiobook) = rated(book, torbox.accountText())
+
+    /** Ready ebooks among the account's web downloads. */
+    suspend fun webAccountMatches(book: Audiobook) = rated(book, webAccountText())
+
+    private fun rated(book: Audiobook, files: List<Pair<String, BookTextSource>>) = files.map { (release, file) ->
+        EbookCandidate(file, maxOf(EbookMatch.confidence(book, release), EbookMatch.confidence(book, file.title)))
+    }.filter { it.confidence != MatchConfidence.NONE }.sortedBy { if (it.source.format == "EPUB") 0 else 1 }
+
+    suspend fun publicMatches(book: Audiobook) = gutenberg.search("${BookIdentity.title(book.title)} ${book.author}".trim()).map {
+        EbookCandidate(it, EbookMatch.confidence(book, "${it.title.substringBefore(';')} - ${it.author}"))
+    }.filter { it.confidence != MatchConfidence.NONE }
+
+    private fun List<EbookCandidate>.strong() = filter { it.confidence == MatchConfidence.STRONG }.map { it.source }
+
+    /** Cached ebook releases from every enabled ebook add-on, for the automatic attach above. */
+    suspend fun cachedReleases(book: Audiobook): List<EbookCandidate> =
+        cachedFiles(book, SourceQuality.searchTitles(book).flatMap { ebookSearch("$it ${book.author}") })
 
     /**
-     * Every candidate [find] would consider, in the same evidence order and with the same matching, for the
-     * listener to choose from instead of attaching the first that parses.
+     * The releases in [found] whose ebook files TorBox already has, confirmed or possible matches only. Asking TorBox
+     * whether a release is cached never adds it to the account.
      */
-    suspend fun candidates(book: Audiobook, sources: List<AudioSource>, connected: Boolean, step: (String) -> Unit): Candidates {
-        var incomplete = false
-        suspend fun read(block: suspend () -> List<BookTextSource>) = try { block() }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { incomplete = true; emptyList() }
-        val results = mutableListOf<BookTextSource>()
-        step("Checking this recording's files")
-        results += sources.flatMap { companions(it) }.sortedBy { !EbookMatch.matches(book, it.title) }
-        if (connected && !BookMetadata.unknown(book.author)) {
-            step("Checking your TorBox ebooks")
-            results += read { accountMatches(book) }
-            results += read { webAccountMatches(book) }
-            step("Checking TorBox for a cached ebook")
-            results += read { cachedReleases(book) }
-        }
-        step("Checking Project Gutenberg")
-        results += read { publicMatches(book) }
-        return Candidates(results.distinctBy { it.id }, incomplete)
-    }
-
-    private suspend fun accountMatches(book: Audiobook) =
-        torbox.accountText().filter { (release, file) -> EbookMatch.matches(book, release) || EbookMatch.matches(book, file.title) }.map { it.second }.preferEpub()
-
-    private suspend fun webAccountMatches(book: Audiobook) =
-        webAccountText().filter { (release, file) -> EbookMatch.matches(book, release) || EbookMatch.matches(book, file.title) }.map { it.second }.preferEpub()
-
-    private suspend fun publicMatches(book: Audiobook) =
-        gutenberg.search("${BookIdentity.title(book.title)} ${book.author}".trim()).filter { EbookMatch.matches(book, "${it.title.substringBefore(';')} - ${it.author}") }
-
-    suspend fun cachedReleases(book: Audiobook): List<BookTextSource> {
-        val releases = SourceQuality.searchTitles(book).flatMap { ebookSearch("$it ${book.author}") }
-            .distinctBy { it.torrentHash }.filter { EbookMatch.matches(book, it.title) }.sortedByDescending { it.seeders }.take(20)
+    suspend fun cachedFiles(book: Audiobook, found: List<Audiobook>): List<EbookCandidate> {
+        val releases = found.distinctBy { it.torrentHash }.map { it to EbookMatch.confidence(book, it.title) }.filter { it.second != MatchConfidence.NONE }
+            .sortedWith(compareBy<Pair<Audiobook, MatchConfidence>> { it.second != MatchConfidence.STRONG }.thenByDescending { it.first.seeders }).take(20)
         if (releases.isEmpty()) return emptyList()
-        val cached = torbox.cachedTextFiles(releases.map { it.torrentHash })
-        return releases.mapNotNull { release ->
+        val cached = torbox.cachedTextFiles(releases.map { it.first.torrentHash })
+        return releases.mapNotNull { (release, confidence) ->
             val files = cached[release.torrentHash.lowercase()].orEmpty()
             val file = files.firstOrNull { textFileFormat(it) == "EPUB" } ?: files.singleOrNull { textFileFormat(it) == "TXT" } ?: return@mapNotNull null
-            BookTextSource("knaben:${release.torrentHash}:$file", release.title, format = textFileFormat(file)!!, provider = "torbox-cache",
-                attribution = "Cached ebook release via TorBox", torrentHash = release.torrentHash, magnetUri = release.magnetUri, fileName = file)
+            EbookCandidate(BookTextSource("knaben:${release.torrentHash}:$file", release.title, format = textFileFormat(file)!!, provider = "torbox-cache",
+                attribution = "Cached ebook release via TorBox", torrentHash = release.torrentHash, magnetUri = release.magnetUri, fileName = file), confidence)
         }
     }
 
@@ -122,14 +110,31 @@ object EbookMatch {
     private val bracketed = Regex("\\[[^\\]]*\\]|\\([^)]*\\)|\\{[^}]*\\}")
     private val separators = Regex("\\s+[-\u2013\u2014]\\s+|\\s+by\\s+|\\s*:\\s+")
 
-    fun matches(book: Audiobook, release: String): Boolean {
-        if (BookMetadata.unknown(book.author) || release.isBlank()) return false
+    fun matches(book: Audiobook, release: String): Boolean = confidence(book, release) == MatchConfidence.STRONG
+
+    /**
+     * [MatchConfidence.STRONG] names the exact title and every author name. [MatchConfidence.POSSIBLE] names the exact
+     * title with part of the author, nothing else at all ("Pride and Prejudice [EPUB]"), or a book whose author is
+     * unverified, so the reader checks it.
+     */
+    fun confidence(book: Audiobook, release: String): MatchConfidence {
+        if (release.isBlank()) return MatchConfidence.NONE
         val cleaned = release.substringAfterLast('/').replace('_', ' ').replace(extension, "").replace(bracketed, " ").replace(noise, " ")
         val titles = SourceQuality.searchTitles(book).map(BookIdentity::normalize).filter(String::isNotBlank)
         val segments = cleaned.split(separators).map(BookIdentity::normalize).filter(String::isNotBlank)
-        val title = segments.firstOrNull { it in titles } ?: return false
+        val title = segments.firstOrNull { it in titles } ?: return MatchConfidence.NONE
         val rest = " " + segments.filter { it != title }.joinToString(" ") + " "
-        if (unrelated.containsMatchIn(rest)) return false
-        return BookIdentity.normalize(book.author).split(' ').filter(String::isNotBlank).all { " $it " in rest }
+        if (unrelated.containsMatchIn(rest)) return MatchConfidence.NONE
+        val names = if (BookMetadata.unknown(book.author)) emptyList() else BookIdentity.normalize(book.author).split(' ').filter(String::isNotBlank)
+        val named = names.count { " $it " in rest }
+        return when {
+            names.isNotEmpty() && named == names.size -> MatchConfidence.STRONG
+            // An unverified author can't rule a release in or out.
+            names.isEmpty() || named > 0 || rest.isBlank() -> MatchConfidence.POSSIBLE
+            else -> MatchConfidence.NONE
+        }
     }
 }
+
+/** A found ebook and how closely it names the book. */
+data class EbookCandidate(val source: BookTextSource, val confidence: MatchConfidence)

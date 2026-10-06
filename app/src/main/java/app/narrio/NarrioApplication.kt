@@ -36,6 +36,7 @@ class AppGraph(application: Application) {
     val addons = AddonManager.create(application, http)
     private val sourceSettingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val sourceProviderSettings = DeviceSourceProviderSettings.create(application, addons, sourceSettingsScope)
+    val ebookProviderSettings = DeviceSourceProviderSettings.create(application, addons, sourceSettingsScope, SourceCatalog.EBOOK)
     val metadata = BookMetadata(http, addonSearch = addons::catalog, addonRevision = { addons.revision })
     val books = BookCatalog(metadata, addonSearch = addons::catalog, addonRevision = { addons.revision })
     val torbox = TorBoxDelivery(http, credentials::read)
@@ -62,6 +63,14 @@ class AppGraph(application: Application) {
         rankingChanges = offline.books.map { Unit },
         preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() })
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks, webEbooks::accountText)
+    val streamingEbookSearch: app.narrio.domain.StreamingEbookSearch = ProviderEbookSearch(ebookProviderSettings, { provider ->
+        when (provider.id) {
+            DeviceSourceProviderSettings.RECORDING_FILES -> RecordingEbookLookup
+            DeviceSourceProviderSettings.TORBOX_EBOOKS -> AccountEbookLookup(textFinder)
+            DeviceSourceProviderSettings.GUTENBERG -> GutenbergEbookLookup(textFinder)
+            else -> if (provider.kind == app.narrio.domain.SourceProviderKind.ADDON) AddonEbookLookup(textFinder, addons, provider.id.removePrefix("addon:")) else null
+        }
+    }, ebookProviderSettings::recordStatus)
     val speechModels = SpeechModelStore(application, http)
     val narrationSync = app.narrio.playback.NarrationSync(application, http, offline, torbox, speechModels)
     val sharedPositions = app.narrio.domain.AudioOwnedPositionStore(RoomSharedPositionStore(library))

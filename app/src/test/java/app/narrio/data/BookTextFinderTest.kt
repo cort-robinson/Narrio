@@ -55,25 +55,6 @@ class BookTextFinderTest {
         } finally { knaben.shutdown(); torbox.shutdown() }
     }
 
-    @Test fun readyWebEbooksSurviveTorrentAccountFailuresAndKeepExactBookMatching() = runTest {
-        val gutenberg = MockWebServer().apply { start() }
-        val torbox = MockWebServer().apply { start() }
-        try {
-            gutenberg.enqueue(MockResponse().setBody("""{"results":[]}"""))
-            torbox.enqueue(MockResponse().setResponseCode(500))
-            val delivery = TorBoxDelivery(OkHttpClient(), { "fixture-key" }, torbox.url("/").toString())
-            val matching = BookTextSource("torbox-web:12:3", "Pride and Prejudice - Jane Austen.epub", format = "EPUB", provider = "torbox-web", torrentId = 12, fileId = 3)
-            val unrelated = matching.copy(id = "wrong", title = "Pride and Prejudice - Study Guide - Jane Austen.epub")
-            val finder = BookTextFinder(GutenbergTextDiscovery(OkHttpClient(), gutenberg.url("/").toString()),
-                KnabenDiscovery(OkHttpClient(), gutenberg.url("/").toString()), delivery, ebookSearch = { emptyList() },
-                webAccountText = { listOf("" to matching, "" to unrelated) })
-            val candidates = finder.candidates(book, emptyList(), true) {}
-            assertEquals(listOf(matching), candidates.results)
-            assertTrue(candidates.incomplete)
-            assertEquals(1, torbox.requestCount)
-        } finally { gutenberg.shutdown(); torbox.shutdown() }
-    }
-
     @Test fun automaticTextMustBeLongEnoughForTheRecording() {
         fun text(words: Int) = BookText("d", "Book", "Author", "TXT", "", listOf(TextChapter("c", "C", listOf(TextPassage("p", List(words) { "word" }.joinToString(" "), "text", 0)))))
         val sevenHours = AudioSource("s", "Parts", "MP3", listOf(AudioPart("a", "a.mp3", "A", durationMs = 7 * 3_600_000L)))
@@ -94,24 +75,15 @@ class BookTextFinderTest {
         assertEquals(listOf("epub", "txt"), BookTextFinder.companions(source).map { it.id })
     }
 
-    /** Find ebook lists every match in evidence order; one failing provider marks the list incomplete, not empty. */
-    @Test fun candidatesListEveryMatchAndReportAFailedProvider() = runTest {
-        val gutenberg = MockWebServer().apply { start() }
-        val torbox = MockWebServer().apply { start() }
-        try {
-            gutenberg.enqueue(MockResponse().setBody("""{"results":[
-                {"id":1342,"title":"Pride and Prejudice","authors":[{"name":"Austen, Jane"}],"languages":["en"],"copyright":false,"media_type":"Text","formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/1342.epub3.images"}},
-                {"id":35688,"title":"Pride and Prejudice and Zombies","authors":[{"name":"Grahame-Smith, Seth"}],"languages":["en"],"copyright":false,"media_type":"Text","formats":{"application/epub+zip":"https://www.gutenberg.org/ebooks/35688.epub"}}]}"""))
-            torbox.enqueue(MockResponse().setResponseCode(500))
-            val delivery = TorBoxDelivery(OkHttpClient(), { "test-secret" }, torbox.url("/").toString())
-            val finder = BookTextFinder(GutenbergTextDiscovery(OkHttpClient(), gutenberg.url("/").toString()), KnabenDiscovery(OkHttpClient(), gutenberg.url("/").toString()), delivery,
-                ebookSearch = { emptyList() })
-            val source = AudioSource("s", "Parts", "MP3", emptyList(), textFiles = listOf(BookTextSource("companion", "Pride and Prejudice.epub", format = "EPUB", provider = "archive")))
-            val steps = mutableListOf<String>()
-            val found = finder.candidates(book, listOf(source), connected = true) { steps += it }
-            assertEquals(listOf("companion", "gutenberg:1342"), found.results.map { it.id })
-            assertTrue(found.incomplete)
-            assertEquals(listOf("Checking this recording's files", "Checking your TorBox ebooks", "Checking TorBox for a cached ebook", "Checking Project Gutenberg"), steps)
-        } finally { gutenberg.shutdown(); torbox.shutdown() }
+    /** Possible matches name the exact title but not every author; other books, summaries, and collections never do. */
+    @Test fun possibleEbooksNeedTheExactTitleAndNoOtherAuthor() {
+        assertEquals(MatchConfidence.STRONG, EbookMatch.confidence(book, "Pride and Prejudice - Jane Austen [EPUB]"))
+        assertEquals(MatchConfidence.POSSIBLE, EbookMatch.confidence(book, "Pride and Prejudice [EPUB]"))
+        assertEquals(MatchConfidence.POSSIBLE, EbookMatch.confidence(book, "Pride and Prejudice - Austen"))
+        assertEquals(MatchConfidence.POSSIBLE, EbookMatch.confidence(book.copy(author = "Author not verified"), "Pride and Prejudice - Jane Austen"))
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(book, "Pride and Prejudice - Seth Grahame-Smith"))
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(book, "Pride and Prejudice and Zombies - Seth Grahame-Smith, Jane Austen"))
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(book, "Pride and Prejudice - Study Guide - Jane Austen"))
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(book, ""))
     }
 }

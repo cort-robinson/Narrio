@@ -62,6 +62,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val sourceSearch by vm.sourceSearch.collectAsStateWithLifecycle()
     val sourceProviders by vm.sourceProviderSettings.providers.collectAsStateWithLifecycle()
     val ebookSearch by vm.ebookSearch.collectAsStateWithLifecycle()
+    val ebookProviders by vm.ebookProviderSettings.providers.collectAsStateWithLifecycle()
     val installedAddons by vm.graph.addons.installed.collectAsStateWithLifecycle()
     val ebookSearchLinks = remember(book.title, book.author, installedAddons) { vm.graph.addons.ebookSearchLinks(book) }
     val loadedFormats by vm.detailFormats.collectAsStateWithLifecycle()
@@ -264,10 +265,13 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     }
     if (sourcePicker) SourcePicker(vm, book, connected, busy) { sourcePicker = false }
     if (listeningOptions && search != null && search.results.isNotEmpty()) ListeningOptionsSheet(vm, book, search, connected, busy) { listeningOptions = false }
-    if (ebookSheet) EbookSheet(book, formats, ebookSearch, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
+    if (ebookSheet) EbookSheet(book, formats, ebookSearch, ebookProviders, connected, "Add and read", EbookActions(
+        add = { vm.addEbook(book, it) }, addAndOpen = { vm.addEbook(book, it) { vm.read(book) } }, retry = vm::retryEbookSource,
+        searchAgain = { vm.findEbooks(book, force = true) },
         chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
-        activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks,
-        openSearch = { vm.openEbookWebsite(book, it) })
+        activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
+        sourceSettings = { ebookSheet = false; vm.navigate(2) }, connectTorBox = { ebookSheet = false; vm.navigate(2) },
+    ), dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks)
 }
 
 /** The leading format is the filled action; the other available format is tonal. */
@@ -392,7 +396,7 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val page = when { addonsOpen -> "addons"; appearanceOpen -> "appearance"; else -> "home" }
     AnimatedContent(page, modifier, transitionSpec = { Motion.sharedAxisX(targetState != "home") }, label = "settings page") { shown ->
         when (shown) {
-            "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, connected, { addonsOpen = false }, vm::addonsChanged, { addonsOpen = false })
+            "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, { addonsOpen = false }, vm::addonsChanged, { addonsOpen = false })
             "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
             else -> SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }, { addonsOpen = true }) { appearanceOpen = true }
         }

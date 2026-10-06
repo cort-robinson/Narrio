@@ -56,13 +56,21 @@ data class BookTextState(
     val loading: Boolean = false,
     val error: String? = null,
 )
-/** Find ebook for one book: every matching candidate, the provider being checked, and what's being added. */
+/**
+ * Find ebook for one book: the latest per-source snapshot, and what's being added. [searchError] means the lookup
+ * itself couldn't start; [error] is a failed add.
+ */
 data class EbookSearchState(
-    val bookId: String = "", val searching: Boolean = false, val step: String = "", val searched: Boolean = false,
-    val results: List<BookTextSource> = emptyList(), val incomplete: Boolean = false, val error: String? = null,
+    val bookId: String = "", val searching: Boolean = false, val searched: Boolean = false,
+    val streamed: StreamedEbookSearch? = null, val searchError: String? = null, val error: String? = null,
     /** Candidate id, or [FILE], while an edition is being added; [added] is set once it is. */
     val adding: String? = null, val added: String? = null,
-) { companion object { const val FILE = "file" } }
+) {
+    val results: List<BookTextSource> get() = streamed?.groups.orEmpty().flatMap { it.editions + it.possible }
+    /** A source couldn't be checked, so the results may be missing something. */
+    val incomplete: Boolean get() = streamed?.groups.orEmpty().any { it.status == SourceGroupStatus.FAILED }
+    companion object { const val FILE = "file" }
+}
 /** Adding an ebook file from the shelf as a new book. */
 data class EbookImportState(val working: Boolean = false, val error: String? = null)
 /**
@@ -121,6 +129,10 @@ class NarrioViewModel @JvmOverloads constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val shelfFilter = MutableStateFlow(ShelfFilter.ALL)
     val ebookSearch = MutableStateFlow(EbookSearchState())
+    val ebookProviderSettings: SourceProviderSettings = graph.ebookProviderSettings
+    private var ebookSession: EbookSearchSession? = null
+    private var ebookBook: Audiobook? = null
+    private val ebookResults = RecentSourceResults<EbookSearchState>()
     val ebookWebsite = MutableStateFlow(EbookWebsiteState())
     private var ebookWebsiteJob: Job? = null
     val ebookImport = MutableStateFlow(EbookImportState())
@@ -173,6 +185,16 @@ class NarrioViewModel @JvmOverloads constructor(
                 sourceSearchJob?.cancel(); sourceSession = null
                 sourceSearch.value = SourceSearchState(book = book)
                 if (active && book != null && selection.value.book?.provider == "catalog") findSources(book, force = true)
+            }
+        }
+        viewModelScope.launch {
+            combine(ebookProviderSettings.providers.map { list -> list.map { listOf(it.id, it.enabled, it.order) } }.distinctUntilChanged(),
+                graph.addons.installed) { providers, addons -> providers to addons }.drop(1).collect {
+                ebookResults.clear()
+                val book = ebookBook
+                if (book != null && ebookSearch.value.searched && ebookSearch.value.adding == null) {
+                    if (selection.value.book?.id == book.id) findEbooks(book, force = true) else stopEbookSearch(reset = true)
+                }
             }
         }
         viewModelScope.launch {
@@ -253,6 +275,7 @@ class NarrioViewModel @JvmOverloads constructor(
 
     fun addonsChanged() {
         sourceResults.clear()
+        ebookResults.clear()
         sourceSearchJob?.cancel()
         sourceSession = null
         sourceSearch.value = SourceSearchState(book = sourceSearch.value.book)
@@ -407,8 +430,8 @@ class NarrioViewModel @JvmOverloads constructor(
     }
 
     fun refreshMetadata(book: Audiobook) = loadMetadata(book, true)
-    fun back() { val open = reader.value; if (open?.together == true && open.fromListening) { reader.value = null; playerOpen.value = true; returnToListening() } else if (open?.together == true) setReadAlong(false) else if (open != null) reader.value = null else if (playerOpen.value) playerOpen.value = false else if (sourceSearch.value.book != null && selection.value.book?.recordingId?.isNotBlank() == true && selection.value.book?.recordingId != sourceSearch.value.book?.recordingId) open(sourceSearch.value.book!!, keepSources = true) else { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); selection.value = SelectionState(); sourceSearch.value = SourceSearchState() } }
-    fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); sourceSearch.value = SourceSearchState(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false; reader.value = null }
+    fun back() { val open = reader.value; if (open?.together == true && open.fromListening) { reader.value = null; playerOpen.value = true; returnToListening() } else if (open?.together == true) setReadAlong(false) else if (open != null) reader.value = null else if (playerOpen.value) playerOpen.value = false else if (sourceSearch.value.book != null && selection.value.book?.recordingId?.isNotBlank() == true && selection.value.book?.recordingId != sourceSearch.value.book?.recordingId) open(sourceSearch.value.book!!, keepSources = true) else { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); stopEbookSearch(); selection.value = SelectionState(); sourceSearch.value = SourceSearchState() } }
+    fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); sourceSearch.value = SourceSearchState(); stopEbookSearch(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false; reader.value = null }
     fun save(book: Audiobook) = viewModelScope.launch { graph.library.save(book); messages.emit("Saved to your shelf") }
     fun remove(book: Audiobook) = viewModelScope.launch {
         if (reader.value?.book?.id == book.id) reader.value = null
@@ -442,29 +465,50 @@ class NarrioViewModel @JvmOverloads constructor(
     fun announceJump(jump: PositionJump) { announcedJump = jump; positionJumps.tryEmit(jump) }
     fun finishJump(jump: PositionJump) { if (announcedJump === jump) { announcedJump = null; clearSyncJump() } }
 
-    /** Lists matching ebooks from the recording's files, TorBox, cached ebook releases, and Project Gutenberg. */
-    fun findEbooks(book: Audiobook) {
-        ebookJob?.cancel()
+    /**
+     * Every enabled ebook source looks for [book] at once, as listening sources do. Complete, error-free results are
+     * reused for ten minutes; changing ebook sources invalidates them.
+     */
+    fun findEbooks(book: Audiobook, force: Boolean = false) {
+        ebookJob?.cancel(); ebookSession = null
+        ebookBook = book
+        val key = "${book.id}|${connected.value}|${book.sources.joinToString(",") { it.id }}"
+        ebookResults.get(key, force)?.let { ebookSearch.value = it; return }
         ebookSearch.value = EbookSearchState(book.id, searching = true, searched = true)
         fun update(change: (EbookSearchState) -> EbookSearchState) = ebookSearch.update { if (it.bookId == book.id) change(it) else it }
         ebookJob = viewModelScope.launch {
             try {
-                val found = readingLibrary.value.findEditions(book, connected.value) { step -> update { it.copy(step = step) } }
-                update { it.copy(results = found.results, incomplete = found.incomplete) }
+                val session = readingLibrary.value.searchEditions(book, connected.value, this)
+                ebookSession = session
+                session.state.collect { snapshot ->
+                    update { it.copy(streamed = snapshot, searching = !snapshot.complete) }
+                    if (snapshot.complete && snapshot.groups.none { it.status == SourceGroupStatus.FAILED })
+                        ebookResults.put(key, EbookSearchState(book.id, searched = true, streamed = snapshot))
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { update { it.copy(error = friendly(error)) } }
-            finally { update { it.copy(searching = false, step = "") } }
+            catch (error: Exception) { update { it.copy(searching = false, searchError = friendly(error)) } }
         }
     }
 
-    /** Opening Find ebook again reuses a complete lookup for the same book. */
+    fun retryEbookSource(providerId: String) { ebookSession?.retry(providerId) }
+
+    /** Opening Find ebook again reuses a running or complete lookup for the same book; a failed one starts over. */
     fun openEbookSearch(book: Audiobook) {
         val state = ebookSearch.value
-        if (state.bookId != book.id || !state.searched || state.error != null || state.incomplete) findEbooks(book)
-        else ebookSearch.update { it.copy(added = null) }
+        if (state.bookId != book.id || !state.searched || state.searchError != null || !state.searching && state.incomplete) findEbooks(book)
+        else ebookSearch.update { it.copy(added = null, error = null) }
     }
 
-    fun addEbook(book: Audiobook, candidate: BookTextSource) = editionWork(book, candidate.id) { readingLibrary.value.addEdition(book, candidate) }
+    /** Leaving a book stops its lookup; a [reset] or unfinished one starts fresh next time. */
+    private fun stopEbookSearch(reset: Boolean = false) {
+        if (ebookSearch.value.adding != null) return
+        ebookJob?.cancel(); ebookSession = null
+        if (reset || ebookSearch.value.searching) ebookSearch.value = EbookSearchState()
+    }
+
+    /** Adds a found ebook as the book's edition; [then] runs once it's added, such as opening it to read. */
+    fun addEbook(book: Audiobook, candidate: BookTextSource, then: () -> Unit = {}) =
+        editionWork(book, candidate.id, then) { readingLibrary.value.addEdition(book, candidate) }
 
     fun openEbookWebsite(book: Audiobook, link: EbookSearchLink) {
         AddonManifest.secureUrl(link.url)
@@ -484,7 +528,7 @@ class NarrioViewModel @JvmOverloads constructor(
                     ebookWebsite.update { if (it.request == target) it.copy(step = step) else it }
                 }
                 if (ebookWebsite.value.request != target) return@launch
-                ebookSearch.value = EbookSearchState(target.book.id, searched = true, added = edition.id)
+                ebookSearch.update { if (it.bookId == target.book.id) it.copy(added = edition.id) else EbookSearchState(target.book.id, searched = true, added = edition.id) }
                 ebookWebsite.value = EbookWebsiteState()
                 messages.emit("Ebook added. Read opens it.")
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -532,7 +576,7 @@ class NarrioViewModel @JvmOverloads constructor(
     }
     fun dismissEbookImport() { ebookImport.value = EbookImportState() }
 
-    private fun editionWork(book: Audiobook, adding: String, action: suspend () -> EbookEdition) = viewModelScope.launch {
+    private fun editionWork(book: Audiobook, adding: String, then: () -> Unit = {}, action: suspend () -> EbookEdition) = viewModelScope.launch {
         if (ebookSearch.value.adding != null) return@launch
         if (ebookSearch.value.bookId != book.id) ebookSearch.value = EbookSearchState(book.id)
         ebookSearch.update { it.copy(adding = adding, added = null, error = null) }
@@ -540,6 +584,7 @@ class NarrioViewModel @JvmOverloads constructor(
             val edition = action()
             ebookSearch.update { if (it.bookId == book.id) it.copy(added = edition.id) else it }
             messages.emit("Ebook added. Read opens it.")
+            then()
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { ebookSearch.update { if (it.bookId == book.id) it.copy(error = textError(error)) else it } }
         finally { ebookSearch.update { if (it.bookId == book.id) it.copy(adding = null) else it } }

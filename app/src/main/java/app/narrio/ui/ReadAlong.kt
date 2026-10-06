@@ -605,6 +605,7 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
     val formatsFlow = remember(book.id) { vm.readingLibrary.value.observeBook(book) }
     val formats by formatsFlow.collectAsStateWithLifecycle(null)
     val search by vm.ebookSearch.collectAsStateWithLifecycle()
+    val providers by vm.ebookProviderSettings.providers.collectAsStateWithLifecycle()
     val connected by vm.connected.collectAsStateWithLifecycle()
     val addons by vm.graph.addons.installed.collectAsStateWithLifecycle()
     val searchLinks = remember(book.title, book.author, addons) { vm.graph.addons.ebookSearchLinks(book) }
@@ -628,10 +629,13 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
         }, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
     }
     val current = formats
-    if (sheet && current != null) EbookSheet(book, current, search, connected, retry = { vm.findEbooks(book) }, add = { vm.addEbook(book, it) },
+    if (sheet && current != null) EbookSheet(book, current, search, providers, connected, "Add and read along", EbookActions(
+        add = { vm.addEbook(book, it) }, addAndOpen = { vm.addEbook(book, it) { vm.readAlong() } }, retry = vm::retryEbookSource,
+        searchAgain = { vm.findEbooks(book, force = true) },
         chooseFile = { vm.beginEbookImport(book); file.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
-        activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, dismiss = { sheet = false },
-        searchLinks = searchLinks, openSearch = { vm.openEbookWebsite(book, it) })
+        activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
+        sourceSettings = { sheet = false; vm.navigate(2) }, connectTorBox = { sheet = false; vm.navigate(2) },
+    ), dismiss = { sheet = false }, searchLinks = searchLinks)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

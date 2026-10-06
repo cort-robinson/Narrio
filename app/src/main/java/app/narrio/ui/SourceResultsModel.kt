@@ -12,23 +12,29 @@ import app.narrio.domain.*
 
 /**
  * The best match on screen and a better one waiting to be shown. A new best replaces the shown one only before the
- * listener has touched the page; afterwards it waits in [pending] behind a quiet "Better match found".
+ * listener has touched the page; afterwards it waits in [pending] behind a quiet "Better match found". [key] names
+ * the release or ebook a best match stands for.
  */
-data class PinnedBest(val shown: BestMatch? = null, val pending: BestMatch? = null) {
-    fun next(latest: BestMatch?, interacted: Boolean, stillListed: (String) -> Boolean): PinnedBest {
-        val current = shown?.takeIf { stillListed(it.recording.id) }
+data class Pinned<T>(val shown: T? = null, val pending: T? = null) {
+    fun next(latest: T?, interacted: Boolean, key: (T) -> String, stillListed: (String) -> Boolean): Pinned<T> {
+        val current = shown?.takeIf { stillListed(key(it)) }
         return when {
-            latest == null -> PinnedBest(current, null)
-            current == null -> PinnedBest(latest, null)
+            latest == null -> Pinned(current, null)
+            current == null -> Pinned(latest, null)
             // The same release can gain detail (a finished cache check); that never moves anything.
-            latest.recording.id == current.recording.id -> PinnedBest(latest, null)
-            !interacted -> PinnedBest(latest, null)
-            else -> PinnedBest(current, latest)
+            key(latest) == key(current) -> Pinned(latest, null)
+            !interacted -> Pinned(latest, null)
+            else -> Pinned(current, latest)
         }
     }
 
-    fun accept(): PinnedBest = if (pending == null) this else PinnedBest(pending, null)
+    fun accept(): Pinned<T> = if (pending == null) this else Pinned(pending, null)
 }
+
+typealias PinnedBest = Pinned<BestMatch>
+
+fun PinnedBest.next(latest: BestMatch?, interacted: Boolean, stillListed: (String) -> Boolean): PinnedBest =
+    next(latest, interacted, { it.recording.id }, stillListed)
 
 /** The audio format the best match would play: the preferred one when offered, otherwise the first. */
 fun bestFormat(recording: Audiobook, preferred: String = "M4B"): String? =
@@ -70,10 +76,12 @@ fun needsPreparing(best: BestMatch): Boolean = BestMatchReason.NEEDS_PREPARING i
     best.reasons.none { it == BestMatchReason.ON_PHONE || it == BestMatchReason.READY_TO_STREAM || it == BestMatchReason.FREE_PUBLIC_RECORDING } && !SourceQuality.ready(best.recording)
 
 /** Why a section was skipped, in the listener's terms. */
-fun skippedReason(group: SourceGroup, provider: SourceProvider?, connected: Boolean): String = when {
-    provider?.enabled == false || group.message.equals("Disabled", true) -> "Off in settings"
-    provider?.requiresTorBox == true && !connected || group.message.orEmpty().contains("TorBox", true) -> "Needs TorBox"
-    !group.message.isNullOrBlank() -> group.message
+fun skippedReason(group: SourceGroup, provider: SourceProvider?, connected: Boolean): String = skippedReason(group.message, provider, connected)
+
+internal fun skippedReason(message: String?, provider: SourceProvider?, connected: Boolean): String = when {
+    provider?.enabled == false || message.equals("Disabled", true) -> "Off in settings"
+    provider?.requiresTorBox == true && !connected || message.orEmpty().contains("TorBox", true) -> "Needs TorBox"
+    !message.isNullOrBlank() -> message
     else -> "Skipped"
 }
 
@@ -110,12 +118,15 @@ fun tally(search: StreamedSourceSearch, providers: Map<String, SourceProvider>, 
 }
 
 /** One line under "Listening sources": how far the search has got and what it found. */
-fun searchSummary(search: StreamedSourceSearch, tally: SearchTally): String {
+fun searchSummary(search: StreamedSourceSearch, tally: SearchTally): String = searchSummary(search.complete, tally)
+
+/** The same line for any per-source search; ebook sources word it identically. */
+internal fun searchSummary(complete: Boolean, tally: SearchTally): String {
     val found = "${tally.found} found"
     val torbox = if (tally.needTorBox > 0) " · ${tally.needTorBox} need TorBox" else ""
     return when {
         tally.active == 0 -> "No sources are searching$torbox"
-        !search.complete -> "${tally.answered} of ${tally.active} ${plural(tally.active, "source")} answered · $found$torbox"
+        !complete -> "${tally.answered} of ${tally.active} ${plural(tally.active, "source")} answered · $found$torbox"
         tally.failed == tally.active -> "${tally.failed} of ${tally.active} ${plural(tally.active, "source")} couldn't be checked$torbox"
         tally.failed > 0 -> "$found · ${tally.failed} of ${tally.active} ${plural(tally.active, "source")} couldn't be checked$torbox"
         tally.active == 1 -> "1 source searched · $found$torbox"
@@ -161,19 +172,23 @@ internal fun sourceList(names: List<String>): String = when (names.size) {
 internal fun plural(count: Int, one: String, many: String = one + "s") = if (count == 1) one else many
 
 /** A section's status in a few words: "Searching", "4 found", "Timed out". */
-fun groupStatusLabel(group: SourceGroup, provider: SourceProvider?, connected: Boolean): String {
-    val count = group.recordings.size + group.possible.size
-    return when (group.status) {
+fun groupStatusLabel(group: SourceGroup, provider: SourceProvider?, connected: Boolean): String =
+    groupStatusLabel(group.status, group.recordings.size, group.possible.size, group.message, provider, connected)
+
+/** A section's status from its counts, shared by listening and ebook sections. */
+internal fun groupStatusLabel(status: SourceGroupStatus, found: Int, possible: Int, message: String?, provider: SourceProvider?, connected: Boolean): String {
+    val count = found + possible
+    return when (status) {
         SourceGroupStatus.WAITING -> "Waiting its turn"
         SourceGroupStatus.SEARCHING -> if (count > 0) "Searching · $count found" else "Searching"
         SourceGroupStatus.CHECKING -> if (count > 0) "Checking TorBox · $count found" else "Checking TorBox"
         SourceGroupStatus.DONE -> when {
-            group.recordings.isNotEmpty() -> "${group.recordings.size} found"
-            group.possible.isNotEmpty() -> "${group.possible.size} possible"
+            found > 0 -> "$found found"
+            possible > 0 -> "$possible possible"
             else -> "Nothing for this book"
         }
-        SourceGroupStatus.FAILED -> if (group.message.orEmpty().contains("timed out", true)) "Timed out" else "Couldn't search"
-        SourceGroupStatus.SKIPPED -> skippedReason(group, provider, connected)
+        SourceGroupStatus.FAILED -> if (message.orEmpty().contains("timed out", true)) "Timed out" else "Couldn't search"
+        SourceGroupStatus.SKIPPED -> skippedReason(message, provider, connected)
     }
 }
 

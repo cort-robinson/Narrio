@@ -40,16 +40,18 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Settings → Sources & add-ons: one place for where Narrio looks. Audiobook sources (built in and add-ons) can be
- * turned off and reordered; ebook sources and book info can be turned off. Import, refresh, and remove keep their
- * explicit network actions.
+ * Settings → Sources & add-ons: one place for where Narrio looks. Audiobook and ebook sources (built in and add-ons)
+ * can be turned off and reordered; ebook websites and book info can be turned off. Import, refresh, and remove keep
+ * their explicit network actions.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connected: Boolean, connectTorBox: () -> Unit, changed: () -> Unit, back: () -> Unit) {
+fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, ebookSources: SourceProviderSettings, connected: Boolean,
+                  connectTorBox: () -> Unit, changed: () -> Unit, back: () -> Unit) {
     val installed by manager.installed.collectAsStateWithLifecycle()
     val statuses by manager.status.collectAsStateWithLifecycle()
     val providers by sources.providers.collectAsStateWithLifecycle()
+    val ebookProviders by ebookSources.providers.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var url by rememberSaveable { mutableStateOf("") }
     var working by remember { mutableStateOf<String?>(null) }
@@ -67,21 +69,8 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
     fun say(text: String) { message = text; error = false }
     // Confirmations fade after a moment; errors stay until the next action.
     LaunchedEffect(message, error) { if (message != null && !error) { kotlinx.coroutines.delay(6_000); message = null } }
-    // Reordering moves a local copy while the finger is down; the order is saved once, when it lifts.
-    var dragging by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableFloatStateOf(0f) }
-    var draft by remember { mutableStateOf(providers) }
-    val heights = remember { mutableStateMapOf<String, Int>() }
-    val audiobook = if (dragging != null) draft else providers
-    fun move(id: String, index: Int) {
-        val name = providers.firstOrNull { it.id == id }?.name ?: return
-        val target = index.coerceIn(0, providers.lastIndex)
-        if (providers.indexOfFirst { it.id == id } == target) return
-        // Source settings invalidate cached results and restart an open search on their own.
-        sources.move(id, target)
-        say("$name moved to ${target + 1} of ${providers.size}.")
-    }
-    val haptics = LocalHapticFeedback.current
+    val audiobookOrder = remember { ReorderState() }
+    val ebookOrder = remember { ReorderState() }
     val needTorBox = providers.count { it.enabled && it.requiresTorBox }
     BackHandler(onBack = back)
     Column(Modifier.fillMaxSize()) {
@@ -112,58 +101,12 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, connec
             item(key = "audiobook-heading") {
                 SectionHeading("Audiobook sources", "All sources that are on search together. This order sets the order of sources on a book's page and breaks ties. Drag a source by its handle, or use its menu to move it.")
             }
-            items(audiobook, key = { "provider:${it.id}" }) { provider ->
-                val index = audiobook.indexOf(provider)
-                val lifted = dragging == provider.id
-                val addonId = provider.id.removePrefix("addon:").takeIf { provider.kind == SourceProviderKind.ADDON }
-                val addon = installed.firstOrNull { it.id == addonId }
-                Box(Modifier.then(if (lifted) Modifier.zIndex(1f) else Modifier.animateItem())
-                    .graphicsLayer { translationY = if (lifted) dragOffset else 0f }
-                    .onSizeChanged { heights[provider.id] = it.height }) {
-                    SourceRow(
-                        name = provider.name,
-                        subtitle = providerSubtitle(provider, addon),
-                        status = providerStatus(provider, addon, statuses),
-                        warning = if (provider.requiresTorBox && !connected) "Needs TorBox" else null,
-                        enabled = provider.enabled,
-                        toggleEnabled = working == null && dragging == null,
-                        onToggle = { value -> sources.setEnabled(provider.id, value); say("${provider.name} ${if (value) "on" else "off"}.") },
-                        tag = provider.id,
-                        lifted = lifted,
-                        handle = {
-                            Box(Modifier.size(48.dp).pointerInput(provider.id) {
-                                detectDragGestures(
-                                    onDragStart = { draft = providers; dragging = provider.id; dragOffset = 0f; haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
-                                    onDrag = { change, amount ->
-                                        change.consume()
-                                        dragOffset += amount.y
-                                        val current = draft.indexOfFirst { it.id == provider.id }
-                                        val next = draft.getOrNull(current + 1); val previous = draft.getOrNull(current - 1)
-                                        val down = next?.let { heights[it.id] } ?: 0; val up = previous?.let { heights[it.id] } ?: 0
-                                        if (next != null && dragOffset > down / 2f) {
-                                            draft = draft.toMutableList().apply { add(current + 1, removeAt(current)) }; dragOffset -= down
-                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        } else if (previous != null && dragOffset < -up / 2f) {
-                                            draft = draft.toMutableList().apply { add(current - 1, removeAt(current)) }; dragOffset += up
-                                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        }
-                                    },
-                                    onDragEnd = { move(provider.id, draft.indexOfFirst { it.id == provider.id }); dragging = null; dragOffset = 0f },
-                                    onDragCancel = { dragging = null; dragOffset = 0f },
-                                )
-                            }.semantics { hideFromAccessibility() }, contentAlignment = Alignment.Center) {
-                                Icon(Icons.Rounded.DragHandle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        },
-                        moveUp = if (index > 0) ({ move(provider.id, index - 1) }) else null,
-                        moveDown = if (index < audiobook.lastIndex) ({ move(provider.id, index + 1) }) else null,
-                        refresh = addon?.let { { run("refresh add-on") { manager.refresh(it.id); "${it.name} refreshed." } } },
-                        remove = addon?.let { { run("remove add-on") { manager.remove(it.id); "${it.name} removed. Reimport its URL to restore it." } } },
-                        busy = working != null,
-                    )
-                }
+            providerRows("provider", providers, audiobookOrder, sources, installed, statuses, connected, working, ::say, ::run, manager)
+            item(key = "ebook-heading") {
+                SectionHeading("Ebook sources", "All sources that are on search together when you find an ebook. This order sets the order of sources there and breaks ties. Ebook websites open inside Narrio when you choose them, and files on this phone are always available.")
             }
-            addonSection("Ebook sources", "Project Gutenberg, companion files, and files on this phone are always available.", installed.filter { it.purpose == "Ebook sources" }, statuses, working, connected,
+            providerRows("ebook-provider", ebookProviders, ebookOrder, ebookSources, installed, statuses, connected, working, ::say, ::run, manager)
+            addonSection("Ebook websites", null, installed.filter { it.purpose == "Ebook sources" && !it.source }, statuses, working, connected,
                 toggle = { addon, value -> run("save add-on") { manager.enable(addon.id, value); "${addon.name} ${if (value) "on" else "off"}." } },
                 refresh = { addon -> run("refresh add-on") { manager.refresh(addon.id); "${addon.name} refreshed." } },
                 remove = { addon -> run("remove add-on") { manager.remove(addon.id); "${addon.name} removed. Reimport its URL to restore it." } })
@@ -190,11 +133,13 @@ private fun SectionHeading(title: String, help: String) {
     }
 }
 
+/** [help] null lists the add-ons under the section above, without a heading or an empty message. */
 private fun androidx.compose.foundation.lazy.LazyListScope.addonSection(
-    title: String, help: String, addons: List<InstalledAddon>, statuses: Map<String, String>, working: String?, connected: Boolean,
+    title: String, help: String?, addons: List<InstalledAddon>, statuses: Map<String, String>, working: String?, connected: Boolean,
     toggle: (InstalledAddon, Boolean) -> Unit, refresh: (InstalledAddon) -> Unit, remove: (InstalledAddon) -> Unit,
 ) {
-    item(key = "heading:$title") { SectionHeading(title, help) }
+    if (help == null) { if (addons.isEmpty()) return }
+    else item(key = "heading:$title") { SectionHeading(title, help) }
     if (addons.isEmpty()) item(key = "empty:$title") { Text("No add-ons installed for ${title.lowercase()}.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     items(addons, key = { "addon:${title}:${it.id}" }) { addon ->
         SourceRow(
@@ -209,10 +154,90 @@ private fun androidx.compose.foundation.lazy.LazyListScope.addonSection(
     }
 }
 
+/** Reordering moves a local copy while the finger is down; the order is saved once, when it lifts. */
+private class ReorderState {
+    var dragging by mutableStateOf<String?>(null)
+    var dragOffset by mutableFloatStateOf(0f)
+    var draft by mutableStateOf<List<SourceProvider>>(emptyList())
+    val heights = mutableStateMapOf<String, Int>()
+}
+
+/** One reorderable list of sources: a switch per row, a drag handle, and Move up/down in the menu and for TalkBack. */
+private fun androidx.compose.foundation.lazy.LazyListScope.providerRows(
+    key: String, providers: List<SourceProvider>, order: ReorderState, sources: SourceProviderSettings, installed: List<InstalledAddon>,
+    statuses: Map<String, String>, connected: Boolean, working: String?, say: (String) -> Unit, run: (String, suspend () -> String) -> Unit, manager: AddonManager,
+) {
+    fun move(id: String, index: Int) {
+        val name = providers.firstOrNull { it.id == id }?.name ?: return
+        val target = index.coerceIn(0, providers.lastIndex)
+        if (providers.indexOfFirst { it.id == id } == target) return
+        // Source settings invalidate cached results and restart an open search on their own.
+        sources.move(id, target)
+        say("$name moved to ${target + 1} of ${providers.size}.")
+    }
+    val shown = if (order.dragging != null) order.draft else providers
+    items(shown, key = { "$key:${it.id}" }) { provider ->
+        val haptics = LocalHapticFeedback.current
+        val index = shown.indexOf(provider)
+        val lifted = order.dragging == provider.id
+        val addonId = provider.id.removePrefix("addon:").takeIf { provider.kind == SourceProviderKind.ADDON }
+        val addon = installed.firstOrNull { it.id == addonId }
+        Box(Modifier.then(if (lifted) Modifier.zIndex(1f) else Modifier.animateItem())
+            .graphicsLayer { translationY = if (lifted) order.dragOffset else 0f }
+            .onSizeChanged { order.heights[provider.id] = it.height }) {
+            SourceRow(
+                name = provider.name,
+                subtitle = providerSubtitle(provider, addon),
+                status = providerStatus(provider, addon, statuses),
+                warning = if (provider.requiresTorBox && !connected) "Needs TorBox" else null,
+                enabled = provider.enabled,
+                toggleEnabled = working == null && order.dragging == null,
+                onToggle = { value -> sources.setEnabled(provider.id, value); say("${provider.name} ${if (value) "on" else "off"}.") },
+                tag = provider.id,
+                lifted = lifted,
+                handle = {
+                    Box(Modifier.size(48.dp).pointerInput(provider.id) {
+                        detectDragGestures(
+                            onDragStart = { order.draft = providers; order.dragging = provider.id; order.dragOffset = 0f; haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                order.dragOffset += amount.y
+                                val draft = order.draft
+                                val current = draft.indexOfFirst { it.id == provider.id }
+                                val next = draft.getOrNull(current + 1); val previous = draft.getOrNull(current - 1)
+                                val down = next?.let { order.heights[it.id] } ?: 0; val up = previous?.let { order.heights[it.id] } ?: 0
+                                if (next != null && order.dragOffset > down / 2f) {
+                                    order.draft = draft.toMutableList().apply { add(current + 1, removeAt(current)) }; order.dragOffset -= down
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                } else if (previous != null && order.dragOffset < -up / 2f) {
+                                    order.draft = draft.toMutableList().apply { add(current - 1, removeAt(current)) }; order.dragOffset += up
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            },
+                            onDragEnd = { move(provider.id, order.draft.indexOfFirst { it.id == provider.id }); order.dragging = null; order.dragOffset = 0f },
+                            onDragCancel = { order.dragging = null; order.dragOffset = 0f },
+                        )
+                    }.semantics { hideFromAccessibility() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.DragHandle, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                moveUp = if (index > 0) ({ move(provider.id, index - 1) }) else null,
+                moveDown = if (index < shown.lastIndex) ({ move(provider.id, index + 1) }) else null,
+                refresh = addon?.let { { run("refresh add-on") { manager.refresh(it.id); "${it.name} refreshed." } } },
+                remove = addon?.let { { run("remove add-on") { manager.remove(it.id); "${it.name} removed. Reimport its URL to restore it." } } },
+                busy = working != null,
+            )
+        }
+    }
+}
+
 private fun providerSubtitle(provider: SourceProvider, addon: InstalledAddon?): String = when (provider.id) {
     DeviceSourceProviderSettings.ARCHIVE -> "Built in · Free public recordings from LibriVox"
     DeviceSourceProviderSettings.LIBRARY -> "Built in · Recordings already in your TorBox"
     DeviceSourceProviderSettings.TORBOX_SEARCH -> "Built in · Releases TorBox can find"
+    DeviceSourceProviderSettings.RECORDING_FILES -> "Built in · Ebook files that come with a recording"
+    DeviceSourceProviderSettings.TORBOX_EBOOKS -> "Built in · Ebooks already in your TorBox"
+    DeviceSourceProviderSettings.GUTENBERG -> "Built in · Free public-domain ebooks"
     else -> listOfNotNull(if (provider.kind == SourceProviderKind.BUILT_IN) "Built in" else "Add-on",
         addon?.manifest?.text("version")?.takeIf(String::isNotBlank)?.let { "Version $it" }).joinToString(" · ")
 }
