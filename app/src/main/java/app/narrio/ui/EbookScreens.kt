@@ -156,8 +156,11 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                searchLinks: List<EbookSearchLink> = emptyList(), openSearch: (EbookSearchLink) -> Unit = {}) {
     val state = search.takeIf { it.bookId == book.id } ?: EbookSearchState(book.id)
     var removing by remember { mutableStateOf<EbookEdition?>(null) }
-    LaunchedEffect(state.added) { if (state.added != null) dismiss() }
-    ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val close = rememberSheetCloser(sheetState, dismiss)
+    // A successful add slides the sheet away, revealing Read in its place.
+    LaunchedEffect(state.added) { if (state.added != null) close {} }
+    ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = sheetState) {
         val view = LocalView.current
         val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
         SideEffect { (view.parent as? DialogWindowProvider)?.window?.let { window ->

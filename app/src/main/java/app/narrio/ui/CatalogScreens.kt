@@ -49,7 +49,14 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         item(key = "search") {
             OutlinedTextField(query, onValueChange = { vm.search(it) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
                 placeholder = { Text("Search books or authors") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { AnimatedVisibility(query.isNotEmpty(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) { IconButton(onClick = { vm.search("") }) { Icon(Icons.Rounded.Close, "Clear search") } } },
+                // While a typed query loads, the field itself says so; the last results stay readable below it.
+                trailingIcon = { AnimatedVisibility(query.isNotEmpty(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+                    IconButton(onClick = { vm.search("") }) {
+                        Crossfade(catalog.loading, label = "searching") { searching ->
+                            if (searching) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) else Icon(Icons.Rounded.Close, "Clear search")
+                        }
+                    }
+                } },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
                 shape = RoundedCornerShape(14.dp))
             AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
@@ -71,9 +78,12 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             items(4, key = { "skeleton$it" }) { SkeletonBookRow(Modifier.animateItem()) }
         } else if (catalog.books.isNotEmpty()) {
             if (query.isNotBlank()) item(key = "results-title") {
-                Text("${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AnimatedContent(if (catalog.loading) "Searching…" else "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}",
+                    transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
+                    Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
-            items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.open(book) }, Modifier.animateItem()) }
+            items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading)) }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
@@ -82,7 +92,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 fun BookRow(book: Audiobook, open: () -> Unit, modifier: Modifier = Modifier, recording: Boolean = true, extra: (@Composable ColumnScope.() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
-    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = open),
+    val interaction = remember { MutableInteractionSource() }
+    Row(modifier.fillMaxWidth().pressScale(interaction, .985f).clip(RoundedCornerShape(12.dp)).clickable(interaction, LocalIndication.current, onClick = open),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
         BookCover(book, Modifier.width(76.dp).height(112.dp), sharedKey = "cover-${book.id}")
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -175,18 +186,10 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         items(visible, key = { it.bookId }) { entry ->
             val book = remember(entry.bookJson) { entry.book() }
-            var menu by remember { mutableStateOf(false) }
             Column(Modifier.animateItem()) {
-                ShelfRow(entry, book, formatsFor(entry), playing.book?.id == entry.bookId && playing.playing, { vm.continueBook(entry) }, { vm.open(book) })
+                ShelfRow(entry, book, formatsFor(entry), playing.book?.id == entry.bookId && playing.playing, { vm.continueBook(entry) }, { vm.open(book) }) { remove = book }
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                    Box {
-                        IconButton({ menu = true }) { Icon(Icons.Rounded.MoreHoriz, "More for ${book.title}") }
-                        DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem(text = { Text("Remove from shelf") }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) }, onClick = { menu = false; remove = book })
-                        }
-                    }
-                }
+                Spacer(Modifier.height(20.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
@@ -197,17 +200,27 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, resume: () -> Unit, details: () -> Unit) {
+private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, resume: () -> Unit, details: () -> Unit, removeBook: () -> Unit) {
     val mode = formats.leadingMode
+    var menu by remember { mutableStateOf(false) }
     BookRow(book, details, recording = formats.audio, extra = { FormatMarks(formats, Modifier.padding(top = 2.dp)) }) {
-        when {
-            mode == PositionOrigin.READING -> IconButton(resume) {
-                Icon(Icons.AutoMirrored.Rounded.MenuBook, "${if (formats.lastMode == PositionOrigin.READING) "Continue reading" else "Read"} ${book.title}", tint = MaterialTheme.colorScheme.primary)
+        // Continue and the overflow sit together at the row's edge, so a shelf entry is one line of controls.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            when {
+                mode == PositionOrigin.READING -> IconButton(resume) {
+                    Icon(Icons.AutoMirrored.Rounded.MenuBook, "${if (formats.lastMode == PositionOrigin.READING) "Continue reading" else "Read"} ${book.title}", tint = MaterialTheme.colorScheme.primary)
+                }
+                entry.sourceJson.isNotBlank() -> IconButton(resume) {
+                    Crossfade(nowPlaying, label = "now playing") { live ->
+                        if (live) NarrationPulse(true, Modifier.semantics { contentDescription = "Now playing ${book.title}" })
+                        else Icon(Icons.Rounded.PlayArrow, "Resume ${book.title}", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
-            entry.sourceJson.isNotBlank() -> IconButton(resume) {
-                Crossfade(nowPlaying, label = "now playing") { live ->
-                    if (live) NarrationPulse(true, Modifier.semantics { contentDescription = "Now playing ${book.title}" })
-                    else Icon(Icons.Rounded.PlayArrow, "Resume ${book.title}", tint = MaterialTheme.colorScheme.primary)
+            Box {
+                IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "More for ${book.title}") }
+                DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(text = { Text("Remove from shelf") }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) }, onClick = { menu = false; removeBook() })
                 }
             }
         }

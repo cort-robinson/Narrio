@@ -51,7 +51,9 @@ fun ListeningBookmarksSheet(vm: NarrioViewModel, state: ListeningState, book: Au
                 .map { place -> ListeningBookmark(place, place.text?.let { library?.chapterOf(book.id, it) }) }
         }
     }
-    ModalBottomSheet(onDismissRequest = close, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val leave = rememberSheetCloser(sheetState, close)
+    ModalBottomSheet(onDismissRequest = close, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = sheetState) {
         LazyColumn(contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.heightIn(max = 480.dp).testTag("listening-bookmarks")) {
             item {
                 Text("Bookmarks", style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp))
@@ -67,8 +69,8 @@ fun ListeningBookmarksSheet(vm: NarrioViewModel, state: ListeningState, book: Au
                 val text = place.text
                 val reading = text?.let { readingPlace(it, row.chapter) }
                 val open: (() -> Unit)? = when {
-                    audio != null -> { { vm.jumpBookmark(book.id, audio); close() } }
-                    text != null && readable -> { { close(); vm.readAt(book.id, text) } }
+                    audio != null -> { { leave { vm.jumpBookmark(book.id, audio) } } }
+                    text != null && readable -> { { leave { vm.readAt(book.id, text) } } }
                     else -> null
                 }
                 Row(Modifier.fillMaxWidth().animateItem().testTag("listening-bookmark-row"), verticalAlignment = Alignment.CenterVertically) {

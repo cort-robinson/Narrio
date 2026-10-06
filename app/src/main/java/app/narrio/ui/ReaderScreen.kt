@@ -4,7 +4,6 @@ import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.view.KeyEvent
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -95,7 +94,7 @@ fun ReaderScreen(appVm: NarrioViewModel, bookId: String, onClose: () -> Unit, to
         vm.clearStartJump()
     }
     DisposableEffect(vm) { vm.ensureOpen(); onDispose { vm.release() } }
-    BackHandler { if (together) appVm.back() else onClose() }
+    // Back is handled by the shell (including read-along), so the reader takes part in Predictive Back like every other screen.
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("reader")) {
         when (val current = state) {
             is ReaderState.Ready -> vm.marks.collectAsStateWithLifecycle().value?.let { marks -> ReaderRoom(appVm, vm, current.session, marks, onClose, together, fromListening, startJump) }
@@ -222,7 +221,10 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
                 timeLeft(location)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = quiet) }
             }
         }
-        if (!ready) Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { OpeningBook() }
+        // The opening screen dissolves to reveal the first page rather than cutting away.
+        AnimatedVisibility(!ready, enter = fadeIn(), exit = fadeOut(tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate))) {
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) { OpeningBook() }
+        }
 
         AnimatedVisibility(controls, Modifier.align(Alignment.TopCenter),
             enter = slideInVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) { -it } + fadeIn(),
@@ -270,13 +272,19 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
     if (sheet == "text") ModalBottomSheet({ sheet = null }, containerColor = MaterialTheme.colorScheme.surfaceContainer, scrimColor = Color.Black.copy(alpha = .12f)) {
         TypographySheet(settings, appearance, dark, vm::update, appVm::updateAppearance)
     }
-    if (sheet == "contents") ModalBottomSheet({ sheet = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-        ReaderGuideSheet(marksUi, session, dark, { cursor -> sheet = null; controls = false; controller.jumpTo(cursor) }) {
-            ContentsSheet(session, location, header = false) { place -> sheet = null; controls = false; controller.jumpTo(place) }
+    if (sheet == "contents") {
+        val contentsSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val closeContents = rememberSheetCloser(contentsSheet) { sheet = null }
+        ModalBottomSheet({ sheet = null }, sheetState = contentsSheet, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        ReaderGuideSheet(marksUi, session, dark, { cursor -> closeContents { controls = false; controller.jumpTo(cursor) } }) {
+            ContentsSheet(session, location, header = false) { place -> closeContents { controls = false; controller.jumpTo(place) } }
+        }
         }
     }
     footnote?.let { note ->
-        ModalBottomSheet({ footnote = null }, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        val noteSheet = rememberModalBottomSheetState()
+        val closeNote = rememberSheetCloser(noteSheet) { footnote = null }
+        ModalBottomSheet({ footnote = null }, sheetState = noteSheet, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
             Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 24.dp).testTag("reader-footnote")) {
                 Text("Note", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(10.dp))
@@ -285,8 +293,8 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
                         modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()).padding(18.dp))
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton({ footnote = null; controller.jumpTo(note.target) }) { Text("Go to note") }
-                    TextButton({ footnote = null }) { Text("Done") }
+                    TextButton({ closeNote { controller.jumpTo(note.target) } }) { Text("Go to note") }
+                    TextButton({ closeNote {} }) { Text("Done") }
                 }
             }
         }
