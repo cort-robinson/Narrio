@@ -2,8 +2,6 @@ package app.narrio.data
 
 import app.narrio.domain.*
 import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
-import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -110,27 +108,5 @@ class StreamingAutomaticSelectionTest {
         assertEquals(listOf(uncached.id), loaded)
         assertEquals(listOf(uncached.id), result.recordings.map { it.id })
         assertFalse(SourceQuality.ready(result.recordings.single()))
-    }
-
-    @Test fun torBoxSearchSendsTheAccountKeyAndKeepsOnlyPossibleAudioReleases() = runBlocking {
-        val server = MockWebServer()
-        server.enqueue(MockResponse().setBody("""{"success":true,"data":{"torrents":[
-            {"hash":"${"A".repeat(40)}","raw_title":"Andy Weir - Project Hail Mary [M4B]","magnet":"magnet:?xt=urn:btih:${"a".repeat(40)}","last_known_seeders":12,"size":500,"tracker":"Tracker"},
-            {"hash":"${"b".repeat(40)}","raw_title":"Project Hail Mary 2026 1080p WEB-DL x264","last_known_seeders":900},
-            {"hash":"${"c".repeat(40)}","raw_title":"Andy Weir - Project Hail Mary EPUB","last_known_seeders":40},
-            {"hash":"not-a-hash","raw_title":"Andy Weir - Project Hail Mary"}]}}"""))
-        server.start()
-        try {
-            val search = TorBoxSearchDiscovery(OkHttpClient(), { "test-secret" }, server.url("/").toString())
-            val results = search.search("Project Hail Mary: A Novel")
-            val request = server.takeRequest()
-            assertEquals("Bearer test-secret", request.getHeader("Authorization"))
-            assertEquals(listOf("torrents", "search", "Project Hail Mary: A Novel"), request.requestUrl!!.pathSegments)
-            val only = results.single()
-            assertEquals("knaben:${"a".repeat(40)}", only.id)
-            assertEquals(12, only.seeders); assertEquals(500, only.releaseSizeBytes); assertEquals("knaben", only.provider)
-            assertTrue(TorBoxSearchDiscovery(OkHttpClient(), { null }, server.url("/").toString()).search("Project Hail Mary").isEmpty())
-            assertEquals(1, server.requestCount)
-        } finally { server.shutdown() }
     }
 }

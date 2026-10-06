@@ -11,7 +11,7 @@ enum class SourceProviderKind { BUILT_IN, ADDON }
 
 /**
  * Anything that can contribute listening sources: a built-in source (Internet Archive/LibriVox, the TorBox
- * account library, TorBox search) or an installed audiobook add-on. [order] is the listener's priority: it sets
+ * account library) or an installed audiobook add-on. [order] is the listener's priority: it sets
  * section order and breaks ties when the same release comes from several providers.
  */
 data class SourceProvider(

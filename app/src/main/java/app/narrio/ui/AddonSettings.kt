@@ -212,7 +212,6 @@ private fun androidx.compose.foundation.lazy.LazyListScope.addonSection(
 private fun providerSubtitle(provider: SourceProvider, addon: InstalledAddon?): String = when (provider.id) {
     DeviceSourceProviderSettings.ARCHIVE -> "Built in · Free public recordings from LibriVox"
     DeviceSourceProviderSettings.LIBRARY -> "Built in · Recordings already in your TorBox"
-    DeviceSourceProviderSettings.TORBOX_SEARCH -> "Built in · Releases TorBox can find"
     else -> listOfNotNull(if (provider.kind == SourceProviderKind.BUILT_IN) "Built in" else "Add-on",
         addon?.manifest?.text("version")?.takeIf(String::isNotBlank)?.let { "Version $it" }).joinToString(" · ")
 }
