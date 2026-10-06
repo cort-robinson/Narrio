@@ -242,7 +242,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                 }
             }
             item(key = "best") {
-                BestEbookCard(streamed, pinned, tally, providersById, book, state.adding, busy, openLabel, actions,
+                BestEbookCard(streamed, pinned, tally, providersById, book, state.adding, state.step, busy, openLabel, actions,
                     acceptBetter = { pinned = pinned.accept() }, showSources = { scope.launch { listState.animateScrollToItem(sourcesIndex) } },
                     Modifier.padding(top = 8.dp))
             }
@@ -257,7 +257,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "sources") {
                 Column(Modifier.fillMaxWidth().animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
                     streamed.groups.forEach { group ->
-                        key(group.providerId) { EbookSection(group, streamed, providersById[group.providerId], pinned.shown?.edition?.id, state.adding, busy, connected, actions) }
+                        key(group.providerId) { EbookSection(group, streamed, providersById[group.providerId], pinned.shown?.edition?.id, state.adding, state.step, busy, connected, actions) }
                     }
                 }
             }
@@ -301,7 +301,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tally: SearchTally, providers: Map<String, SourceProvider>, book: Audiobook,
-                          adding: String?, busy: Boolean, openLabel: String, actions: EbookActions, acceptBetter: () -> Unit, showSources: () -> Unit,
+                          adding: String?, step: String, busy: Boolean, openLabel: String, actions: EbookActions, acceptBetter: () -> Unit, showSources: () -> Unit,
                           modifier: Modifier = Modifier) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val shown = pinned.shown
@@ -347,7 +347,10 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         Spacer(Modifier.height(14.dp))
         val button = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         when {
-            shown != null && adding == shown.edition.id -> Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Adding…") }
+            shown != null && adding == shown.edition.id -> Column {
+                Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Adding…") }
+                AddingStep(step, Modifier.padding(top = 8.dp))
+            }
             shown != null -> Button({ actions.addAndOpen(shown.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
             !search.complete && tally.active > 0 -> Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Finding an ebook…") }
             else -> when (ebookNoMatchCopy(search, tally).kind) {
@@ -370,7 +373,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
 private const val SHOWN_EBOOKS = 3
 
 @Composable
-private fun EbookSection(group: EbookGroup, search: StreamedEbookSearch, provider: SourceProvider?, bestId: String?, adding: String?, busy: Boolean,
+private fun EbookSection(group: EbookGroup, search: StreamedEbookSearch, provider: SourceProvider?, bestId: String?, adding: String?, step: String, busy: Boolean,
                          connected: Boolean, actions: EbookActions) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     var showAll by rememberSaveable(group.providerId) { mutableStateOf(false) }
@@ -386,6 +389,11 @@ private fun EbookSection(group: EbookGroup, search: StreamedEbookSearch, provide
             SourceGroupStatus.SEARCHING, SourceGroupStatus.CHECKING -> if (group.editions.isEmpty() && group.possible.isEmpty()) ReleaseSkeleton()
             SourceGroupStatus.FAILED -> {
                 Text(group.message?.takeIf(String::isNotBlank) ?: "This source didn't answer.", style = MaterialTheme.typography.bodySmall, color = muted)
+                group.checkUrl?.let { url ->
+                    TextButton({ actions.openSearch(EbookSearchLink(group.name, url)) }, Modifier.testTag("ebook-check:${group.providerId}"), enabled = !busy) {
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Open browser check")
+                    }
+                }
                 TextButton({ actions.retry(group.providerId) }, Modifier.semantics { contentDescription = "Retry ${group.name}" }.testTag("ebook-retry:${group.providerId}")) {
                     Icon(Icons.Rounded.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Retry")
                 }
@@ -394,7 +402,7 @@ private fun EbookSection(group: EbookGroup, search: StreamedEbookSearch, provide
         }
         val shown = if (showAll) group.editions else group.editions.take(SHOWN_EBOOKS)
         shown.forEach { candidate ->
-            CandidateRow(candidate, best = candidate.id == bestId, adding = adding == candidate.id, enabled = !busy, also = ebookAlsoFoundBy(search, candidate.id)) { actions.add(candidate) }
+            CandidateRow(candidate, best = candidate.id == bestId, adding = adding == candidate.id, step, enabled = !busy, also = ebookAlsoFoundBy(search, candidate.id)) { actions.add(candidate) }
         }
         if (group.editions.size > SHOWN_EBOOKS) TextButton({ showAll = !showAll }) {
             Text(if (showAll) "Show fewer" else "Show all ${group.editions.size} from ${group.name}")
@@ -411,7 +419,7 @@ private fun EbookSection(group: EbookGroup, search: StreamedEbookSearch, provide
                 Column {
                     Text("These might be this book. Check the title and author before adding one.", style = MaterialTheme.typography.bodySmall, color = muted)
                     group.possible.forEach { candidate ->
-                        CandidateRow(candidate, best = false, adding = adding == candidate.id, enabled = !busy, also = ebookAlsoFoundBy(search, candidate.id)) { actions.add(candidate) }
+                        CandidateRow(candidate, best = false, adding = adding == candidate.id, step, enabled = !busy, also = ebookAlsoFoundBy(search, candidate.id)) { actions.add(candidate) }
                     }
                 }
             }
@@ -421,7 +429,7 @@ private fun EbookSection(group: EbookGroup, search: StreamedEbookSearch, provide
 }
 
 @Composable
-private fun CandidateRow(candidate: BookTextSource, best: Boolean, adding: Boolean, enabled: Boolean, also: List<String>, add: () -> Unit) {
+private fun CandidateRow(candidate: BookTextSource, best: Boolean, adding: Boolean, step: String, enabled: Boolean, also: List<String>, add: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClickLabel = "Add this ebook", onClick = add).heightIn(min = 48.dp).padding(vertical = 8.dp)
         .testTag("ebook:${candidate.id}"), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -430,10 +438,17 @@ private fun CandidateRow(candidate: BookTextSource, best: Boolean, adding: Boole
             Text(listOf(candidate.author, candidate.language, candidate.format).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(candidate.attribution.ifBlank { "In this recording's files" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
             if (also.isNotEmpty()) Text("Also found by ${also.joinToString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (adding) AddingStep(step)
         }
         if (adding) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
         else Icon(Icons.Rounded.Add, null, tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** What a slow download is doing, such as waiting for a website's free server; nothing for a quick add. */
+@Composable
+private fun AddingStep(step: String, modifier: Modifier = Modifier) {
+    if (step.isNotBlank()) Text(step, modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 /** Format marks for a shelf row: quiet icons and words, no extra container around the row. */

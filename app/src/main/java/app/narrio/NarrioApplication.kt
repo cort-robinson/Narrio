@@ -61,13 +61,17 @@ class AppGraph(application: Application) {
         phoneRecordings = { offline.books.value.filter { it.complete }.map { it.book.copy(id = it.book.recordingId.ifBlank { it.book.id }, sources = listOf(it.source)) } },
         rankingChanges = offline.books.map { Unit },
         preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() })
+    val annasArchive = AnnasArchive(http, WebViewPages(application))
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks, webEbooks::accountText)
     val streamingEbookSearch: app.narrio.domain.StreamingEbookSearch = ProviderEbookSearch(ebookProviderSettings, { provider ->
         when (provider.id) {
             DeviceSourceProviderSettings.RECORDING_FILES -> RecordingEbookLookup
             DeviceSourceProviderSettings.TORBOX_EBOOKS -> AccountEbookLookup(textFinder)
             DeviceSourceProviderSettings.GUTENBERG -> GutenbergEbookLookup(textFinder)
-            else -> if (provider.kind == app.narrio.domain.SourceProviderKind.ADDON) AddonEbookLookup(textFinder, addons, provider.id.removePrefix("addon:")) else null
+            else -> if (provider.kind != app.narrio.domain.SourceProviderKind.ADDON) null
+                else provider.id.removePrefix("addon:").let { id ->
+                    if (addons.installed.value.any { it.id == id && it.searchedInApp }) AnnasArchiveEbookLookup(annasArchive, addons, id) else AddonEbookLookup(textFinder, addons, id)
+                }
         }
     }, ebookProviderSettings::recordStatus)
     val speechModels = SpeechModelStore(application, http)

@@ -106,7 +106,7 @@ fun AddonSettings(manager: AddonManager, sources: SourceProviderSettings, ebookS
                 SectionHeading("Ebook sources", "All sources that are on search together when you find an ebook. This order sets the order of sources there and breaks ties. Ebook websites open inside Narrio when you choose them, and files on this phone are always available.")
             }
             providerRows("ebook-provider", ebookProviders, ebookOrder, ebookSources, installed, statuses, connected, working, ::say, ::run, manager)
-            addonSection("Ebook websites", null, installed.filter { it.purpose == "Ebook sources" && !it.source }, statuses, working, connected,
+            addonSection("Ebook websites", null, installed.filter { it.purpose == "Ebook sources" && !it.source && !it.searchedInApp }, statuses, working, connected,
                 toggle = { addon, value -> run("save add-on") { manager.enable(addon.id, value); "${addon.name} ${if (value) "on" else "off"}." } },
                 refresh = { addon -> run("refresh add-on") { manager.refresh(addon.id); "${addon.name} refreshed." } },
                 remove = { addon -> run("remove add-on") { manager.remove(addon.id); "${addon.name} removed. Reimport its URL to restore it." } })

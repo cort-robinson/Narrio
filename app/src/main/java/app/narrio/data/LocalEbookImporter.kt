@@ -26,11 +26,14 @@ class LocalEbookImporter(
                 "text/plain" -> "TXT"
                 else -> null
             }
-            if (format !in setOf("EPUB", "TXT")) throw EbookImportException(EbookImportFailure.UNSUPPORTED,
+            val unnamed = format == null && EbookWebAcquisition.undetermined(name, resolver.getType(uri).orEmpty())
+            if (format !in setOf("EPUB", "TXT") && !unnamed) throw EbookImportException(EbookImportFailure.UNSUPPORTED,
                 unsupportedEbook(name))
             val bytes = resolver.openInputStream(uri)?.use { BookTextParser.readBounded(it) }
                 ?: throw EbookImportException(EbookImportFailure.UNREADABLE, "This file couldn't be opened. Choose it again.")
-            Triple(bytes, format!!, name.substringBeforeLast('.').ifBlank { "Imported book" })
+            // A website download saved as ".bin" is still an EPUB when its contents say so.
+            val detected = format ?: BookTextParser.detect(bytes) ?: throw EbookImportException(EbookImportFailure.UNSUPPORTED, unsupportedEbook(name))
+            Triple(bytes, detected, name.substringBeforeLast('.').ifBlank { "Imported book" })
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: EbookImportException) { throw error }
         catch (error: Exception) { throw EbookImportException(EbookImportFailure.UNREADABLE, error.message ?: "This file couldn't be opened.") }

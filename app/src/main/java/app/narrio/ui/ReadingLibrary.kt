@@ -20,8 +20,8 @@ interface ReadingLibrary {
     suspend fun importBook(uri: Uri): Audiobook
     /** Adds an EPUB or TXT file to [book] as an edition. */
     suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition
-    /** Adds a found ebook to [book] as an edition. */
-    suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition
+    /** Adds a found ebook to [book] as an edition; [step] describes a download that takes a while. */
+    suspend fun addEdition(book: Audiobook, candidate: BookTextSource, step: (String) -> Unit = {}): EbookEdition
     /** Acquires a user-initiated website download, trying TorBox before the browser session. */
     suspend fun downloadWebsiteEbook(book: Audiobook, request: EbookDownloadRequest, connected: Boolean, step: (String) -> Unit): EbookEdition =
         throw ProviderException("Website ebook downloads are unavailable.")
@@ -94,7 +94,14 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
 
     override suspend fun importBook(uri: Uri): Audiobook = graph.ebookImporter.import(uri)
     override suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition = graph.ebookImporter.importEdition(uri, book)
-    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition {
+    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource, step: (String) -> Unit): EbookEdition {
+        // Anna's Archive gives no lasting file link, so a download is found when the reader chooses the result.
+        if (candidate.provider == AnnasArchive.PROVIDER) {
+            val downloaded = graph.webEbookAcquisition.acquire(graph.annasArchive.download(candidate, step), connected = false, step)
+            step("Adding this ebook to your library")
+            val document = graph.followAlong.importDownloaded(downloaded.bytes, downloaded.format, book, downloaded.attribution, downloaded.provider)
+            return graph.editionFiles.editions(book.id).first { it.id == document.id }
+        }
         val doc = graph.followAlong.fetch(candidate, book, "", "")
         return graph.editionFiles.editions(book.id).first { it.id == doc.id }
     }

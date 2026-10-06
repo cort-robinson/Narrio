@@ -6,8 +6,11 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** One ebook source. [found] keeps what it reached even when part of the lookup failed with [failure]. */
-data class EbookLookupResult(val found: List<EbookCandidate>, val failure: String? = null)
+/**
+ * One ebook source. [found] keeps what it reached even when part of the lookup failed with [failure]; [checkUrl] is a
+ * website page where the reader can pass a browser check the source couldn't pass by itself.
+ */
+data class EbookLookupResult(val found: List<EbookCandidate>, val failure: String? = null, val checkUrl: String? = null)
 
 interface EbookLookup {
     suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult
@@ -120,7 +123,7 @@ class ProviderEbookSearch(
             mutex.withLock {
                 raw[provider.id] = result.found.distinctBy { identity(it.source) }
                 groups[provider.id] = groups.getValue(provider.id).copy(status = if (result.failure == null) SourceGroupStatus.DONE else SourceGroupStatus.FAILED,
-                    message = result.failure, elapsedMs = now() - started)
+                    message = result.failure, elapsedMs = now() - started, checkUrl = result.checkUrl)
                 recordStatus(provider.id, result.failure ?: "Done · ${result.found.count { it.confidence == MatchConfidence.STRONG }} matches")
                 publish()
             }

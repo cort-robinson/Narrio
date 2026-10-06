@@ -22,22 +22,26 @@ class EbookWebAcquisition(
 
     suspend fun acquire(request: EbookDownloadRequest, connected: Boolean, step: (String) -> Unit): DownloadedWebEbook {
         validate(request.url)
+        // An unnamed or ".bin" download is checked by its contents once it arrives.
         val format = format(request.fileName, request.mimeType)
-            ?: throw ProviderException("Choose an EPUB or text download. PDF, Kindle, and other file types cannot be opened.")
+        if (format == null && !undetermined(request.fileName, request.mimeType))
+            throw ProviderException("Choose an EPUB or text download. PDF, Kindle, and other file types cannot be opened.")
         if (connected) {
             try {
                 val source = torboxAcquire(request.url, step)
                 val url = torboxResolve(source)
                 step("Saving the TorBox ebook on this phone")
-                return DownloadedWebEbook(download(request.copy(url = url, cookie = "", referrer = ""), source.format), source.format, "${request.sourceName} via TorBox", "torbox-web")
+                return DownloadedWebEbook(download(request.copy(url = url, cookie = "", referrer = ""), source.format).first, source.format, "${request.sourceName} via TorBox", "torbox-web")
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (pending: WebEbookPendingException) { throw pending }
             catch (_: Exception) { step("TorBox couldn't handle this link. Using the website download") }
         } else step("Saving the website ebook on this phone")
-        return DownloadedWebEbook(download(request, format), format, "${request.sourceName} website download", "web")
+        val (bytes, detected) = download(request, format)
+        return DownloadedWebEbook(bytes, detected, "${request.sourceName} website download", "web")
     }
 
-    private suspend fun download(original: EbookDownloadRequest, format: String): ByteArray = withContext(Dispatchers.IO) {
+    /** The file and its format: [declared] when the link named one, otherwise what its bytes are. */
+    private suspend fun download(original: EbookDownloadRequest, declared: String?): Pair<ByteArray, String> = withContext(Dispatchers.IO) {
         val originalUrl = original.url.toHttpUrl()
         var url = originalUrl
         repeat(6) {
@@ -68,8 +72,10 @@ class EbookWebAcquisition(
                     val prefix = bytes.take(512).toByteArray().toString(Charsets.UTF_8).trimStart('\uFEFF', ' ', '\n', '\r', '\t')
                     if (prefix.startsWith("<!doctype html", true) || prefix.startsWith("<html", true))
                         throw ProviderException("This link returned a web page. Complete its verification and tap the final ebook download.")
+                    val format = declared ?: BookTextParser.detect(bytes)
+                        ?: throw ProviderException("This download isn't an EPUB or text ebook. PDF, Kindle, and other file types cannot be opened.")
                     BookTextParser.parse(bytes, format, "Downloaded ebook")
-                    return@withContext bytes
+                    return@withContext bytes to format
                 }
             }
         }
@@ -91,6 +97,12 @@ class EbookWebAcquisition(
             mime.substringBefore(';').trim().equals("application/epub+zip", true) -> "EPUB"
             mime.substringBefore(';').trim().equals("text/plain", true) -> "TXT"
             else -> null
+        }
+        /** Generic names and types that say nothing about the file, so its contents decide. */
+        internal fun undetermined(name: String, mime: String): Boolean {
+            val extension = name.substringAfterLast('.', "").lowercase()
+            val type = mime.substringBefore(';').trim().lowercase()
+            return extension in setOf("", "bin", "dat", "tmp", "download", "zip") && type in setOf("", "application/octet-stream", "binary/octet-stream", "application/zip", "application/x-zip-compressed", "application/download", "application/force-download")
         }
     }
 }

@@ -12,6 +12,8 @@ data class InstalledAddon(val manifest: JsonObject, val manifestUrl: String, val
     val catalog get() = "catalog" in (manifest["provides"] as? JsonArray).orEmpty().map { it.stringValue() }
     val source get() = "source" in (manifest["provides"] as? JsonArray).orEmpty().map { it.stringValue() }
     val ebookSearch get() = "ebook-search" in (manifest["provides"] as? JsonArray).orEmpty().map { it.stringValue() }
+    /** A website Narrio searches and downloads from itself, listed with the ebook sources rather than opened. */
+    val searchedInApp get() = ebookSearch && id == AnnasArchive.ADDON_ID
     val purpose get() = if (catalog) "Book metadata" else if (contentType == "ebook") "Ebook sources" else "Audiobook sources"
 }
 

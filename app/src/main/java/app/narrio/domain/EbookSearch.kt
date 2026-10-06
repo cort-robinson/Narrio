@@ -22,6 +22,8 @@ data class EbookGroup(
     val alsoFoundBy: Map<String, List<String>> = emptyMap(),
     val message: String? = null,
     val elapsedMs: Long = 0,
+    /** A website page where the reader can pass the browser check this source couldn't pass by itself. */
+    val checkUrl: String? = null,
 )
 
 /** Why the best ebook was chosen; the UI words these for readers. */
