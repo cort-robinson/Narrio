@@ -8,7 +8,7 @@ New bundled providers are installed once on upgrade. Existing disabled settings 
 
 ## Discovery and delivery
 
-Catalog add-ons identify books without checking TorBox or creating playable recordings. Browsing categories use Apple's audiobook charts first and catalog add-on search only as a fallback; typed search always uses catalog add-ons. Narrio still collapses metadata by title and author, uses Google Books as a built-in supplementary fallback, and hydrates selected Open Library works when descriptions are needed. Search and enrichment use enabled catalog definitions. Saved descriptive fields remain available after disabling a provider.
+Catalog add-ons identify books without checking TorBox or creating playable recordings. Browsing categories use Apple's audiobook charts and typed searches use Apple's audiobook search first; catalog add-on search fills gaps when Apple returns few books or is unavailable. Narrio still collapses metadata by title and author, uses Google Books as a built-in supplementary fallback, and hydrates selected Open Library works when descriptions are needed. Search and enrichment use enabled catalog definitions. Saved descriptive fields remain available after disabling a provider.
 
 Audio source add-ons run during book-detail source discovery when TorBox is connected. Mapped torrent hashes enter the existing matching, cache, and file-verification pipeline. Remote `debridCache` hints never establish availability. Narrio verifies availability through the listener's TorBox account. Uncached torrents still require explicit preparation; source discovery does not add them to the account. Narrator/language hints are provider claims, not playback verification.
 

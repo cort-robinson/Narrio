@@ -26,13 +26,47 @@ class BookMetadataTest {
     }"""
     private fun server(block: suspend (MockWebServer, BookMetadata) -> Unit) = runBlocking {
         val server = MockWebServer(); server.start()
-        try { block(server, BookMetadata(OkHttpClient(), server.url("/audible/").toString(), server.url("/library/").toString(), { 10_000 })) }
+        try { block(server, BookMetadata(OkHttpClient(), server.url("/audible/").toString(), server.url("/library/").toString(), { 10_000 }, appleUrl = server.url("/apple/").toString())) }
         finally { server.shutdown() }
     }
     private fun audible(server: MockWebServer, vararg products: String) {
         server.enqueue(MockResponse().setBody("""{"products":[${products.joinToString(",")}]}"""))
     }
     private fun noLibraryMatch(server: MockWebServer) { server.enqueue(MockResponse().setBody("""{"docs":[]}""")) }
+
+    @Test fun audibleBannerArtIsReplacedByTheEbookCoverOnceAndRemembered() = server { server, metadata ->
+        audible(server, product().replace("\"content_type\"", "\"publisher_name\":\"Audible Studios\",\"content_type\"")
+            .replace("https://images.example/1024.jpg", "https://m.media-amazon.com/images/I/banner._SL1024_.jpg"))
+        server.enqueue(MockResponse().setBody("""{"results":[
+            {"kind":"ebook","trackName":"Project Hail Mary: A Novel","artistName":"Other Writer","artworkUrl100":"https://art.example/wrong/100x100bb.jpg"},
+            {"kind":"ebook","trackName":"Project Hail Mary (Italian edition)","artistName":"Andy Weir","artworkUrl100":"https://art.example/italian/100x100bb.jpg"},
+            {"kind":"ebook","trackName":"Project Hail Mary: A Novel","artistName":"Andy Weir","artworkUrl100":"https://art.example/phm/100x100bb.jpg"}]}"""))
+        val result = metadata.enrich(release())
+        assertEquals("https://art.example/phm/600x600bb.jpg", result.coverUrl)
+        server.takeRequest()
+        val search = server.takeRequest().requestUrl!!
+        assertEquals("/apple/search", search.encodedPath); assertEquals("Andy Weir", search.queryParameter("term"))
+        assertEquals("authorTerm", search.queryParameter("attribute")); assertEquals("ebook", search.queryParameter("entity"))
+        val branded = BookDetails("Project Hail Mary", listOf("Andy Weir"), emptyList(), "", "https://m.media-amazon.com/x.jpg", "", "Audible", "", "Audible Studios")
+        val clean = metadata.unbranded(branded)!!
+        assertEquals("https://art.example/phm/600x600bb.jpg", clean.coverUrl); assertFalse(clean.brandedCover)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun failedCoverLookupKeepsStoreArtAndIsNotRemembered() = server { server, metadata ->
+        val branded = BookDetails("Hopeless", listOf("Colleen Hoover"), emptyList(), "", "https://m.media-amazon.com/x.jpg", "", "Audible", "", "Audible Studios")
+        server.enqueue(MockResponse().setResponseCode(403))
+        assertNull(metadata.unbranded(branded))
+        server.enqueue(MockResponse().setBody("""{"results":[{"trackName":"Hopeless","artistName":"Colleen Hoover","artworkUrl100":"https://art.example/h/100x100bb.jpg"}]}"""))
+        assertEquals("https://art.example/h/600x600bb.jpg", metadata.unbranded(branded)?.coverUrl)
+    }
+
+    @Test fun onlyAudibleProducedArtCountsAsBranded() {
+        fun details(publisher: String) = BookDetails("Book", listOf("Author"), emptyList(), "", "https://covers.example/a.jpg", "", "Audible", "", publisher)
+        assertTrue(details("Audible Originals").brandedCover)
+        assertTrue(details("Pottermore Publishing and Audible Studios").brandedCover)
+        assertFalse(details("Macmillan Audio").brandedCover)
+    }
 
     @Test fun matchingCatalogEnrichesAllFieldsWithoutChangingPlayableIdentity() = server { server, metadata ->
         audible(server, product())
