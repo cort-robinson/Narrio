@@ -15,7 +15,7 @@ class BookCatalog(
     private val now: () -> Long = System::currentTimeMillis,
     private val addonSearch: (suspend (String) -> List<BookDetails>)? = null,
     private val addonRevision: () -> Int = { 0 },
-    private val charts: AudiobookCharts? = null,
+    private val apple: AppleBooks? = null,
 ) {
     private data class Cached(val books: List<Audiobook>, val expires: Long)
     private val cache = object : LinkedHashMap<String, Cached>(32, .75f, true) {
@@ -30,24 +30,33 @@ class BookCatalog(
         suspend fun read(block: suspend () -> List<BookDetails>) = try { block() }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { failed = true; emptyList() }
-        if (terms.isBlank() && charts != null) {
-            val popular = collapse(read { charts.popular(category) }, now())
-            val books = popular.filter { it.description.isNotBlank() && it.coverUrl.isNotBlank() }.ifEmpty { popular }
-            if (books.size >= MIN_POPULAR) {
-                synchronized(cache) { cache[key] = Cached(books, now() + 6 * 60 * 60_000L) }
-                return books
-            }
-        }
-        val browseTerm = when (category) { "Wonder" -> "fantasy"; "All" -> "bestsellers"; else -> category.lowercase(Locale.ROOT) }
-        var candidates = read { addonSearch?.invoke(terms.ifBlank { browseTerm }) ?: metadata.audible(terms.ifBlank { browseTerm }, 50) }
-        // Keyword browsing is only a fallback; store exclusives rarely have another listening source.
-        if (terms.isBlank()) candidates = candidates.filterNot { it.publisher.equals(STORE_EXCLUSIVE, ignoreCase = true) }
         fun relevant(book: BookDetails): Boolean {
             if (terms.isBlank()) return true
             val text = " ${BookIdentity.normalize(book.title + " " + book.authors.joinToString(" "))} "
             return BookIdentity.normalize(terms).split(' ').filter { it.isNotBlank() }.all { " $it " in text }
         }
-        candidates = candidates.filter(::relevant)
+        if (terms.isBlank() && apple != null) {
+            val (found, covered) = unbranded(read { apple.popular(category) })
+            val popular = collapse(found, now())
+            val books = popular.filter { it.description.isNotBlank() && it.coverUrl.isNotBlank() }.ifEmpty { popular }
+            if (books.size >= MIN_BOOKS) {
+                synchronized(cache) { cache[key] = Cached(books, now() + if (covered) 6 * 60 * 60_000L else RETRY_MS) }
+                return books
+            }
+        }
+        val browseTerm = when (category) { "Wonder" -> "fantasy"; "All" -> "bestsellers"; else -> category.lowercase(Locale.ROOT) }
+        // Apple's catalog leads typed searches: it lists widely published recordings, which listening sources usually carry.
+        var appleFailed = false
+        var candidates = if (terms.isNotBlank() && apple != null) {
+            try { apple.search(terms) } catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { appleFailed = true; emptyList() }
+        } else emptyList()
+        // The Audible catalog fills gaps, such as store exclusives and smaller series.
+        if (candidates.size < MIN_BOOKS) {
+            var store = read { addonSearch?.invoke(terms.ifBlank { browseTerm }) ?: metadata.audible(terms.ifBlank { browseTerm }, 50) }
+            // Keyword browsing is only a fallback; store exclusives rarely have another listening source.
+            if (terms.isBlank()) store = store.filterNot { it.publisher.equals(STORE_EXCLUSIVE, ignoreCase = true) }
+            candidates += store.filter(::relevant)
+        }
         if (candidates.isEmpty() || candidates.any { it.description.isBlank() || it.coverUrl.isBlank() }) {
             candidates += read { google(terms, category, browseTerm) }.filter(::relevant)
         }
@@ -59,14 +68,31 @@ class BookCatalog(
                 candidates += metadata.libraryDetails(work)
             }
         }
-        val all = collapse(candidates, now())
+        val (found, covered) = unbranded(candidates)
+        val all = collapse(found, now())
         val books = all.filter { it.description.isNotBlank() && it.coverUrl.isNotBlank() }.ifEmpty { all }
-        if (books.isEmpty() && failed) throw ProviderException("Book metadata is unavailable. Try again shortly, or listen from your saved shelf.")
-        if (books.isNotEmpty() || !failed) synchronized(cache) {
-            // A browse fallback stands in for unavailable charts only briefly.
-            cache[key] = Cached(books, now() + if (books.isEmpty() || (terms.isBlank() && charts != null)) 5 * 60_000 else 24 * 60 * 60_000L)
+        if (books.isEmpty() && (failed || appleFailed)) throw ProviderException("Book metadata is unavailable. Try again shortly, or listen from your saved shelf.")
+        if (books.isNotEmpty() || !(failed || appleFailed)) synchronized(cache) {
+            // A browse fallback stands in for unavailable charts only briefly, as do results missing Apple or clean covers.
+            val brief = books.isEmpty() || (terms.isBlank() && apple != null) || appleFailed || !covered
+            cache[key] = Cached(books, now() + if (brief) RETRY_MS else 24 * 60 * 60_000L)
         }
         return books
+    }
+
+    /**
+     * Books whose only covers carry Audible's banner use their ebook's cover: one lookup per author, a few authors per list.
+     * The flag reports whether every lookup completed, so a list with failed lookups is retried soon.
+     */
+    private suspend fun unbranded(candidates: List<BookDetails>): Pair<List<BookDetails>, Boolean> = coroutineScope {
+        fun branded(book: BookDetails) = book.brandedCover && book.coverUrl.isNotBlank()
+        val needed = candidates.groupBy(::identity).values
+            .filter { books -> books.any(::branded) && books.none { it.coverUrl.isNotBlank() && !it.brandedCover } }.map { it.first(::branded) }
+        val lookups = needed.groupBy { BookIdentity.authors(it.authors.first()) }.values.take(MAX_AUTHOR_LOOKUPS)
+            .map { books -> async { metadata.unbranded(books) } }.awaitAll()
+        val covers = lookups.filterNotNull().flatten().filterNot { it.brandedCover }.associate { identity(it) to it.coverUrl }
+        candidates.map { book -> covers[identity(book)]?.takeIf { branded(book) }?.let { book.copy(coverUrl = it, brandedCover = false) } ?: book } to
+            lookups.none { it == null }
     }
 
     private suspend fun google(query: String, category: String, browseTerm: String): List<BookDetails> {
@@ -87,19 +113,25 @@ class BookCatalog(
     }
 
     companion object {
-        private const val MIN_POPULAR = 8
+        private const val MIN_BOOKS = 8
+        private const val RETRY_MS = 5 * 60_000L
         private const val STORE_EXCLUSIVE = "Audible Originals"
+        // Apple allows about 20 requests a minute.
+        private const val MAX_AUTHOR_LOOKUPS = 4
+
+        private fun identity(book: BookDetails) = BookIdentity.key(book.title, book.authors.joinToString(", "))
 
         internal fun collapse(candidates: List<BookDetails>, updatedAt: Long): List<Audiobook> = candidates
             .filter { it.title.isNotBlank() && it.authors.isNotEmpty() }
-            .groupBy { BookIdentity.key(it.title, it.authors.joinToString(", ")) }
+            .groupBy(::identity)
             .map { (identity, editions) ->
                 val chosen = editions.maxBy { (if (it.description.isNotBlank()) 2 else 0) + (if (it.coverUrl.isNotBlank()) 1 else 0) }
+                val covers = (listOf(chosen) + editions).filter { it.coverUrl.isNotBlank() }
                 val narrators = editions.map { it.narrators }.distinct().singleOrNull().orEmpty()
                 Audiobook("catalog:$identity", BookIdentity.title(chosen.title), chosen.authors.joinToString(", "),
                     narrator = narrators.joinToString(", ").ifBlank { "Narrator depends on source" },
                     language = "Language depends on source", description = chosen.description.ifBlank { editions.firstOrNull { it.description.isNotBlank() }?.description.orEmpty() },
-                    coverUrl = chosen.coverUrl.ifBlank { editions.firstOrNull { it.coverUrl.isNotBlank() }?.coverUrl.orEmpty() },
+                    coverUrl = (covers.firstOrNull { !it.brandedCover } ?: covers.firstOrNull())?.coverUrl.orEmpty(),
                     provider = "catalog", detailsLoaded = true, metadataSource = chosen.provider, metadataUrl = chosen.url,
                     metadataUpdatedAtMs = updatedAt, narratorFromCatalog = narrators.isNotEmpty())
             }.sortedByDescending { (if (it.description.isNotBlank()) 2 else 0) + (if (it.coverUrl.isNotBlank()) 1 else 0) }

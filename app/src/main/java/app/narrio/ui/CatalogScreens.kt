@@ -26,7 +26,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.narrio.data.AudiobookCharts
+import app.narrio.data.AppleBooks
 import app.narrio.data.ShelfEntry
 import app.narrio.domain.*
 
@@ -62,7 +62,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 shape = RoundedCornerShape(14.dp))
             AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 LazyRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(AudiobookCharts.genres.keys.toList()) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
+                    items(AppleBooks.genres.keys.toList()) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
                         leadingIcon = { AnimatedVisibility(category == it, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } }) }
                 }
             }

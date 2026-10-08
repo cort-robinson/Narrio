@@ -6,10 +6,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.time.OffsetDateTime
 
 /**
- * Popular books for browsing. Store-wide audiobook charts favor widely published recordings, which listening
- * sources usually carry, over store exclusives. A chart entry still never implies an available recording.
+ * Apple's public book catalog: store-wide audiobook charts for browsing and audiobook search. Its catalog favors widely
+ * published recordings, which listening sources usually carry, over store exclusives. An entry never implies an
+ * available recording. Apple allows roughly 20 requests a minute, so callers cache results.
  */
-class AudiobookCharts(
+class AppleBooks(
     private val metadata: BookMetadata,
     private val baseUrl: String = "https://itunes.apple.com/",
     private val now: () -> Long = System::currentTimeMillis,
@@ -26,7 +27,7 @@ class AudiobookCharts(
             val released = row.objectAt("im:releaseDate")?.text("label").orEmpty()
             val releasedAt = runCatching { OffsetDateTime.parse(released).toInstant().toEpochMilli() }.getOrNull()
             // Preorders have no recording anywhere yet.
-            if (!id.matches(Regex("[0-9]{1,15}")) || name.isBlank() || artist.isBlank() || excluded(name) || (releasedAt ?: 0) > now()) null
+            if (!id.matches(Regex("[0-9]{1,15}")) || name.isBlank() || artist.isBlank() || excluded(name) || translated(name, artist) || (releasedAt ?: 0) > now()) null
             else Entry(id, name, artist, (row["im:image"] as? JsonArray)?.lastOrNull()?.let { (it as? JsonObject)?.text("label") }.orEmpty(),
                 releasedAt != null && now() - releasedAt < NEW_RELEASE_MS)
         }.sortedBy { it.new } // Listening sources take a while to carry brand-new releases; list them after established books.
@@ -42,7 +43,26 @@ class AudiobookCharts(
             val match = found[entry.id]
             BookDetails(title(match?.text("collectionName").orEmpty().ifBlank { entry.name }), authors(match?.text("artistName").orEmpty().ifBlank { entry.artist }),
                 emptyList(), MetadataText.clean(match?.text("description").orEmpty()),
-                artwork(match?.text("artworkUrl100").orEmpty().ifBlank { entry.image }), "", SOURCE, "https://books.apple.com/us/audiobook/id${entry.id}")
+                artwork(match?.text("artworkUrl100").orEmpty().ifBlank { entry.image }), "", SOURCE, link(entry.id),
+                publisher(match?.text("copyright").orEmpty()))
+        }.filter { it.title.isNotBlank() && it.authors.isNotEmpty() }
+    }
+
+    /**
+     * Audiobook search with descriptions and artwork in one request. Every search word must appear in the store title
+     * or author; the store title keeps the series name that the shown title drops.
+     */
+    suspend fun search(terms: String): List<BookDetails> {
+        val words = BookIdentity.normalize(terms).split(' ').filter(String::isNotBlank)
+        val url = "${baseUrl}search".toHttpUrl().newBuilder().addQueryParameter("term", terms).addQueryParameter("media", "audiobook")
+            .addQueryParameter("entity", "audiobook").addQueryParameter("country", "us").addQueryParameter("limit", "50").build()
+        return metadata.get(url).objects("results").mapNotNull { result ->
+            val id = result.number("collectionId").toString()
+            val name = result.text("collectionName")
+            val text = " ${BookIdentity.normalize(name + " " + result.text("artistName"))} "
+            if (id == "0" || name.isBlank() || excluded(name) || translated(name, result.text("artistName")) || words.any { " $it " !in text }) null
+            else BookDetails(title(name), authors(result.text("artistName")), emptyList(), MetadataText.clean(result.text("description")),
+                artwork(result.text("artworkUrl100")), "", SOURCE, link(id), publisher(result.text("copyright")))
         }.filter { it.title.isNotBlank() && it.authors.isNotEmpty() }
     }
 
@@ -58,9 +78,26 @@ class AudiobookCharts(
 
         private val parts = Regex("(?i)\\bdramati[sz]ed\\b|\\(\\s*\\d+ of \\d+\\s*\\)")
         private val marketing = Regex("(?i)^(?:an? |the )?(?:[\\w'’&.-]+ ){0,4}(?:novel|novella|memoir|thriller|mystery|romance)$|book club|\\b(?:sequel|prequel|companion) to\\b|\\b(?:book|volume|vol|part)\\.? ?\\d+$")
+        private val translator = Regex("(?i)\\b(?:translator|traductor|traductora|traducteur|traduttore|traduttrice|übersetzer|übersetzerin)\\b")
+        private val foreignSeries = Regex("(?i)\\b(?:libro|tomo|tome|band|teil|livro|deel)\\s+\\d")
+        private val translation = Regex("(?i)\\([^)]*\\b(?:edition|version|ausgabe|edición|édition)\\)")
 
         /** Multi-part and dramatized adaptations are different recordings from the book itself. */
         internal fun excluded(name: String) = parts.containsMatchIn(name)
+
+        /** The US store also sells translated recordings, which credit a translator or carry a translated series label. */
+        internal fun translated(name: String, artist: String) =
+            translator.containsMatchIn(artist) || otherEdition(name) || foreignSeries.containsMatchIn(name)
+
+        /** A translated or special edition's cover is not the listener's book. */
+        internal fun otherEdition(name: String) = translation.containsMatchIn(name)
+
+        /**
+         * Ebook art named by a non-English ISBN belongs to a translation; ebook art kept with audio artwork is the
+         * audiobook's cover again. English ISBNs start 978-0, 978-1, or 979-8.
+         */
+        internal fun plainEbookArt(url: String) = "/Music" !in url &&
+            Regex("/(97[89]\\d{10})\\.[a-z]+/").find(url)?.groupValues?.get(1)?.let { isbn -> listOf("9780", "9781", "9798").any(isbn::startsWith) } != false
 
         /** Store titles add series, award, and marketing labels; keep the book's own title and real subtitles. */
         internal fun title(name: String): String {
@@ -73,6 +110,11 @@ class AudiobookCharts(
         internal fun authors(artist: String) = artist.split(Regex("\\s+&\\s+")).map(String::trim).filter(String::isNotBlank)
 
         internal fun artwork(url: String) = url.takeIf { it.startsWith("https://") }?.replace(Regex("/\\d+x\\d+bb\\.(jpg|png)$"), "/600x600bb.$1").orEmpty()
+
+        /** "℗ 2013 Audible Studios" names the recording's producer. */
+        internal fun publisher(copyright: String) = copyright.replace(Regex("^\\s*(?:[℗©]|\\([PC]\\))?\\s*\\d{4}\\s*"), "").trim()
+
+        private fun link(id: String) = "https://books.apple.com/us/audiobook/id$id"
 
         private fun JsonObject.objectAt(key: String) = this[key] as? JsonObject
     }
