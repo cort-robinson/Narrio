@@ -8,7 +8,7 @@ New bundled providers are installed once on upgrade. Existing disabled settings 
 
 ## Discovery and delivery
 
-Catalog add-ons identify books without checking TorBox or creating playable recordings. Narrio still collapses metadata by title and author, uses Google Books as a built-in supplementary fallback, and hydrates selected Open Library works when descriptions are needed. Search and enrichment use enabled catalog definitions. Saved descriptive fields remain available after disabling a provider.
+Catalog add-ons identify books without checking TorBox or creating playable recordings. Browsing categories use Apple's audiobook charts first and catalog add-on search only as a fallback; typed search always uses catalog add-ons. Narrio still collapses metadata by title and author, uses Google Books as a built-in supplementary fallback, and hydrates selected Open Library works when descriptions are needed. Search and enrichment use enabled catalog definitions. Saved descriptive fields remain available after disabling a provider.
 
 Audio source add-ons run during book-detail source discovery when TorBox is connected. Mapped torrent hashes enter the existing matching, cache, and file-verification pipeline. Remote `debridCache` hints never establish availability. Narrio verifies availability through the listener's TorBox account. Uncached torrents still require explicit preparation; source discovery does not add them to the account. Narrator/language hints are provider claims, not playback verification.
 
@@ -32,7 +32,7 @@ Indexed recordings retain the existing `knaben:<hash>` IDs and torrent delivery 
 
 ## Manifest contract
 
-The manager supports declarative schema `1.0.0`, `source`, `catalog.search`, and `ebook-search` adapters, and audiobook/ebook content types. It executes bounded GET or JSON POST requests, substitutes `{TITLE}`, `{AUTHOR}`, and `{QUERY}` (URL encoded in URLs; JSON escaped in bodies), and maps JSON response paths. Nested keys, numeric object keys, array indexes (`narrators[0].name`), and projected arrays (`authors[].name`) are supported. Catalog discovery-section definitions are accepted, but Narrio's existing browsing categories continue to use catalog search rather than separate add-on section pages.
+The manager supports declarative schema `1.0.0`, `source`, `catalog.search`, and `ebook-search` adapters, and audiobook/ebook content types. It executes bounded GET or JSON POST requests, substitutes `{TITLE}`, `{AUTHOR}`, and `{QUERY}` (URL encoded in URLs; JSON escaped in bodies), and maps JSON response paths. Nested keys, numeric object keys, array indexes (`narrators[0].name`), and projected arrays (`authors[].name`) are supported. Catalog discovery-section definitions are accepted, but Narrio's browsing categories use its built-in audiobook charts rather than separate add-on section pages.
 
 An ebook website extension declares `contentType: "ebook"`, `provides: ["ebook-search"]`, and `adapters.ebook-search.request` with a public HTTPS `url` and `method: "GET"`. Its URL must include `{TITLE}` or `{QUERY}`; `{QUERY}` expands to the book title and known author. No request body, headers, or response mapping is used. Creating the link makes no network request; the in-app WebView opens only after the user taps it. See the [bundled Anna's Archive manifest](../app/src/main/assets/addons/annas-archive-ebooks.json). Refreshing that manifest updates the mirror/search URL through the existing manager.
 

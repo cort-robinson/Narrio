@@ -38,7 +38,7 @@ class AppGraph(application: Application) {
     val sourceProviderSettings = DeviceSourceProviderSettings.create(application, addons, sourceSettingsScope)
     val ebookProviderSettings = DeviceSourceProviderSettings.create(application, addons, sourceSettingsScope, SourceCatalog.EBOOK)
     val metadata = BookMetadata(http, addonSearch = addons::catalog, addonRevision = { addons.revision })
-    val books = BookCatalog(metadata, addonSearch = addons::catalog, addonRevision = { addons.revision })
+    val books = BookCatalog(metadata, addonSearch = addons::catalog, addonRevision = { addons.revision }, charts = AudiobookCharts(metadata))
     val torbox = TorBoxDelivery(http, credentials::read)
     val webEbooks = TorBoxWebEbooks(torbox)
     val webEbookAcquisition = EbookWebAcquisition(http, webEbooks::acquire, { source -> torbox.webTextLink(source.torrentId!!, source.fileId!!) })

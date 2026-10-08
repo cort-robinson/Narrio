@@ -146,7 +146,7 @@ class AddonManager(
                 else -> ""
             }
             BookDetails(name, authors, fields["narrator"].orEmpty().takeIf(String::isNotBlank)?.let(::listOf).orEmpty(),
-                MetadataText.clean(fields["description"].orEmpty()), cover, fields["language"].orEmpty(), addon.name, link)
+                MetadataText.clean(fields["description"].orEmpty()), cover, fields["language"].orEmpty(), addon.name, link, fields["publisher"].orEmpty())
         }
     }
 

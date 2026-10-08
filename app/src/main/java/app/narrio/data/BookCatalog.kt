@@ -15,6 +15,7 @@ class BookCatalog(
     private val now: () -> Long = System::currentTimeMillis,
     private val addonSearch: (suspend (String) -> List<BookDetails>)? = null,
     private val addonRevision: () -> Int = { 0 },
+    private val charts: AudiobookCharts? = null,
 ) {
     private data class Cached(val books: List<Audiobook>, val expires: Long)
     private val cache = object : LinkedHashMap<String, Cached>(32, .75f, true) {
@@ -29,8 +30,18 @@ class BookCatalog(
         suspend fun read(block: suspend () -> List<BookDetails>) = try { block() }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { failed = true; emptyList() }
+        if (terms.isBlank() && charts != null) {
+            val popular = collapse(read { charts.popular(category) }, now())
+            val books = popular.filter { it.description.isNotBlank() && it.coverUrl.isNotBlank() }.ifEmpty { popular }
+            if (books.size >= MIN_POPULAR) {
+                synchronized(cache) { cache[key] = Cached(books, now() + 6 * 60 * 60_000L) }
+                return books
+            }
+        }
         val browseTerm = when (category) { "Wonder" -> "fantasy"; "All" -> "bestsellers"; else -> category.lowercase(Locale.ROOT) }
         var candidates = read { addonSearch?.invoke(terms.ifBlank { browseTerm }) ?: metadata.audible(terms.ifBlank { browseTerm }, 50) }
+        // Keyword browsing is only a fallback; store exclusives rarely have another listening source.
+        if (terms.isBlank()) candidates = candidates.filterNot { it.publisher.equals(STORE_EXCLUSIVE, ignoreCase = true) }
         fun relevant(book: BookDetails): Boolean {
             if (terms.isBlank()) return true
             val text = " ${BookIdentity.normalize(book.title + " " + book.authors.joinToString(" "))} "
@@ -52,7 +63,8 @@ class BookCatalog(
         val books = all.filter { it.description.isNotBlank() && it.coverUrl.isNotBlank() }.ifEmpty { all }
         if (books.isEmpty() && failed) throw ProviderException("Book metadata is unavailable. Try again shortly, or listen from your saved shelf.")
         if (books.isNotEmpty() || !failed) synchronized(cache) {
-            cache[key] = Cached(books, now() + if (books.isEmpty()) 5 * 60_000 else 24 * 60 * 60_000L)
+            // A browse fallback stands in for unavailable charts only briefly.
+            cache[key] = Cached(books, now() + if (books.isEmpty() || (terms.isBlank() && charts != null)) 5 * 60_000 else 24 * 60 * 60_000L)
         }
         return books
     }
@@ -75,6 +87,9 @@ class BookCatalog(
     }
 
     companion object {
+        private const val MIN_POPULAR = 8
+        private const val STORE_EXCLUSIVE = "Audible Originals"
+
         internal fun collapse(candidates: List<BookDetails>, updatedAt: Long): List<Audiobook> = candidates
             .filter { it.title.isNotBlank() && it.authors.isNotEmpty() }
             .groupBy { BookIdentity.key(it.title, it.authors.joinToString(", ")) }
