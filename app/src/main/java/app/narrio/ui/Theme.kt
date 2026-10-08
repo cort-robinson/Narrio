@@ -63,7 +63,8 @@ fun typographyFor(font: AppFont, size: AppTextSize): Typography {
 }
 
 fun colourSchemeFor(settings: AppearanceSettings, dark: Boolean): ColorScheme {
-    if (settings.palette == ThemePalette.LISTENING_ROOM || settings.palette == ThemePalette.CUSTOM && settings.custom == null) return if (dark) Night else Day
+    val tuned = settings.palette == ThemePalette.LISTENING_ROOM || settings.palette == ThemePalette.CUSTOM && settings.custom == null
+    if (tuned && !settings.blackAt(dark)) return if (dark) Night else Day
     val colours = settings.colours(dark)
     val background = colours.background
     val low = ThemeContrast.surface(background, .035f)
@@ -101,7 +102,7 @@ fun colourSchemeFor(settings: AppearanceSettings, dark: Boolean): ColorScheme {
 
 @Composable
 fun NarrioTheme(settings: AppearanceSettings, dark: Boolean = settings.mode.isDark(isSystemInDarkTheme()), content: @Composable () -> Unit) {
-    val colours = remember(settings.palette, settings.custom, dark) { colourSchemeFor(settings, dark) }
+    val colours = remember(settings.palette, settings.custom, settings.pureBlack, dark) { colourSchemeFor(settings, dark) }
     val typography = remember(settings.font, settings.textSize) { typographyFor(settings.font, settings.textSize) }
     MaterialTheme(colorScheme = animatedColorScheme(colours), typography = typography, content = content)
 }

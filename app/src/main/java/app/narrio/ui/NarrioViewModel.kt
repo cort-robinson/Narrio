@@ -103,6 +103,10 @@ class NarrioViewModel @JvmOverloads constructor(
     private val appearanceStore = AppearanceStore(graph.preferences)
     private val appearanceState = MutableStateFlow(appearanceStore.read())
     val appearance = appearanceState.asStateFlow()
+    private val bookThemeStore = BookThemeStore(graph.preferences)
+    private val bookThemesState = MutableStateFlow(bookThemeStore.read())
+    val bookThemes = bookThemesState.asStateFlow()
+    private val coverLoads = java.util.Collections.synchronizedSet(HashSet<String>())
     val sourceSearch = MutableStateFlow(SourceSearchState())
     val sourceProviderSettings: SourceProviderSettings = graph.sourceProviderSettings
     val streamedSourceSearch: StateFlow<StreamedSourceSearch?> = sourceSearch.map { it.streamed }
@@ -718,6 +722,26 @@ class NarrioViewModel @JvmOverloads constructor(
         val normalized = value.normalized()
         appearanceStore.save(normalized)
         appearanceState.value = normalized
+    }
+    fun setBookTheme(book: Audiobook, theme: BookTheme) {
+        val next = bookThemesState.value.with(book.id, theme)
+        bookThemeStore.save(next)
+        bookThemesState.value = next
+        ensureCoverColours(book)
+    }
+    /** Derives the book's cover palette once, when the book is to be coloured by its cover. */
+    fun ensureCoverColours(book: Audiobook) {
+        val themes = bookThemesState.value
+        if (themes.choice(book.id, appearance.value).colours != BookColours.COVER || book.id in themes.covers || book.coverUrl.isBlank()) return
+        if (!coverLoads.add(book.id)) return
+        viewModelScope.launch {
+            try {
+                val cover = withContext(Dispatchers.Default) { coverPixels(getApplication(), book.coverUrl)?.let(CoverColours::theme) } ?: return@launch
+                val next = bookThemesState.value.withCover(book.id, cover)
+                bookThemeStore.save(next)
+                bookThemesState.value = next
+            } finally { coverLoads.remove(book.id) }
+        }
     }
     fun dismissPlayback() = viewModelScope.launch {
         val state = playback.value
