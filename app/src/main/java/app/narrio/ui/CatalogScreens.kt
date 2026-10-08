@@ -97,10 +97,20 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 /** Names what the browse list holds, including what the playful "Wonder" category covers. */
 internal fun browseTitle(category: String) = when (category) {
     "Fiction" -> "Popular fiction"
-    "Mystery" -> "Popular mysteries & thrillers"
+    "Thriller & mystery" -> "Popular thrillers & mysteries"
+    "Horror" -> "Popular horror"
     "Wonder" -> "Popular fantasy & science fiction"
     "Romance" -> "Popular romance"
+    "Comedy" -> "Popular comedy"
+    "Classics" -> "Popular classics"
+    "Kids & teens" -> "Popular with kids & teens"
     "Nonfiction" -> "Popular nonfiction"
+    "Biography" -> "Popular biographies & memoirs"
+    "History" -> "Popular history"
+    "Science" -> "Popular science & nature"
+    "Self-help" -> "Popular self-help"
+    "Business" -> "Popular business & money"
+    "Travel" -> "Popular travel & adventure"
     else -> "Popular audiobooks"
 }
 
