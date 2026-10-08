@@ -44,7 +44,7 @@ class BookCatalog(
                 return books
             }
         }
-        val browseTerm = when (category) { "Wonder" -> "fantasy"; "All" -> "bestsellers"; else -> category.lowercase(Locale.ROOT) }
+        val browseTerm = keyword(category)
         // Apple's catalog leads typed searches: it lists widely published recordings, which listening sources usually carry.
         var appleFailed = false
         var candidates = if (terms.isNotBlank() && apple != null) {
@@ -96,7 +96,7 @@ class BookCatalog(
     }
 
     private suspend fun google(query: String, category: String, browseTerm: String): List<BookDetails> {
-        val subject = when (category) { "Wonder" -> "fantasy"; "All" -> ""; else -> category.lowercase(Locale.ROOT) }
+        val subject = if (category == "All") "" else keyword(category)
         val terms = query.ifBlank { if (subject.isBlank()) browseTerm else "subject:$subject" }
         val url = googleUrl.toHttpUrl().newBuilder().addQueryParameter("q", terms)
             .addQueryParameter("printType", "books").addQueryParameter("maxResults", "40").build()
@@ -118,6 +118,12 @@ class BookCatalog(
         private const val STORE_EXCLUSIVE = "Audible Originals"
         // Apple allows about 20 requests a minute.
         private const val MAX_AUTHOR_LOOKUPS = 4
+
+        /** Keyword browsing stands in for a category's chart when Apple is unavailable. */
+        internal fun keyword(category: String) = when (category) {
+            "All" -> "bestsellers"; "Thriller & mystery" -> "thriller"; "Wonder" -> "fantasy"; "Kids & teens" -> "young adult"; "Self-help" -> "self help"
+            else -> category.lowercase(Locale.ROOT)
+        }
 
         private fun identity(book: BookDetails) = BookIdentity.key(book.title, book.authors.joinToString(", "))
 

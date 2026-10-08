@@ -6,7 +6,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.time.OffsetDateTime
 
 /**
- * Apple's public book catalog: store-wide audiobook charts for browsing and audiobook search. Its catalog favors widely
+ * Apple's public book catalog: store-wide audiobook charts (and ebook charts for genres audiobooks lack) for browsing,
+ * and audiobook search. Its catalog favors widely
  * published recordings, which listening sources usually carry, over store exclusives. An entry never implies an
  * available recording. Apple allows roughly 20 requests a minute, so callers cache results.
  */
@@ -18,7 +19,9 @@ class AppleBooks(
     /** Chart order is popularity order; one lookup adds descriptions and artwork for the whole page. */
     suspend fun popular(category: String): List<BookDetails> {
         val genre = genres[category]
-        val chart = metadata.get("${baseUrl}us/rss/topaudiobooks/limit=$CHART_SIZE${genre?.let { "/genre=$it" }.orEmpty()}/json".toHttpUrl())
+        val ebooks = genre in ebookGenres
+        val feed = if (ebooks) "toppaidebooks" else "topaudiobooks"
+        val chart = metadata.get("${baseUrl}us/rss/$feed/limit=$CHART_SIZE${genre?.let { "/genre=$it" }.orEmpty()}/json".toHttpUrl())
         val entries = ((chart["feed"] as? JsonObject)?.get("entry") as? JsonArray).orEmpty().mapNotNull { entry ->
             val row = entry as? JsonObject ?: return@mapNotNull null
             val id = (row["id"] as? JsonObject)?.objectAt("attributes")?.text("im:id").orEmpty()
@@ -38,12 +41,13 @@ class AppleBooks(
         val details = try { metadata.get(lookup).objects("results") }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { emptyList() }
-        val found = details.associateBy { it.number("collectionId").toString() }
+        val found = details.associateBy { (if (ebooks) it.number("trackId") else it.number("collectionId")).toString() }
         return entries.map { entry ->
             val match = found[entry.id]
-            BookDetails(title(match?.text("collectionName").orEmpty().ifBlank { entry.name }), authors(match?.text("artistName").orEmpty().ifBlank { entry.artist }),
+            val name = (if (ebooks) match?.text("trackName") else match?.text("collectionName")).orEmpty().ifBlank { entry.name }
+            BookDetails(title(name), authors(match?.text("artistName").orEmpty().ifBlank { entry.artist }),
                 emptyList(), MetadataText.clean(match?.text("description").orEmpty()),
-                artwork(match?.text("artworkUrl100").orEmpty().ifBlank { entry.image }), "", SOURCE, link(entry.id),
+                artwork(match?.text("artworkUrl100").orEmpty().ifBlank { entry.image }), "", SOURCE, link(entry.id, ebooks),
                 publisher(match?.text("copyright").orEmpty()))
         }.filter { it.title.isNotBlank() && it.authors.isNotEmpty() }
     }
@@ -62,7 +66,7 @@ class AppleBooks(
             val text = " ${BookIdentity.normalize(name + " " + result.text("artistName"))} "
             if (id == "0" || name.isBlank() || excluded(name) || translated(name, result.text("artistName")) || words.any { " $it " !in text }) null
             else BookDetails(title(name), authors(result.text("artistName")), emptyList(), MetadataText.clean(result.text("description")),
-                artwork(result.text("artworkUrl100")), "", SOURCE, link(id), publisher(result.text("copyright")))
+                artwork(result.text("artworkUrl100")), "", SOURCE, link(id, false), publisher(result.text("copyright")))
         }.filter { it.title.isNotBlank() && it.authors.isNotEmpty() }
     }
 
@@ -72,9 +76,15 @@ class AppleBooks(
         const val SOURCE = "Apple Books"
         private const val CHART_SIZE = 60
         private const val NEW_RELEASE_MS = 14 * 24 * 60 * 60_000L
-        /** Browsing categories mapped to Apple's audiobook genres; "All" is the store-wide chart. */
-        val genres: Map<String, Int?> = linkedMapOf("All" to null, "Fiction" to 50000040, "Mystery" to 50000051,
-            "Wonder" to 50000055, "Romance" to 50000069, "Nonfiction" to 50000052)
+        private val ebookGenres = setOf(10048)
+        /**
+         * Browsing categories mapped to Apple genres; "All" is the store-wide chart. Apple pairs thrillers with mysteries in
+         * one genre and has no horror audiobook genre, so Horror uses the horror ebook chart: those books are widely published.
+         */
+        val genres: Map<String, Int?> = linkedMapOf("All" to null, "Fiction" to 50000040, "Thriller & mystery" to 50000051,
+            "Horror" to 10048, "Wonder" to 50000055, "Romance" to 50000069, "Comedy" to 50000046, "Classics" to 50000045, "Kids & teens" to 50000044,
+            "Nonfiction" to 50000052, "Biography" to 50000042, "History" to 50000049, "Science" to 50000054,
+            "Self-help" to 50000056, "Business" to 50000043, "Travel" to 50000059)
 
         private val parts = Regex("(?i)\\bdramati[sz]ed\\b|\\(\\s*\\d+ of \\d+\\s*\\)")
         private val marketing = Regex("(?i)^(?:an? |the )?(?:[\\w'’&.-]+ ){0,4}(?:novel|novella|memoir|thriller|mystery|romance)$|book club|\\b(?:sequel|prequel|companion) to\\b|\\b(?:book|volume|vol|part)\\.? ?\\d+$")
@@ -114,7 +124,7 @@ class AppleBooks(
         /** "℗ 2013 Audible Studios" names the recording's producer. */
         internal fun publisher(copyright: String) = copyright.replace(Regex("^\\s*(?:[℗©]|\\([PC]\\))?\\s*\\d{4}\\s*"), "").trim()
 
-        private fun link(id: String) = "https://books.apple.com/us/audiobook/id$id"
+        private fun link(id: String, ebook: Boolean) = "https://books.apple.com/us/${if (ebook) "book" else "audiobook"}/id$id"
 
         private fun JsonObject.objectAt(key: String) = this[key] as? JsonObject
     }
