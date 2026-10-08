@@ -102,7 +102,7 @@ class BookMetadata(
             BookDetails(product.text("title"), authors, product.objects("narrators").map { it.text("name") }.filter(String::isNotBlank),
                 MetadataText.clean(product.text("publisher_summary").ifBlank { product.text("merchandising_summary") }.ifBlank { product.text("short_description") }),
                 images?.entries?.sortedByDescending { it.key.toIntOrNull() ?: 0 }?.firstNotNullOfOrNull { (_, value) -> secureImage(value.stringValue()) }.orEmpty(),
-                product.text("language"), "Audible", "https://www.audible.com/pd/$asin")
+                product.text("language"), "Audible", "https://www.audible.com/pd/$asin", product.text("publisher_name"))
         }
     }
 
@@ -202,7 +202,7 @@ class BookMetadata(
 
 data class BookDetails(
     val title: String, val authors: List<String>, val narrators: List<String>, val description: String,
-    val coverUrl: String, val language: String, val provider: String, val url: String,
+    val coverUrl: String, val language: String, val provider: String, val url: String, val publisher: String = "",
 )
 
 /** Plain text is shared by catalog and recording metadata, without requiring Android in contract tests. */
