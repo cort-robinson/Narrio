@@ -137,7 +137,7 @@ class BookCatalogTest {
             entry(10, "Fourth Wing (1 of 2) [Dramatized Adaptation] : The Empyrean 1 (Empyrean)"),
             entry(11, "Next Year's Thriller", released = "2027-03-01T00:00:00-07:00"))
         lookup(server, *(1..9).toList().toIntArray(), 12)
-        val books = catalog.search("", "Mystery")
+        val books = catalog.search("", "Thriller & mystery")
         assertEquals((1..9).map { "Book $it" } + "Out This Week", books.map { it.title })
         assertEquals("Story 1.", books.first().description); assertEquals("https://art.example/1/600x600bb.jpg", books.first().coverUrl)
         assertEquals("Apple Books", books.first().metadataSource); assertTrue(books.all { it.provider == "catalog" && it.sources.isEmpty() })
@@ -145,7 +145,19 @@ class BookCatalogTest {
         assertEquals("/apple/us/rss/topaudiobooks/limit=60/genre=50000051/json", requests.first().requestUrl?.encodedPath)
         assertEquals(((1..9) + 12).joinToString(","), requests.last().requestUrl?.queryParameter("id"))
         assertTrue(requests.all { it.getHeader("Authorization") == null })
-        assertEquals(books, catalog.search("", "Mystery")); assertEquals(2, server.requestCount)
+        assertEquals(books, catalog.search("", "Thriller & mystery")); assertEquals(2, server.requestCount)
+    }
+
+    @Test fun horrorBrowsesTheHorrorEbookChartWithEbookDetails() = browsing { server, catalog ->
+        chart(server, *(1..8).map { entry(it, "Horror $it: A Novel") }.toTypedArray())
+        server.enqueue(MockResponse().setBody("""{"results":[${(1..8).joinToString(",") {
+            """{"trackId":$it,"trackName":"Horror $it: A Novel","artistName":"Author $it","description":"Fear $it.","artworkUrl100":"https://art.example/h$it/100x100bb.jpg"}"""
+        }}]}"""))
+        val books = catalog.search("", "Horror")
+        assertEquals((1..8).map { "Horror $it" }, books.map { it.title })
+        assertEquals("Fear 1.", books.first().description); assertEquals("https://art.example/h1/600x600bb.jpg", books.first().coverUrl)
+        assertEquals("https://books.apple.com/us/book/id1", books.first().metadataUrl)
+        assertEquals("/apple/us/rss/toppaidebooks/limit=60/genre=10048/json", server.takeRequest().requestUrl?.encodedPath)
     }
 
     @Test fun storeTitlesDropSeriesAndMarketingLabelsButKeepRealSubtitles() {
