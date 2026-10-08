@@ -35,6 +35,55 @@ class AppearanceTest {
         assertEquals(28, CustomTheme("a".repeat(100)).normalized().name.length)
     }
 
+    @Test fun pureBlackAppliesAtNightOnlyAndReaderOnlyWhileReading() {
+        val reader = AppearanceSettings(palette = ThemePalette.HALLOWEEN, pureBlack = PureBlack.READER)
+        assertEquals(0x000000, reader.forBook(null, BookThemes(), reading = true).colours(true).background)
+        assertEquals(presetColours(ThemePalette.HALLOWEEN, true), reader.forBook(null, BookThemes(), reading = false).colours(true))
+        assertEquals(presetColours(ThemePalette.HALLOWEEN, false), reader.forBook(null, BookThemes(), reading = true).colours(false))
+        val everywhere = reader.copy(pureBlack = PureBlack.EVERYWHERE)
+        assertEquals(0x000000, everywhere.forBook(null, BookThemes(), reading = false).colours(true).background)
+        assertEquals(everywhere, AppearanceCodec.decode(AppearanceCodec.encode(everywhere)))
+    }
+
+    @Test fun bookColoursOverrideTheAppPaletteAndCoverMatchingIsTheOptionalDefault() {
+        val cover = CustomTheme("Cover", ThemeColours(0xFF0000, 0x00FF00, 0x110000), ThemeColours(0x880000, 0x008800, 0xFFF0F0))
+        val themes = BookThemes(covers = mapOf("b" to cover)).with("a", BookTheme(BookColours.PALETTE, ThemePalette.AMETHYST))
+        val app = AppearanceSettings(palette = ThemePalette.OCEAN)
+        assertEquals(ThemePalette.AMETHYST, app.forBook("a", themes, reading = false).palette)
+        assertEquals(ThemePalette.OCEAN, app.forBook("b", themes, reading = false).palette)
+        assertEquals(cover.night, app.copy(coverThemes = true).forBook("b", themes, reading = false).colours(true))
+        // Without a derived cover yet, the book follows the app until its colours arrive.
+        assertEquals(ThemePalette.OCEAN, app.copy(coverThemes = true).forBook("c", themes, reading = false).palette)
+        // An explicit app choice outranks the cover default.
+        assertEquals(ThemePalette.OCEAN, app.copy(coverThemes = true).forBook("b", themes.with("b", BookTheme(BookColours.APP)), reading = false).palette)
+        assertEquals(themes, BookThemesCodec.decode(BookThemesCodec.encode(themes)))
+        assertEquals(BookThemes(), BookThemesCodec.decode("damaged"))
+        assertEquals(BookTheme(BookColours.COVER), BookTheme(BookColours.COVER, ThemePalette.EMBER).normalized())
+    }
+
+    @Test fun coverCacheKeepsOnlyTheMostRecentCovers() {
+        val cover = CustomTheme.from(ThemePalette.FOREST)
+        val themes = (0..BookThemes.MAX_COVERS + 5).fold(BookThemes()) { all, index -> all.withCover("book-$index", cover) }
+        assertEquals(BookThemes.MAX_COVERS, themes.covers.size)
+        assertFalse("book-0" in themes.covers)
+        assertTrue("book-${BookThemes.MAX_COVERS + 5}" in themes.covers)
+    }
+
+    @Test fun coverColoursFollowTheCoversDominantHueAndNeutralCoversGetGraphite() {
+        fun hue(colour: Int) = CoverColours.hsv(colour).first
+        // A mostly black cover with a pumpkin-orange title and a little purple.
+        val pixels = IntArray(1000) { index -> when { index < 600 -> 0xFF0A0A0A.toInt(); index < 900 -> 0xFFF07818.toInt(); else -> 0xFF7A3FB0.toInt() } }
+        val theme = CoverColours.theme(pixels)
+        assertEquals(hue(0xF07818), hue(theme.night.accent), 3f)
+        assertEquals(hue(0xF07818), hue(theme.day.accent), 3f)
+        assertEquals(hue(0x7A3FB0), hue(theme.night.secondary), 3f)
+        assertTrue(ThemeContrast.luminance(theme.night.background) < .02)
+        assertTrue(ThemeContrast.luminance(theme.day.background) > .8)
+        val grey = IntArray(500) { 0xFF000000.toInt() or (it % 256 * 0x010101) }
+        assertEquals(CustomTheme.from(ThemePalette.GRAPHITE).copy(name = "Cover"), CoverColours.theme(grey))
+        assertEquals(CustomTheme.from(ThemePalette.GRAPHITE).copy(name = "Cover"), CoverColours.theme(IntArray(10)))
+    }
+
     @Test fun hexColoursAcceptOnlyCompleteOpaqueRgbValues() {
         assertEquals(0xAABBCC, ThemeContrast.parseHex(" #aAbBcC "))
         assertEquals(0x001122, ThemeContrast.parseHex("001122"))

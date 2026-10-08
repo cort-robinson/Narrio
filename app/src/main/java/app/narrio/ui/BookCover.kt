@@ -130,3 +130,11 @@ fun NarrioMark(modifier: Modifier = Modifier) {
         drawLine(color, Offset(size.width*.8f,size.height*.2f),Offset(size.width*.8f,size.height*.77f),stroke, StrokeCap.Round)
     }
 }
+
+/** A small, software-decoded sample of a cover's pixels for deriving its colours; null when it can't be loaded. */
+internal suspend fun coverPixels(context: android.content.Context, url: String): IntArray? {
+    val request = ImageRequest.Builder(context).data(url).size(64).allowHardware(false).build()
+    val result = coil.Coil.imageLoader(context).execute(request) as? coil.request.SuccessResult ?: return null
+    val bitmap = (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap ?: return null
+    return IntArray(bitmap.width * bitmap.height).also { bitmap.getPixels(it, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height) }
+}

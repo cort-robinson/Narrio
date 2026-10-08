@@ -146,8 +146,11 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
     val marksUi = rememberReaderMarksUi(marks, controller)
 
     // Page colours follow the target Appearance scheme, not the 450 ms dissolve, so the book relays out once.
+    // They use this book's colours, as the shell does around the reader.
+    val bookThemes by appVm.bookThemes.collectAsStateWithLifecycle()
     val dark = appearance.mode.isDark(androidx.compose.foundation.isSystemInDarkTheme())
-    val scheme = remember(appearance, dark) { colourSchemeFor(appearance, dark) }
+    val themed = remember(appearance, bookThemes, vm.bookId) { appearance.forBook(vm.bookId, bookThemes, reading = true) }
+    val scheme = remember(themed, dark) { colourSchemeFor(themed, dark) }
     val colors = ReaderColors(scheme.background.toArgb(), scheme.onBackground.toArgb(), dark)
     val request by appVm.reader.collectAsStateWithLifecycle()
     val formatsFlow = remember(request?.book?.id) { request?.book?.let { appVm.readingLibrary.value.observeBook(it) } ?: kotlinx.coroutines.flow.flowOf(null) }
@@ -283,7 +286,9 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
     })
 
     if (sheet == "text") ModalBottomSheet({ sheet = null }, containerColor = MaterialTheme.colorScheme.surfaceContainer, scrimColor = Color.Black.copy(alpha = .12f)) {
-        TypographySheet(settings, appearance, dark, vm::update, appVm::updateAppearance)
+        TypographySheet(settings, appearance, dark, vm::update, appVm::updateAppearance) {
+            request?.book?.let { book -> BookThemePicker(book, appearance, bookThemes, dark) { appVm.setBookTheme(book, it) } }
+        }
     }
     if (sheet == "contents") {
         val contentsSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -465,7 +470,8 @@ private fun ChapterScrubber(progress: Double, marks: List<Double>, enabled: Bool
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSettings, dark: Boolean, update: (ReaderSettings.() -> ReaderSettings) -> Unit, updateAppearance: (AppearanceSettings) -> Unit) {
+private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSettings, dark: Boolean, update: (ReaderSettings.() -> ReaderSettings) -> Unit,
+                            updateAppearance: (AppearanceSettings) -> Unit, bookColours: @Composable () -> Unit) {
     val context = LocalContext.current
     val dyslexic = remember { FontFamily(Font("readium/fonts/OpenDyslexic-Regular.otf", context.assets)) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp).testTag("reader-typography")) {
@@ -513,26 +519,14 @@ private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSett
         SwitchRow("Hyphenation", "Break long words at line ends", settings.hyphenate && !settings.publisherStyles) { value -> update { withAdvanced { copy(hyphenate = value) } } }
         SwitchRow("Publisher styles", if (settings.publisherStyles) "The book's own spacing and alignment" else "Your spacing and alignment choices", settings.publisherStyles) { value -> update { copy(publisherStyles = value) } }
         SwitchRow("Volume keys turn pages", "Only while nothing is playing", settings.volumeKeys) { value -> update { copy(volumeKeys = value) } }
-        SheetLabel("Colours · ${appearance.paletteName}")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ThemePalette.entries.filter { it != ThemePalette.CUSTOM || appearance.custom != null }.forEach { palette ->
-                val option = appearance.copy(palette = palette)
-                val colours = option.colours(dark)
-                val selected = appearance.palette == palette
-                Box(Modifier.size(44.dp).clip(CircleShape)
-                    .border(if (selected) 3.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    .selectable(selected, role = Role.RadioButton) { updateAppearance(option) }
-                    .semantics { contentDescription = if (palette == ThemePalette.CUSTOM) appearance.custom?.name ?: "Custom" else palette.label }) {
-                    Canvas(Modifier.fillMaxSize().padding(if (selected) 5.dp else 1.dp).clip(CircleShape)) {
-                        drawRect(Color(0xFF000000.toInt() or colours.background))
-                        drawCircle(Color(0xFF000000.toInt() or colours.accent), radius = size.minDimension * .28f, center = Offset(size.width * .64f, size.height * .64f))
-                    }
-                }
-            }
-        }
+        SheetLabel("Colours for this book")
+        bookColours()
         SheetLabel("Mode")
         Segments(ThemeMode.entries, appearance.mode, { it.label }) { mode -> updateAppearance(appearance.copy(mode = mode)) }
-        Text("Colours and mode are your Appearance settings, shared with the rest of Narrio.", style = MaterialTheme.typography.bodySmall,
+        Spacer(Modifier.height(8.dp))
+        SwitchRow("Pure black pages", if (appearance.pureBlack == PureBlack.EVERYWHERE) "On throughout Narrio at night" else "True black at night, for OLED screens",
+            appearance.pureBlack != PureBlack.OFF) { on -> updateAppearance(appearance.copy(pureBlack = if (on) PureBlack.READER else PureBlack.OFF)) }
+        Text("Mode and pure black are your Appearance settings, shared with the rest of Narrio.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
     }
 }

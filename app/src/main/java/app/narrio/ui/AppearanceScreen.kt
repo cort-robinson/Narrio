@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -89,17 +92,11 @@ private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, chang
                 }
                 if (settings.mode == ThemeMode.SYSTEM) Text("Follows your device's light and dark setting.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            item { SectionTitle("Palette", "Five presets, or one of your own.") }
-            ThemePalette.entries.chunked(2).forEach { pair -> item {
-                Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    pair.forEach { palette ->
-                        PaletteOption(settings, palette, dark, Modifier.weight(1f)) {
-                            if (palette == ThemePalette.CUSTOM && settings.custom == null) edit()
-                            else change(settings.copy(palette = palette))
-                        }
-                    }
-                }
-            } }
+            val (seasonal, everyday) = ThemePalette.entries.partition { it.seasonal }
+            item { SectionTitle("Palette", "${everyday.size - 1} presets, or one of your own.") }
+            paletteRows(everyday, settings, dark, change, edit)
+            item { SectionTitle("Seasonal", "Palettes for the time of year. Use one as long as you like.") }
+            paletteRows(seasonal, settings, dark, change, edit)
             item {
                 OutlinedButton({ edit() }, Modifier.fillMaxWidth().testTag("edit-custom-theme")) {
                     Icon(Icons.Rounded.Palette, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
@@ -108,6 +105,28 @@ private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, chang
                 if (settings.custom != null) {
                     Spacer(Modifier.height(8.dp))
                     Text("Your custom palette stays saved when you switch themes.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            item {
+                SectionTitle("Pure black", "True black Night backgrounds for OLED screens. Saves battery in the dark.")
+                FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    PureBlack.entries.forEach { option ->
+                        FilterChip(settings.pureBlack == option, { change(settings.copy(pureBlack = option)) }, { Text(option.label) }, modifier = Modifier.testTag("pure-black-${option.name}"))
+                    }
+                }
+                Text(settings.pureBlack.description + if (settings.pureBlack != PureBlack.OFF && !dark) " Switch to Night to see it." else "",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            item {
+                SectionTitle("Book colours", "Any book can have colours of its own: choose them from its reader or Listening room.")
+                Row(Modifier.fillMaxWidth().toggleable(settings.coverThemes, role = Role.Switch) { change(settings.copy(coverThemes = it)) }
+                    .testTag("cover-themes").padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f).padding(end = 16.dp)) {
+                        Text("Match each book's cover", style = MaterialTheme.typography.titleMedium)
+                        Text("Books without their own colours take a palette from their cover while you read or listen.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Switch(settings.coverThemes, null)
                 }
             }
             item {
@@ -144,6 +163,76 @@ private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, chang
             }
         }
     }
+}
+
+private fun androidx.compose.foundation.lazy.LazyListScope.paletteRows(palettes: List<ThemePalette>, settings: AppearanceSettings, dark: Boolean,
+                                                                    change: (AppearanceSettings) -> Unit, edit: () -> Unit) {
+    palettes.chunked(2).forEach { pair -> item {
+        Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            pair.forEach { palette ->
+                PaletteOption(settings, palette, dark, Modifier.weight(1f)) {
+                    if (palette == ThemePalette.CUSTOM && settings.custom == null) edit()
+                    else change(settings.copy(palette = palette))
+                }
+            }
+            if (pair.size == 1) Spacer(Modifier.weight(1f))
+        }
+    } }
+}
+
+/**
+ * Colours for one book: follow Appearance, match the cover, or any palette. [themes] supplies the cover's palette once
+ * derived; until then its swatch shows a cover icon.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun BookThemePicker(book: Audiobook, appearance: AppearanceSettings, themes: BookThemes, dark: Boolean, choose: (BookTheme) -> Unit) {
+    val current = themes.choice(book.id, appearance)
+    val cover = themes.covers[book.id]
+    val options = buildList {
+        add(BookTheme(BookColours.APP))
+        if (book.coverUrl.isNotBlank()) add(BookTheme(BookColours.COVER))
+        ThemePalette.entries.filter { it != ThemePalette.CUSTOM || appearance.custom != null }.forEach { add(BookTheme(BookColours.PALETTE, it)) }
+    }
+    fun name(option: BookTheme) = when (option.colours) {
+        BookColours.APP -> "App theme"
+        BookColours.COVER -> "Match the cover"
+        BookColours.PALETTE -> appearance.copy(palette = option.palette).paletteName
+    }
+    FlowRow(Modifier.selectableGroup().testTag("book-theme-picker"), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        options.forEach { option ->
+            val colours = when (option.colours) {
+                BookColours.APP -> appearance.colours(dark)
+                BookColours.COVER -> cover?.let { if (dark) it.night else it.day }
+                BookColours.PALETTE -> appearance.copy(palette = option.palette).colours(dark)
+            }
+            val selected = current == option
+            Box(Modifier.size(44.dp).clip(CircleShape)
+                .border(if (selected) 3.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                .selectable(selected, role = Role.RadioButton) { choose(option) }
+                .semantics { contentDescription = name(option) }
+                .testTag("book-theme-${if (option.colours == BookColours.PALETTE) option.palette.name else option.colours.name}"), contentAlignment = Alignment.Center) {
+                androidx.compose.foundation.Canvas(Modifier.fillMaxSize().padding(if (selected) 5.dp else 1.dp).clip(CircleShape)) {
+                    drawRect(colours?.let { Color(0xFF000000.toInt() or it.background) } ?: Color.Transparent)
+                    colours?.takeIf { option.colours == BookColours.PALETTE }?.let { drawCircle(Color(0xFF000000.toInt() or it.accent), radius = size.minDimension * .28f, center = androidx.compose.ui.geometry.Offset(size.width * .64f, size.height * .64f)) }
+                }
+                // The icon takes the accent's place, in the accent colour.
+                val ink = colours?.let { Color(0xFF000000.toInt() or ThemeContrast.readable(it.accent, listOf(it.background), 3.0)) } ?: MaterialTheme.colorScheme.onSurfaceVariant
+                when (option.colours) {
+                    BookColours.APP -> Icon(Icons.Rounded.Palette, null, Modifier.size(18.dp), tint = ink)
+                    BookColours.COVER -> Icon(Icons.Rounded.Image, null, Modifier.size(18.dp), tint = ink)
+                    BookColours.PALETTE -> Unit
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    val detail = when (current.colours) {
+        BookColours.APP -> "App theme · ${appearance.paletteName}. This book follows your Appearance settings."
+        BookColours.COVER -> if (cover == null) "Match the cover · Reading the cover's colours…" else "Match the cover · Colours drawn from this book's cover."
+        BookColours.PALETTE -> "${name(current)} · Only this book. Your Appearance settings are unchanged."
+    }
+    Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })
 }
 
 @Composable
