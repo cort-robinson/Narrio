@@ -120,9 +120,20 @@ class TorBoxDelivery(
         }
     }
 
-    suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = withContext(Dispatchers.IO) {
-        val item = list().firstOrNull { if (torrentId > 0) it.number("id") == torrentId else it.text("hash").equals(book.torrentHash, true) }
-        item?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
+    suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = account().preparation(book, torrentId)
+
+    /** The account's items, listed once, so several preparations can be checked with one request. */
+    suspend fun account(): PreparationAccount = withContext(Dispatchers.IO) { Account(list()) }
+
+    private inner class Account(private val items: List<JsonObject>) : PreparationAccount {
+        private fun item(book: Audiobook, torrentId: Long) =
+            items.firstOrNull { if (torrentId > 0) it.number("id") == torrentId else book.torrentHash.isNotBlank() && it.text("hash").equals(book.torrentHash, true) }
+        override fun preparation(book: Audiobook, torrentId: Long) =
+            item(book, torrentId)?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
+        override fun sources(book: Audiobook, torrentId: Long): List<AudioSource> {
+            val item = item(book, torrentId)?.takeIf { preparation(it).ready } ?: throw ProviderException("This recording is still being prepared in TorBox.")
+            return mapSources(item, book)
+        }
     }
 
     override suspend fun status(torrentId: Long): Preparation = withContext(Dispatchers.IO) {

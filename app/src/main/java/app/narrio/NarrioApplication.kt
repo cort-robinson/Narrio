@@ -83,9 +83,11 @@ class AppGraph(application: Application) {
     val readingSync = app.narrio.playback.ReadingSync(sharedPositions, positionMapper, mappingRepository, alignmentJobs)
     val bookAlignment = app.narrio.playback.BookAlignmentScheduler(application)
     val updates = app.narrio.updates.AppUpdates(application, playback)
-    val preparations = TorBoxPreparations(RoomPreparationShelf(library),
-        PreferencePreparationHistory(application.getSharedPreferences("torbox-preparations", Application.MODE_PRIVATE)), torbox::refresh, torbox::sources)
-    val preparationChecks = app.narrio.preparation.PreparationChecks(application, library.observeShelf()) { credentials.read() != null }
-    // While Narrio is on screen the shelf and book page show the change; otherwise a notification does.
+    /** Starts, checks, and settles TorBox preparations; see [TorBoxPreparations]. */
+    val preparations = TorBoxPreparations(RoomPreparationShelf(database),
+        PreferencePreparationRecords(application.getSharedPreferences("torbox-preparation-records", Application.MODE_PRIVATE)), torbox::account)
+    val preparationChecks = app.narrio.preparation.PreparationChecks(application, library.observeShelf(), preparations) { credentials.read() != null }
+    /** A preparation notification's tap or Listen, waiting for Narrio's screen to act on it. */
+    val preparationRequests = kotlinx.coroutines.flow.MutableStateFlow<app.narrio.preparation.PreparationRequest?>(null)
     init { preparations.announce = { change -> if (!playback.visible) app.narrio.preparation.PreparationNotifications.show(application, change) } }
 }
