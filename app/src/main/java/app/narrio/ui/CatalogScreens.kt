@@ -258,7 +258,7 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
     shelfPreparationLabel(entry.state)?.let { label ->
         Spacer(Modifier.height(12.dp))
         Text(label, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelMedium,
-            color = if (entry.state == "failed") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+            color = if (entry.state == "failed") MaterialTheme.colorScheme.error else if (entry.state == "paused") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary)
     }
 }
 

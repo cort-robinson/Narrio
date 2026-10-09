@@ -67,10 +67,13 @@ data class Preparation(
     val seeds: Long? = null, val checkedAtMs: Long = 0,
     /** TorBox no longer lists the item, or has no peers to fetch it from. */
     val missing: Boolean = false, val stalled: Boolean = false,
-    /** Why it couldn't get ready, in the listener's words; blank while it still can. */
+    /** Why it couldn't get ready, or why checking stopped when [paused], in the listener's words. */
     val problem: String = "",
+    /** Narrio stopped checking (TorBox unreachable or disconnected); checking again can resume it. */
+    val paused: Boolean = false,
 ) {
-    val failed: Boolean get() = problem.isNotEmpty()
+    /** TorBox can't fetch this release; another recording is the way forward. */
+    val failed: Boolean get() = problem.isNotEmpty() && !paused
 }
 
 /** Full path comparison keeps disc folders and unpadded chapter numbers in order. */
