@@ -1,0 +1,21 @@
+# Required Android smoke-test classes for CI, one fully qualified class name per line.
+# Add a class by appending its own line. Blank lines and lines starting with # are ignored.
+app.narrio.PersistenceAndRenewalTest
+app.narrio.NowPlayingDismissTest
+app.narrio.PreciseSeekTest
+app.narrio.PersistentPlayerTest
+app.narrio.SourceExperienceTest
+app.narrio.SourceSearchExperienceTest
+app.narrio.BookDiscoveryExperienceTest
+app.narrio.BookSourceDiscoveryAndroidTest
+app.narrio.AddonSettingsExperienceTest
+app.narrio.AppUpdatesExperienceTest
+app.narrio.FollowAlongMigrationTest
+app.narrio.ReadAlongExperienceTest
+app.narrio.ReaderExperienceTest
+app.narrio.ReaderAnnotationsExperienceTest
+app.narrio.ReadingStorageMigrationTest
+app.narrio.ReadingSyncSmokeTest
+app.narrio.LibraryFormatsExperienceTest
+app.narrio.ReadingIntegrationTest
+app.narrio.ReadingRestartTest
