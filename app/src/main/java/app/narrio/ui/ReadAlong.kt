@@ -255,10 +255,11 @@ fun leaveReadAlong(reader: ReaderViewModel, controller: ReaderController) {
 
 /**
  * Lays out the page and read along's controls. The page is always the first child, so turning read along on or
- * off never recreates the navigator. A reported separating hinge stays empty.
+ * off never recreates the navigator. A reported separating hinge stays empty. [docked] keeps a tray under the page
+ * without read along, for the mini-player while another book or this one plays.
  */
 @Composable
-fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Composable (ReadAlongArrangement?) -> Unit, controls: @Composable (ReadAlongArrangement) -> Unit) {
+fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, docked: Boolean = false, page: @Composable (ReadAlongArrangement?) -> Unit, controls: @Composable (ReadAlongArrangement) -> Unit) {
     val fold = LocalFold.current
     val density = LocalDensity.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -274,7 +275,7 @@ fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Com
         val vertical = fold != null && fold.isSeparating && fold.orientation == FoldingFeature.Orientation.VERTICAL &&
             hingeLeft != null && hingeLeft in (width / 4)..(width * 3 / 4)
         val arrangement = when {
-            !together -> null
+            !together -> if (docked) ReadAlongArrangement.TRAY else null
             tabletop -> ReadAlongArrangement.TABLETOP
             maxWidth >= 600.dp -> ReadAlongArrangement.PANEL
             else -> ReadAlongArrangement.TRAY
@@ -306,6 +307,20 @@ fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Com
                 }
             }
         }
+    }
+}
+
+/**
+ * The reader's docked mini-player while audio plays without read along. Opening it leaves the reader for the
+ * Listening room; snackbars rise above it as they do above read along's tray.
+ */
+@Composable
+fun ReaderMiniPlayer(vm: NarrioViewModel) {
+    val lift = LocalSnackbarLift.current
+    val density = LocalDensity.current
+    DisposableEffect(lift) { onDispose { lift.value = 0.dp } }
+    MiniPlayer(vm, Modifier.onSizeChanged { lift.value = with(density) { it.height.toDp() } }, aboveSystemBar = true) {
+        vm.closeReader(); vm.playerOpen.value = true
     }
 }
 
@@ -635,7 +650,7 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Modifier.navigationBarsIgnoringVisibilityPadding() = windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
+internal fun Modifier.navigationBarsIgnoringVisibilityPadding() = windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Modifier.statusBarsIgnoringVisibilityPadding() = windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)

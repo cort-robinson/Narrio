@@ -354,7 +354,7 @@ Discover, My shelf, and Settings use the same Material icon and label pair in na
 
 ### Mini-player
 
-The mini-player uses a full-width functional surface, a small cover (38 × 52 dp), title and current-part context with narration bars while playing, skip, and play/pause. The whole surface opens the player. A thin progress line (2 dp) appears only when duration is known. Buffering replaces transport content with a progress indicator; the text remains tied to actual state.
+The mini-player uses a full-width functional surface, a small cover (38 × 52 dp), title and current-part context with narration bars while playing, skip, and play/pause. The whole surface opens the player. While a book plays it stays docked at the bottom of every phone screen: above the tabs at home, under a book's details, and under the reader's page (opening it there leaves the reader for the Listening room). Only the Listening room and read along, which carry their own controls, replace it. A thin progress line (2 dp) appears only when duration is known. Buffering replaces transport content with a progress indicator; the text remains tied to actual state.
 
 ### Functional containers and modals
 

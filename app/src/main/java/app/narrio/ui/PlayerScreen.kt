@@ -47,20 +47,24 @@ import app.narrio.playback.SKIP_BACK_MS
 import app.narrio.playback.SKIP_FORWARD_MS
 import kotlinx.coroutines.launch
 
+/**
+ * The docked player. [open] opens the Listening room by default; [aboveSystemBar] extends it under the navigation bar
+ * where nothing else sits below it.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier) {
+fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBar: Boolean = false, open: () -> Unit = { vm.playerOpen.value = true }) {
     val state by vm.playback.collectAsStateWithLifecycle()
     val book = state.book ?: return
     val interaction = remember { MutableInteractionSource() }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val lift = remember { Animatable(0f) }
-    val open = { vm.playerOpen.value = true }
     var armed by remember { mutableStateOf(false) }
     val progress by animateFloatAsState(if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f, tween(1000, easing = LinearEasing), label = "mini progress")
     // A short upward flick opens the listening room, the same way the player can be pulled back down.
     // Pulling it down past the threshold closes Now playing; the shell offers Undo.
-    Surface(open, modifier.fillMaxWidth().pressScale(interaction, .985f)
+    Surface(open, modifier.fillMaxWidth().testTag("mini-player").pressScale(interaction, .985f)
         .semantics { customActions = listOf(CustomAccessibilityAction("Close player") { vm.dismissPlayback(); true }) }
         .draggable(rememberDraggableState { delta ->
             scope.launch {
@@ -79,7 +83,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             })
         .graphicsLayer { translationY = lift.value * .35f; alpha = 1f - (lift.value / 160f).coerceIn(0f, 1f) * .6f },
         color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, interactionSource = interaction) {
-        Column {
+        Column(if (aboveSystemBar) Modifier.navigationBarsIgnoringVisibilityPadding() else Modifier) {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BookCover(book, Modifier.width(38.dp).height(52.dp), sharedKey = "now-${book.id}")
                 Column(Modifier.weight(1f)) {
