@@ -169,7 +169,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).then(when {
                 snackbarLift.value > 0.dp -> Modifier.padding(bottom = snackbarLift.value)
-                !expanded && !tabletop && current == Home -> Modifier.padding(bottom = barHeight)
+                !expanded && !tabletop && (current == Home || current is Details && state.book != null) -> Modifier.padding(bottom = barHeight)
                 else -> Modifier.navigationBarsPadding()
             })) { NarrioSnackbar(it) }
         }
@@ -211,21 +211,31 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                     CompositionLocalProvider(LocalNavigationScope provides this) {
                         when (screen) {
                             Home -> Box(shellInsets.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
-                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
+                            // The mini-player stays docked under a book's details; it brings its own navigation-bar room.
+                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, if (hasPlayback) shellInsets.padding(bottom = barHeight) else shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
                             Listening -> PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
                             is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
                         }
                     }
                 }
-                transition.AnimatedVisibility({ it == Home }, Modifier.align(Alignment.BottomCenter),
-                    enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
-                    exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
-                    CompositionLocalProvider(LocalNavigationScope provides this) {
-                        Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
-                            AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) { MiniPlayer(vm) }
-                            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-                                navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
+                // While a book plays, its controls stay at the bottom of every screen: above the tabs at home, and
+                // docked under a book's details. The Listening room and the reader carry their own.
+                Column(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
+                    transition.AnimatedVisibility({ it == Home || it is Details },
+                        enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
+                        exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
+                        CompositionLocalProvider(LocalNavigationScope provides this) {
+                            AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                                MiniPlayer(vm, aboveSystemBar = current is Details)
                             }
+                        }
+                    }
+                    transition.AnimatedVisibility({ it == Home },
+                        enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
+                        exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
+                        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                            navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
                         }
                     }
                 }

@@ -194,7 +194,8 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
         onDispose { host?.keyInterceptor = null }
     }
 
-    ReadAlongLayout(together, page = { arrangement ->
+    // While audio plays and read along is off, the mini-player stays docked under the page.
+    ReadAlongLayout(together, docked = playback.book != null, page = { arrangement ->
     BoxWithConstraints(Modifier.fillMaxSize().semantics {
         customActions = listOf(
             CustomAccessibilityAction(if (controls) "Hide reader controls" else "Show reader controls") { controls = !controls; true },
@@ -273,6 +274,7 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
         ReaderMarksLayer(marksUi, session, appVm, controls, dark, insets.copy(bottom = bottom), controlsTop, controlsBottom) { controls = false }
         }
     }, controls = { arrangement ->
+        if (!together) { ReaderMiniPlayer(appVm); return@ReadAlongLayout }
         val alongNow = readAlong ?: return@ReadAlongLayout
         Box {
             when (arrangement) {
