@@ -5,6 +5,7 @@ import app.narrio.AppGraph
 import app.narrio.data.*
 import app.narrio.domain.*
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 
@@ -19,15 +20,15 @@ interface ReadingLibrary {
     suspend fun importBook(uri: Uri): Audiobook
     /** Adds an EPUB or TXT file to [book] as an edition. */
     suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition
-    /** Adds a found ebook to [book] as an edition. */
-    suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition
+    /** Adds a found ebook to [book] as an edition; [step] describes a download that takes a while. */
+    suspend fun addEdition(book: Audiobook, candidate: BookTextSource, step: (String) -> Unit = {}): EbookEdition
     /** Acquires a user-initiated website download, trying TorBox before the browser session. */
     suspend fun downloadWebsiteEbook(book: Audiobook, request: EbookDownloadRequest, connected: Boolean, step: (String) -> Unit): EbookEdition =
         throw ProviderException("Website ebook downloads are unavailable.")
     /** Makes [editionId] the edition used for reading and sync. */
     suspend fun activate(bookId: String, editionId: String)
-    /** Matching ebooks from the existing providers, reporting each provider as it's checked. */
-    suspend fun findEditions(book: Audiobook, connected: Boolean, step: (String) -> Unit): BookTextFinder.Candidates
+    /** Every enabled ebook source looks for [book] at once; each one's section fills in as it answers. */
+    suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession
 }
 
 /** Room editions and positions, with pairing evidence from the sync engine. */
@@ -93,7 +94,14 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
 
     override suspend fun importBook(uri: Uri): Audiobook = graph.ebookImporter.import(uri)
     override suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition = graph.ebookImporter.importEdition(uri, book)
-    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition {
+    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource, step: (String) -> Unit): EbookEdition {
+        // Anna's Archive gives no lasting file link, so a download is found when the reader chooses the result.
+        if (candidate.provider == AnnasArchive.PROVIDER) {
+            val downloaded = graph.webEbookAcquisition.acquire(graph.annasArchive.download(candidate, step), connected = false, step)
+            step("Adding this ebook to your library")
+            val document = graph.followAlong.importDownloaded(downloaded.bytes, downloaded.format, book, downloaded.attribution, downloaded.provider)
+            return graph.editionFiles.editions(book.id).first { it.id == document.id }
+        }
         val doc = graph.followAlong.fetch(candidate, book, "", "")
         return graph.editionFiles.editions(book.id).first { it.id == doc.id }
     }
@@ -104,9 +112,9 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
         return graph.editionFiles.editions(book.id).first { it.id == document.id }
     }
     override suspend fun activate(bookId: String, editionId: String) = graph.followAlong.activateEdition(bookId, editionId)
-    override suspend fun findEditions(book: Audiobook, connected: Boolean, step: (String) -> Unit): BookTextFinder.Candidates {
+    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession {
         val saved = library.find(book.id)?.book()
-        return graph.textFinder.candidates(book, (book.sources + saved?.sources.orEmpty()).distinctBy { it.id }, connected, step)
+        return graph.streamingEbookSearch.start(book, (book.sources + saved?.sources.orEmpty()).distinctBy { it.id }, connected, scope)
     }
 }
 

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.narrio.data.AppleBooks
 import app.narrio.data.ShelfEntry
 import app.narrio.domain.*
 
@@ -61,7 +62,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 shape = RoundedCornerShape(14.dp))
             AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 LazyRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(listOf("All", "Fiction", "Mystery", "Wonder", "Nonfiction")) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
+                    items(AppleBooks.genres.keys.toList()) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
                         leadingIcon = { AnimatedVisibility(category == it, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } }) }
                 }
             }
@@ -77,6 +78,9 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         if (catalog.loading && catalog.books.isEmpty()) {
             items(4, key = { "skeleton$it" }) { SkeletonBookRow(Modifier.animateItem()) }
         } else if (catalog.books.isNotEmpty()) {
+            if (query.isBlank()) item(key = "browse-title") {
+                Text(browseTitle(category), Modifier.animateItem(), style = MaterialTheme.typography.headlineSmall)
+            }
             if (query.isNotBlank()) item(key = "results-title") {
                 AnimatedContent(if (catalog.loading) "Searching…" else "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}",
                     transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
@@ -88,6 +92,26 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
     }
+}
+
+/** Names what the browse list holds, including what the playful "Wonder" category covers. */
+internal fun browseTitle(category: String) = when (category) {
+    "Fiction" -> "Popular fiction"
+    "Thriller & mystery" -> "Popular thrillers & mysteries"
+    "Horror" -> "Popular horror"
+    "Wonder" -> "Popular fantasy & science fiction"
+    "Romance" -> "Popular romance"
+    "Comedy" -> "Popular comedy"
+    "Classics" -> "Popular classics"
+    "Kids & teens" -> "Popular with kids & teens"
+    "Nonfiction" -> "Popular nonfiction"
+    "Biography" -> "Popular biographies & memoirs"
+    "History" -> "Popular history"
+    "Science" -> "Popular science & nature"
+    "Self-help" -> "Popular self-help"
+    "Business" -> "Popular business & money"
+    "Travel" -> "Popular travel & adventure"
+    else -> "Popular audiobooks"
 }
 
 @Composable

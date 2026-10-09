@@ -36,8 +36,9 @@ class AppGraph(application: Application) {
     val addons = AddonManager.create(application, http)
     private val sourceSettingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val sourceProviderSettings = DeviceSourceProviderSettings.create(application, addons, sourceSettingsScope)
+    val ebookProviderSettings = DeviceSourceProviderSettings.create(application, addons, sourceSettingsScope, SourceCatalog.EBOOK)
     val metadata = BookMetadata(http, addonSearch = addons::catalog, addonRevision = { addons.revision })
-    val books = BookCatalog(metadata, addonSearch = addons::catalog, addonRevision = { addons.revision })
+    val books = BookCatalog(metadata, addonSearch = addons::catalog, addonRevision = { addons.revision }, apple = AppleBooks(metadata))
     val torbox = TorBoxDelivery(http, credentials::read)
     val webEbooks = TorBoxWebEbooks(torbox)
     val webEbookAcquisition = EbookWebAcquisition(http, webEbooks::acquire, { source -> torbox.webTextLink(source.torrentId!!, source.fileId!!) })
@@ -60,7 +61,19 @@ class AppGraph(application: Application) {
         phoneRecordings = { offline.books.value.filter { it.complete }.map { it.book.copy(id = it.book.recordingId.ifBlank { it.book.id }, sources = listOf(it.source)) } },
         rankingChanges = offline.books.map { Unit },
         preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() })
+    val annasArchive = AnnasArchive(http, WebViewPages(application))
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks, webEbooks::accountText)
+    val streamingEbookSearch: app.narrio.domain.StreamingEbookSearch = ProviderEbookSearch(ebookProviderSettings, { provider ->
+        when (provider.id) {
+            DeviceSourceProviderSettings.RECORDING_FILES -> RecordingEbookLookup
+            DeviceSourceProviderSettings.TORBOX_EBOOKS -> AccountEbookLookup(textFinder)
+            DeviceSourceProviderSettings.GUTENBERG -> GutenbergEbookLookup(textFinder)
+            else -> if (provider.kind != app.narrio.domain.SourceProviderKind.ADDON) null
+                else provider.id.removePrefix("addon:").let { id ->
+                    if (addons.installed.value.any { it.id == id && it.searchedInApp }) AnnasArchiveEbookLookup(annasArchive, addons, id) else AddonEbookLookup(textFinder, addons, id)
+                }
+        }
+    }, ebookProviderSettings::recordStatus)
     val speechModels = SpeechModelStore(application, http)
     val narrationSync = app.narrio.playback.NarrationSync(application, http, offline, torbox, speechModels)
     val sharedPositions = app.narrio.domain.AudioOwnedPositionStore(RoomSharedPositionStore(library))

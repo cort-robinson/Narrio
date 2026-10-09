@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
@@ -52,7 +53,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -65,6 +69,7 @@ import app.narrio.MainActivity
 import app.narrio.domain.*
 import app.narrio.reader.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.readium.r2.shared.publication.services.content.Content
@@ -141,8 +146,11 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
     val marksUi = rememberReaderMarksUi(marks, controller)
 
     // Page colours follow the target Appearance scheme, not the 450 ms dissolve, so the book relays out once.
+    // They use this book's colours, as the shell does around the reader.
+    val bookThemes by appVm.bookThemes.collectAsStateWithLifecycle()
     val dark = appearance.mode.isDark(androidx.compose.foundation.isSystemInDarkTheme())
-    val scheme = remember(appearance, dark) { colourSchemeFor(appearance, dark) }
+    val themed = remember(appearance, bookThemes, vm.bookId) { appearance.forBook(vm.bookId, bookThemes, reading = true) }
+    val scheme = remember(themed, dark) { colourSchemeFor(themed, dark) }
     val colors = ReaderColors(scheme.background.toArgb(), scheme.onBackground.toArgb(), dark)
     val request by appVm.reader.collectAsStateWithLifecycle()
     val formatsFlow = remember(request?.book?.id) { request?.book?.let { appVm.readingLibrary.value.observeBook(it) } ?: kotlinx.coroutines.flow.flowOf(null) }
@@ -194,20 +202,27 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
             CustomAccessibilityAction("Previous page") { controller.previous(); true },
         )
     }) {
-        // Unfolded in landscape (or any similarly wide and tall window), pages sit side by side like an open book.
-        // Height separates an unfolded inner display (about 830 x 690 dp) from a phone on its side (about 915 x 410 dp).
+        // While reading, the page reaches into the room hidden system bars leave and keeps clear only of the camera
+        // cutout and any bar that stays on screen. The controls bring the bars back over the page without reflowing it.
+        val insets = rememberPageInsets(controls, maxWidth, maxHeight)
+        // Two pages side by side whenever the window is wider than tall and each page keeps a comfortable measure at
+        // the chosen text size: an unfolded inner display, a Fold's wide cover screen, or a phone on its side.
         // Reading along keeps one text column; the narration's place is easier to follow without a spread.
-        val spread = !together && maxWidth > maxHeight && maxWidth >= 720.dp && maxHeight >= 560.dp
+        val pageWidth = (maxWidth - insets.left - insets.right) / 2
+        val spread = !together && !settings.scroll && maxWidth > maxHeight && maxHeight >= 320.dp &&
+            pageWidth >= 340.dp * settings.fontScale.coerceAtLeast(1.0).toFloat()
         val preferences = remember(settings, colors, spread) { settings.toEpubPreferences(colors, spread) }
-        val top = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+        val top = insets.top
         // Below the tray or the tabletop hinge, the page no longer meets the navigation bar.
-        val bottom = if (arrangement == ReadAlongArrangement.TRAY || arrangement == ReadAlongArrangement.TABLETOP) 0.dp
-            else WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+        val docked = arrangement == ReadAlongArrangement.TRAY || arrangement == ReadAlongArrangement.TABLETOP
+        val bottom = if (docked) 0.dp else insets.bottom
+        // The controls sit inside the system bars, which return with them.
+        val controlsTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
+        val controlsBottom = if (docked) 0.dp else WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
         // The page keeps only the room its running head and folio need; the shell adds no insets of its own here.
-        val margin = if (spread) 16.dp else 0.dp
         EpubReaderView(controller, preferences, spread, Modifier.fillMaxSize()
-            .padding(top = top + 28.dp, bottom = bottom + 26.dp, start = margin, end = margin)
-            .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+            .padding(top = top + 28.dp, bottom = bottom + 26.dp)
+            .absolutePadding(left = insets.left, right = insets.right)
             .testTag("reader-page"), selectionActionMode = marksUi.selectionMenu)
 
         // Running head and folio, like a printed page; they give way to the controls.
@@ -217,7 +232,7 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
                 modifier = Modifier.padding(top = top + 8.dp).padding(horizontal = 48.dp))
         }
         AnimatedVisibility(!controls && ready && layout != null, Modifier.align(Alignment.BottomCenter), enter = fadeIn(), exit = fadeOut()) {
-            Row(Modifier.fillMaxWidth().padding(bottom = bottom + 6.dp).padding(horizontal = 24.dp + margin).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth().padding(bottom = bottom + 6.dp).absolutePadding(left = insets.left, right = insets.right).padding(horizontal = 24.dp).semantics(mergeDescendants = true) {}, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(folioPlace(location), style = MaterialTheme.typography.labelSmall, color = quiet)
                 timeLeft(location)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = quiet) }
             }
@@ -246,7 +261,7 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
             exit = slideOutVertically(tween(Motion.SHORT, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
             ReaderBottomBar(session, location, contents, layout != null)
         }
-        AnimatedVisibility(returnPoint != null && ready && !together, Modifier.align(Alignment.BottomCenter).padding(bottom = bottom + (if (controls) 168.dp else 56.dp) +
+        AnimatedVisibility(returnPoint != null && ready && !together, Modifier.align(Alignment.BottomCenter).padding(bottom = (if (controls) controlsBottom + 168.dp else bottom + 56.dp) +
             if (marksUi.stackHeight > 0.dp) marksUi.stackHeight + 8.dp else 0.dp),
             enter = scaleIn(Motion.responsive(), initialScale = .8f) + fadeIn(), exit = scaleOut(targetScale = .8f) + fadeOut()) {
             val label = returnPoint?.let { session.label(BookPlace(it.resource, it.offset)) }
@@ -255,7 +270,7 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
                 Text(if (label != null) "Back to $label" else "Back to where you were")
             }
         }
-        ReaderMarksLayer(marksUi, session, appVm, controls, dark, top, bottom, margin) { controls = false }
+        ReaderMarksLayer(marksUi, session, appVm, controls, dark, insets.copy(bottom = bottom), controlsTop, controlsBottom) { controls = false }
         }
     }, controls = { arrangement ->
         val alongNow = readAlong ?: return@ReadAlongLayout
@@ -271,7 +286,9 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
     })
 
     if (sheet == "text") ModalBottomSheet({ sheet = null }, containerColor = MaterialTheme.colorScheme.surfaceContainer, scrimColor = Color.Black.copy(alpha = .12f)) {
-        TypographySheet(settings, appearance, dark, vm::update, appVm::updateAppearance)
+        TypographySheet(settings, appearance, dark, vm::update, appVm::updateAppearance) {
+            request?.book?.let { book -> BookThemePicker(book, appearance, bookThemes, dark) { appVm.setBookTheme(book, it) } }
+        }
     }
     if (sheet == "contents") {
         val contentsSheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -308,6 +325,31 @@ private fun ReaderRoom(appVm: NarrioViewModel, vm: ReaderViewModel, session: Rea
             confirmButton = { TextButton({ outsideLink = null; runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url.toString()))) } }) { Text("Open link") } },
             dismissButton = { TextButton({ outsideLink = null }) { Text("Stay here") } })
     }
+}
+
+/** The room a page leaves at each window edge; left and right are absolute, so a side cutout stays on its side. */
+data class PageInsets(val top: Dp, val bottom: Dp, val left: Dp, val right: Dp) {
+    companion object {
+        fun of(insets: WindowInsets, density: Density, direction: LayoutDirection) = with(density) {
+            PageInsets(insets.getTop(density).toDp(), insets.getBottom(density).toDp(), insets.getLeft(density, direction).toDp(), insets.getRight(density, direction).toDp())
+        }
+    }
+}
+
+/**
+ * The page's insets: the system bars actually on screen and the display cutout. They follow the window only while
+ * the controls are down and the insets have settled, so showing the controls (and their bars) or a bar animating
+ * away never repaginates the book. A new window size starts from the cutout alone, as the bars are expected hidden.
+ */
+@Composable
+private fun rememberPageInsets(controls: Boolean, width: Dp, height: Dp): PageInsets {
+    val density = LocalDensity.current
+    val direction = LocalLayoutDirection.current
+    val cutout = WindowInsets.displayCutout
+    val current = PageInsets.of(WindowInsets.systemBars.union(cutout), density, direction)
+    var settled by remember(width, height) { mutableStateOf(PageInsets.of(cutout, density, direction)) }
+    LaunchedEffect(controls, current) { if (!controls) { delay(400); settled = current } }
+    return settled
 }
 
 private fun folioPlace(location: ReaderLocation) = buildString {
@@ -428,7 +470,8 @@ private fun ChapterScrubber(progress: Double, marks: List<Double>, enabled: Bool
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSettings, dark: Boolean, update: (ReaderSettings.() -> ReaderSettings) -> Unit, updateAppearance: (AppearanceSettings) -> Unit) {
+private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSettings, dark: Boolean, update: (ReaderSettings.() -> ReaderSettings) -> Unit,
+                            updateAppearance: (AppearanceSettings) -> Unit, bookColours: @Composable () -> Unit) {
     val context = LocalContext.current
     val dyslexic = remember { FontFamily(Font("readium/fonts/OpenDyslexic-Regular.otf", context.assets)) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp).testTag("reader-typography")) {
@@ -476,26 +519,14 @@ private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSett
         SwitchRow("Hyphenation", "Break long words at line ends", settings.hyphenate && !settings.publisherStyles) { value -> update { withAdvanced { copy(hyphenate = value) } } }
         SwitchRow("Publisher styles", if (settings.publisherStyles) "The book's own spacing and alignment" else "Your spacing and alignment choices", settings.publisherStyles) { value -> update { copy(publisherStyles = value) } }
         SwitchRow("Volume keys turn pages", "Only while nothing is playing", settings.volumeKeys) { value -> update { copy(volumeKeys = value) } }
-        SheetLabel("Colours · ${appearance.paletteName}")
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ThemePalette.entries.filter { it != ThemePalette.CUSTOM || appearance.custom != null }.forEach { palette ->
-                val option = appearance.copy(palette = palette)
-                val colours = option.colours(dark)
-                val selected = appearance.palette == palette
-                Box(Modifier.size(44.dp).clip(CircleShape)
-                    .border(if (selected) 3.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, CircleShape)
-                    .selectable(selected, role = Role.RadioButton) { updateAppearance(option) }
-                    .semantics { contentDescription = if (palette == ThemePalette.CUSTOM) appearance.custom?.name ?: "Custom" else palette.label }) {
-                    Canvas(Modifier.fillMaxSize().padding(if (selected) 5.dp else 1.dp).clip(CircleShape)) {
-                        drawRect(Color(0xFF000000.toInt() or colours.background))
-                        drawCircle(Color(0xFF000000.toInt() or colours.accent), radius = size.minDimension * .28f, center = Offset(size.width * .64f, size.height * .64f))
-                    }
-                }
-            }
-        }
+        SheetLabel("Colours for this book")
+        bookColours()
         SheetLabel("Mode")
         Segments(ThemeMode.entries, appearance.mode, { it.label }) { mode -> updateAppearance(appearance.copy(mode = mode)) }
-        Text("Colours and mode are your Appearance settings, shared with the rest of Narrio.", style = MaterialTheme.typography.bodySmall,
+        Spacer(Modifier.height(8.dp))
+        SwitchRow("Pure black pages", if (appearance.pureBlack == PureBlack.EVERYWHERE) "On throughout Narrio at night" else "True black at night, for OLED screens",
+            appearance.pureBlack != PureBlack.OFF) { on -> updateAppearance(appearance.copy(pureBlack = if (on) PureBlack.READER else PureBlack.OFF)) }
+        Text("Mode and pure black are your Appearance settings, shared with the rest of Narrio.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
     }
 }

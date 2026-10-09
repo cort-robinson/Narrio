@@ -133,24 +133,39 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Saved").assertIsDisplayed()
         capture("details-audio-night")
 
-        // Find ebook opens the sheet, names the provider being checked, then lists what it found.
+        // Find ebook opens the sheet with every source searching, then the best match and each source's own outcome.
+        val gutenberg = BookTextSource("gutenberg:1", audioOnly.title, audioOnly.author, "EPUB", "gutenberg", attribution = "Project Gutenberg · ebook 1", language = "en")
         compose.runOnIdle {
             fake.findDelayMs = 2_000
-            fake.found = BookTextFinder.Candidates(listOf(
-                BookTextSource("gutenberg:1", audioOnly.title, audioOnly.author, "EPUB", "gutenberg", attribution = "Project Gutenberg · ebook 1", language = "en"),
-                BookTextSource("torbox-cache:1", "${audioOnly.title} - ${audioOnly.author} [EPUB]", format = "EPUB", provider = "torbox-cache", attribution = "Cached ebook release via TorBox")), incomplete = true)
+            fake.found = { listOf(
+                EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE, editions = listOf(gutenberg)),
+                EbookGroup("addon:knaben-ebooks", "Knaben Ebooks", SourceGroupStatus.FAILED, message = "Ebook lookup timed out. Retry."),
+            ) }
         }
         compose.onNodeWithTag("find-ebook-action").performClick()
         compose.onNodeWithText("Find an ebook").assertIsDisplayed()
-        compose.onNodeWithText("Checking Project Gutenberg…").assertIsDisplayed()
+        compose.onNodeWithText("Finding an ebook…").assertIsDisplayed()
+        compose.onNodeWithTag("ebook-sources-summary").assertTextEquals("0 of 2 sources answered · 0 found")
         capture("find-ebook-searching-night")
-        compose.waitUntil(10_000) { shown("Cached ebook release via TorBox") }
-        compose.onNodeWithText("Some providers didn't respond, so this list may be incomplete.").assertExists()
-        compose.onNodeWithText("Choose an EPUB or text file").assertExists()
+        compose.waitUntil(10_000) { shown("Free public-domain ebook · EPUB") }
+        compose.onNodeWithTag("ebook-sources-summary").assertTextEquals("1 found · 1 of 2 sources couldn't be checked")
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-retry:addon:knaben-ebooks"))
+        compose.onNodeWithText("Ebook lookup timed out. Retry.").assertExists()
         capture("find-ebook-results-night")
-        compose.runOnIdle { fake.findDelayMs = 0; fake.found = BookTextFinder.Candidates(emptyList(), incomplete = false) }
-        compose.onNodeWithText("Search again").performClick()
-        compose.waitUntil(10_000) { shown("No ebook with this exact title and author turned up here. Try an ebook website or add your own file below.") }
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Choose an EPUB or text file"))
+        compose.onNodeWithText("Choose an EPUB or text file").assertExists()
+        // One tap adds the best match and opens it, as Listen plays the best recording.
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("best-ebook-action"))
+        compose.onNodeWithTag("best-ebook-action").performClick()
+        compose.waitUntil(10_000) { vm.reader.value != null }
+        assertEquals(audioOnly.id, vm.reader.value!!.book.id)
+        assertEquals(gutenberg.title, vm.reader.value!!.edition.title)
+        compose.runOnIdle { vm.closeReader(); fake.formats.value = formats }
+        // A source that couldn't be checked makes Find ebook search again; nothing found says so and offers the next step.
+        compose.runOnIdle { fake.findDelayMs = 0; fake.found = { listOf(EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE)) } }
+        compose.onNodeWithTag("find-ebook-action").performClick()
+        compose.waitUntil(10_000) { shown("No ebook found") }
+        compose.onNodeWithText("Searched Project Gutenberg. Nothing matched this title and author.").assertExists()
         theme(ThemeMode.DAY)
         capture("find-ebook-empty-day")
         // Adding an edition closes the sheet.
@@ -205,7 +220,7 @@ class LibraryFormatsExperienceTest {
         try {
             compose.runOnIdle {
                 graph.addons.enable(addonId, true)
-                fake.found = BookTextFinder.Candidates(emptyList(), incomplete = false)
+                fake.found = { emptyList() }
                 vm.selection.value = SelectionState(audioOnly)
             }
             compose.onNodeWithTag("find-ebook-action").performClick()
@@ -307,7 +322,8 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
     val importable = Audiobook("fixture-imported", "Notes from a Quiet Harbor", "Ines Calder", provider = "catalog", detailsLoaded = true)
     @Volatile var importError: Exception? = null
     @Volatile var importDelayMs = 0L
-    @Volatile var found = BookTextFinder.Candidates(emptyList(), incomplete = false)
+    /** Each source's final section for a book; the session first shows them all searching for [findDelayMs]. */
+    @Volatile var found: (Audiobook) -> List<EbookGroup> = { emptyList() }
     @Volatile var findDelayMs = 0L
     @Volatile var websiteDownload: EbookDownloadRequest? = null
     override fun observeShelf(): Flow<Map<String, BookFormats>> = formats
@@ -321,7 +337,11 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
         return importable
     }
     override suspend fun importEdition(book: Audiobook, uri: Uri): EbookEdition = throw ProviderException("Not used by this fixture.")
-    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource): EbookEdition = throw ProviderException("Not used by this fixture.")
+    override suspend fun addEdition(book: Audiobook, candidate: BookTextSource, step: (String) -> Unit): EbookEdition {
+        val edition = EbookEdition("ed-added", book.id, candidate.title, candidate.author, candidate.format, attribution = candidate.attribution, active = true)
+        formats.update { it + (book.id to it.getValue(book.id).copy(editions = listOf(edition))) }
+        return edition
+    }
     override suspend fun downloadWebsiteEbook(book: Audiobook, request: EbookDownloadRequest, connected: Boolean, step: (String) -> Unit): EbookEdition {
         websiteDownload = request
         val edition = EbookEdition("ed-web", book.id, book.title, book.author, "TXT", attribution = "Controlled website download", active = true)
@@ -329,7 +349,13 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
         return edition
     }
     override suspend fun activate(bookId: String, editionId: String) = Unit
-    override suspend fun findEditions(book: Audiobook, connected: Boolean, step: (String) -> Unit): BookTextFinder.Candidates {
-        step("Checking Project Gutenberg"); delay(findDelayMs); return found
+    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession {
+        val groups = found(book)
+        val state = MutableStateFlow(StreamedEbookSearch(book, groups.map { EbookGroup(it.providerId, it.name, SourceGroupStatus.SEARCHING) }))
+        scope.launch { delay(findDelayMs); state.value = StreamedEbookSearch(book, groups, EbookRanking.choose(book, groups), complete = true) }
+        return object : EbookSearchSession {
+            override val state = state.asStateFlow()
+            override fun retry(providerId: String) = Unit
+        }
     }
 }

@@ -58,19 +58,24 @@ class AddonManager(
     override suspend fun searchBook(book: Audiobook, title: String): List<Audiobook> = sources(title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), "audiobook")
     suspend fun ebooks(query: String): List<Audiobook> = sources(query, "", "ebook")
     /** Browser-only providers are offered separately from verified ebook files and need no delivery account. */
-    fun ebookSearchLinks(book: Audiobook): List<EbookSearchLink> {
+    fun ebookSearchLinks(book: Audiobook): List<EbookSearchLink> = installed.value.filter { it.enabled && it.ebookSearch }
+        .mapNotNull { addon -> ebookSearchUrl(addon, book)?.let { EbookSearchLink(addon.name, it) } }
+
+    /** The enabled ebook website's search for [book], or null when it's disabled, removed, or the book has no title. */
+    fun ebookSearchUrl(id: String, book: Audiobook): String? =
+        installed.value.firstOrNull { it.id == id && it.enabled && it.ebookSearch }?.let { ebookSearchUrl(it, book) }
+
+    private fun ebookSearchUrl(addon: InstalledAddon, book: Audiobook): String? {
         val title = BookIdentity.title(book.title)
-        if (title.isBlank()) return emptyList()
+        if (title.isBlank()) return null
         val author = book.author.takeUnless(BookMetadata::unknown).orEmpty()
         val replacements = mapOf("{TITLE}" to title.take(250), "{AUTHOR}" to author.take(200), "{QUERY}" to "$title $author".trim().take(450))
-        return installed.value.filter { it.enabled && it.ebookSearch }.map { addon ->
-            val spec = addon.manifest["adapters"]!!.jsonObject["ebook-search"]!!.jsonObject["request"]!!.jsonObject
-            val url = Regex("\\{(?:TITLE|AUTHOR|QUERY)\\}").replace(spec.text("url")) { match ->
-                java.net.URLEncoder.encode(replacements.getValue(match.value), "UTF-8").replace("+", "%20")
-            }
-            AddonManifest.secureUrl(url)
-            EbookSearchLink(addon.name, url)
+        val spec = addon.manifest["adapters"]!!.jsonObject["ebook-search"]!!.jsonObject["request"]!!.jsonObject
+        val url = Regex("\\{(?:TITLE|AUTHOR|QUERY)\\}").replace(spec.text("url")) { match ->
+            java.net.URLEncoder.encode(replacements.getValue(match.value), "UTF-8").replace("+", "%20")
         }
+        AddonManifest.secureUrl(url)
+        return url
     }
     override suspend fun recording(id: String): Audiobook = throw ProviderException("Choose a release to inspect its TorBox availability.")
 
@@ -80,11 +85,20 @@ class AddonManager(
 
     /** One audio add-on, with its existing lock/rate limit and independently reported outcome. */
     suspend fun searchAddon(id: String, book: Audiobook, title: String, budget: SourceSearchBudget,
-                            status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> {
-        val addon = installed.value.firstOrNull { it.id == id && it.enabled && it.source && it.contentType == "audiobook" }
+                            status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> =
+        searchOne(id, "audiobook", title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), budget, status)
+
+    /** One ebook add-on, queried with title and author together as [ebooks] always has. */
+    suspend fun searchEbookAddon(id: String, book: Audiobook, title: String, budget: SourceSearchBudget,
+                                 status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> =
+        searchOne(id, "ebook", "$title ${book.author.takeUnless(BookMetadata::unknown).orEmpty()}".trim(), "", budget, status)
+
+    private suspend fun searchOne(id: String, type: String, title: String, author: String, budget: SourceSearchBudget,
+                                  status: suspend (SourceGroupStatus) -> Unit): List<Audiobook> {
+        val addon = installed.value.firstOrNull { it.id == id && it.enabled && it.source && it.contentType == type }
             ?: throw ProviderException("This source is disabled or removed.")
         return try {
-            source(addon, title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), budget, status)
+            source(addon, title, author, budget, status)
                 .also { statusState.update { previous -> previous + (id to "Available") } }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
@@ -132,7 +146,7 @@ class AddonManager(
                 else -> ""
             }
             BookDetails(name, authors, fields["narrator"].orEmpty().takeIf(String::isNotBlank)?.let(::listOf).orEmpty(),
-                MetadataText.clean(fields["description"].orEmpty()), cover, fields["language"].orEmpty(), addon.name, link)
+                MetadataText.clean(fields["description"].orEmpty()), cover, fields["language"].orEmpty(), addon.name, link, fields["publisher"].orEmpty())
         }
     }
 

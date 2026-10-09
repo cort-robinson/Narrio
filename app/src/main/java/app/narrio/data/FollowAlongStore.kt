@@ -49,14 +49,17 @@ class FollowAlongStore(private val context: Context, private val library: Librar
         val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) cursor.getString(0) else null
         }.orEmpty()
-        val format = textFileFormat(name) ?: when (resolver.getType(uri)) {
+        val type = resolver.getType(uri).orEmpty()
+        val declared = textFileFormat(name) ?: when (type) {
             "application/epub+zip" -> "EPUB"
             "text/plain" -> "TXT"
             "text/vtt" -> "VTT"
-            else -> throw ProviderException("Choose an EPUB, UTF-8 .txt, or WebVTT .vtt file.")
+            else -> null
         }
+        if (declared == null && !EbookWebAcquisition.undetermined(name, type)) throw ProviderException("Choose an EPUB, UTF-8 .txt, or WebVTT .vtt file.")
         val bytes = resolver.openInputStream(uri)?.use { BookTextParser.readBounded(it) }
             ?: throw ProviderException("This file couldn't be opened. Choose it again.")
+        val format = declared ?: BookTextParser.detect(bytes) ?: throw ProviderException("Choose an EPUB, UTF-8 .txt, or WebVTT .vtt file.")
         attach(bytes, format, book, sourceId, partId, book.title, book.author, "Imported from your device")
     }
 

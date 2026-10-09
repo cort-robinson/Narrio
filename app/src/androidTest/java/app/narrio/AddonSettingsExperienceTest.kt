@@ -77,8 +77,9 @@ class AddonSettingsExperienceTest {
             reveal(hasText("Knaben AudioBooks")); compose.onNodeWithText("Knaben AudioBooks").assertIsDisplayed()
             reveal(hasText("The Pirate Bay")); compose.onNodeWithText("The Pirate Bay").assertIsDisplayed()
             reveal(hasText("Knaben Ebooks")); compose.onNodeWithText("Knaben Ebooks").assertIsDisplayed()
-            reveal(hasText("Anna's Archive")); compose.onNodeWithText("Anna's Archive").assertIsDisplayed()
-            compose.onNodeWithText("Opens inside Narrio").assertExists()
+            // Narrio searches Anna's Archive itself, so it's listed and ordered with the other ebook sources.
+            reveal(hasTestTag("source-toggle:addon:annas-archive-ebooks")); compose.onNodeWithText("Anna's Archive").assertIsDisplayed()
+            compose.onNodeWithText("Opens inside Narrio").assertDoesNotExist()
             compose.onNodeWithContentDescription("Back to settings").performClick()
             compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").assertIsDisplayed()
             compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()

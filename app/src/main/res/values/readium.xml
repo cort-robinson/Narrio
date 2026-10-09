@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Readium pads paginated pages by 40dp (20dp in landscape) above and below. The reader already leaves room for
+         its running head and folio, so the page keeps only a small breathing space. -->
+    <dimen name="readium_navigator_epub_vertical_padding">8dp</dimen>
+</resources>

@@ -25,6 +25,7 @@ class BookMetadata(
     private val now: () -> Long = System::currentTimeMillis,
     private val addonSearch: (suspend (String) -> List<BookDetails>)? = null,
     private val addonRevision: () -> Int = { 0 },
+    private val appleUrl: String = "https://itunes.apple.com/",
 ) {
     private val http = http.newBuilder().connectTimeout(4, TimeUnit.SECONDS)
         .readTimeout(6, TimeUnit.SECONDS).callTimeout(8, TimeUnit.SECONDS).build()
@@ -32,6 +33,9 @@ class BookMetadata(
     private data class Cached(val candidates: List<BookDetails>, val expires: Long)
     private val cache = object : LinkedHashMap<String, Cached>(128, .75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Cached>) = size > 128
+    }
+    private val covers = object : LinkedHashMap<String, String>(128, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>) = size > 128
     }
 
     suspend fun enrich(book: Audiobook, force: Boolean = false): Audiobook {
@@ -78,7 +82,7 @@ class BookMetadata(
                 narrator = if (useNarrator) narrators.joinToString(", ") else book.narrator,
                 narratorFromCatalog = if (useNarrator) true else book.narratorFromCatalog,
                 description = chosen.description.ifBlank { book.description },
-                coverUrl = chosen.coverUrl.ifBlank { book.coverUrl },
+                coverUrl = (unbranded(chosen) ?: chosen).coverUrl.ifBlank { book.coverUrl },
                 releaseTitle = book.releaseTitle.ifBlank { book.title },
                 metadataSource = chosen.provider,
                 metadataUrl = chosen.url,
@@ -102,9 +106,48 @@ class BookMetadata(
             BookDetails(product.text("title"), authors, product.objects("narrators").map { it.text("name") }.filter(String::isNotBlank),
                 MetadataText.clean(product.text("publisher_summary").ifBlank { product.text("merchandising_summary") }.ifBlank { product.text("short_description") }),
                 images?.entries?.sortedByDescending { it.key.toIntOrNull() ?: 0 }?.firstNotNullOfOrNull { (_, value) -> secureImage(value.stringValue()) }.orEmpty(),
-                product.text("language"), "Audible", "https://www.audible.com/pd/$asin")
+                product.text("language"), "Audible", "https://www.audible.com/pd/$asin", product.text("publisher_name"))
         }
     }
+
+    /**
+     * Audible's own productions carry an "Only from Audible" banner on their artwork, in every store that sells them.
+     * The publisher's ebook has the plain cover; one search of an author's ebooks covers a whole series. Without an
+     * ebook (Audible Originals), the banner art stays. Pass books by one author. Returns null when the lookup failed,
+     * so callers can retry it soon.
+     */
+    internal suspend fun unbranded(books: List<BookDetails>): List<BookDetails>? {
+        fun branded(book: BookDetails) = book.brandedCover && book.coverUrl.isNotBlank() && book.authors.isNotEmpty()
+        val pending = books.filter { branded(it) && synchronized(covers) { coverKey(it) !in covers } }
+        if (pending.isNotEmpty()) {
+            val url = (appleUrl + "search").toHttpUrl().newBuilder().addQueryParameter("term", pending.first().authors.first())
+                .addQueryParameter("attribute", "authorTerm").addQueryParameter("media", "ebook").addQueryParameter("entity", "ebook")
+                .addQueryParameter("country", "us").addQueryParameter("limit", "100").build()
+            val results = try { get(url).objects("results") }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { return null }
+            for (book in pending) {
+                val title = normalized(coverTitle(book.title))
+                val cover = results.firstOrNull { result ->
+                    val name = result.text("trackName")
+                    val clean = coverTitle(name)
+                    // The ebook may add the subtitle that the audiobook keeps separately.
+                    !AppleBooks.otherEdition(name) && AppleBooks.plainEbookArt(result.text("artworkUrl100")) && (normalized(clean) == title || normalized(clean.substringBefore(":")) == title) &&
+                        AppleBooks.authors(result.text("artistName")).any { sameAuthors(listOf(it), listOf(book.authors.first())) }
+                }?.let { AppleBooks.artwork(it.text("artworkUrl100")) }.orEmpty()
+                synchronized(covers) { covers[coverKey(book)] = cover }
+            }
+        }
+        return books.map { book ->
+            synchronized(covers) { covers[coverKey(book)] }?.takeIf { branded(book) && it.isNotBlank() }?.let { book.copy(coverUrl = it, brandedCover = false) } ?: book
+        }
+    }
+
+    internal suspend fun unbranded(book: BookDetails): BookDetails? = unbranded(listOf(book))?.single()
+
+    private fun coverKey(book: BookDetails) = BookIdentity.key(book.title, book.authors.joinToString(", "))
+
+    private fun coverTitle(value: String) = BookIdentity.title(AppleBooks.title(value))
 
     private suspend fun openLibrary(book: Audiobook, query: String): List<BookDetails> {
         val candidates = librarySearch(query)
@@ -202,7 +245,9 @@ class BookMetadata(
 
 data class BookDetails(
     val title: String, val authors: List<String>, val narrators: List<String>, val description: String,
-    val coverUrl: String, val language: String, val provider: String, val url: String,
+    val coverUrl: String, val language: String, val provider: String, val url: String, val publisher: String = "",
+    /** Audible-produced store art is marked "Only from Audible" (and "Audible Original"); other publishers' art is plain. */
+    val brandedCover: Boolean = publisher.contains("audible", ignoreCase = true),
 )
 
 /** Plain text is shared by catalog and recording metadata, without requiring Android in contract tests. */

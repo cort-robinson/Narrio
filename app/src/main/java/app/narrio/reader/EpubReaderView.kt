@@ -61,9 +61,13 @@ fun ReaderSettings.toEpubPreferences(colors: ReaderColors, spread: Boolean) = Ep
 private fun navigatorConfiguration(selection: ActionMode.Callback?, spread: Boolean) = EpubNavigatorFragment.Configuration {
     servedAssets += "fonts/.*"
     // ReadiumCSS only lays out two columns above 60em of width; an unfolded phone in landscape is narrower, so a
-    // spread sets the reading-system column count directly. These properties are fixed when the navigator is created.
-    if (spread) readiumCssRsProperties = RsProperties(colCount = ColCount.TWO, colWidth = Length.Rem(12.0))
+    // spread sets the reading-system column count directly. Its width-based gutter (up to 40px a side) would leave
+    // twice that between the pages, so a spread uses a narrower one; the Margins choice still scales it.
+    // These properties are fixed when the navigator is created.
+    if (spread) readiumCssRsProperties = RsProperties(colCount = ColCount.TWO, colWidth = Length.Rem(12.0), pageGutter = Length.Px(28.0))
     selectionActionModeCallback = selection
+    // The reader pads the page for the cutout and system bars itself; Readium's own cutout padding would double it.
+    shouldApplyInsetsPadding = false
     decorationTemplates = decorationTemplates.copy().also(NarrationMark::register)
     for ((family, file) in listOf("Newsreader" to "newsreader.ttf", "Manrope" to "manrope.ttf", ReaderDocuments.NARRIO_PAIRING to "manrope.ttf")) {
         addFontFamilyDeclaration(FontFamily(family)) {

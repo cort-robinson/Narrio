@@ -33,6 +33,36 @@ object BookTextParser {
         return output.toByteArray()
     }
 
+    /**
+     * EPUB when the bytes are a ZIP holding an EPUB's mimetype or container, for files whose name or type doesn't say,
+     * such as a website download saved as ".bin" with "application/octet-stream". Text is never guessed from bytes.
+     */
+    fun detect(bytes: ByteArray): String? {
+        if (bytes.size < 4 || bytes[0] != 'P'.code.toByte() || bytes[1] != 'K'.code.toByte() || bytes[2].toInt() != 3 || bytes[3].toInt() != 4) return null
+        return try {
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+                var entries = 0
+                while (entries++ < 2_000) {
+                    val entry = zip.nextEntry ?: break
+                    if (entry.name == "META-INF/container.xml") return "EPUB"
+                    if (entry.name == "mimetype" && String(zip.readNBytesCompat(64), Charsets.US_ASCII).trim() == "application/epub+zip") return "EPUB"
+                }
+                null
+            }
+        } catch (_: Exception) { null }
+    }
+
+    private fun ZipInputStream.readNBytesCompat(limit: Int): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(limit)
+        while (output.size() < limit) {
+            val count = read(buffer, 0, limit - output.size())
+            if (count < 0) break
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+
     fun fingerprint(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     fun parse(bytes: ByteArray, format: String, title: String, author: String = "", attribution: String = "Imported from your device"): BookText {

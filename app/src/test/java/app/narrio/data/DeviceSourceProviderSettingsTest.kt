@@ -23,6 +23,15 @@ class DeviceSourceProviderSettingsTest {
         addons.enable("on", false); runCurrent(); assertFalse(settings.providers.value.first { it.id == "addon:on" }.enabled)
     }
 
+    @Test fun annasArchiveIsSearchedAsAnEbookSourceWithoutTorBoxWhileOtherWebsitesStayLinks() = runTest {
+        val addons = AddonManager(OkHttpClient(), listOf(addon("knaben", type = "ebook"), addon(AnnasArchive.ADDON_ID, type = "ebook", capability = "ebook-search"),
+            addon("other-website", type = "ebook", capability = "ebook-search")))
+        val settings = DeviceSourceProviderSettings(addons, backgroundScope, catalog = SourceCatalog.EBOOK); runCurrent()
+        assertEquals(listOf("recording-files", "torbox-ebooks", "addon:knaben", "addon:${AnnasArchive.ADDON_ID}", "gutenberg"), settings.providers.value.map { it.id })
+        assertFalse(settings.providers.value.first { it.id == "addon:${AnnasArchive.ADDON_ID}" }.requiresTorBox)
+        assertTrue(settings.providers.value.first { it.id == "addon:knaben" }.requiresTorBox)
+    }
+
     @Test fun builtinSwitchAndPrioritySurviveRestoreAndAddonRemovalStaysRemoved() = runTest {
         var saved = SourceProviderPreferences()
         var installed = listOf(addon("audio", false))

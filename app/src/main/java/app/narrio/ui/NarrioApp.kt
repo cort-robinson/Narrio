@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.window.layout.*
 import app.narrio.domain.Audiobook
 import app.narrio.domain.ThemeContrast
+import app.narrio.domain.forBook
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
@@ -91,7 +92,13 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     val backEnabled = selected.book != null || playerOpen || reader != null || destination != 0
     val goBack: () -> Unit = { if (playerOpen || selected.book != null || reader != null) vm.back() else vm.navigate(0) }
 
-    NarrioTheme(appearance) {
+    // The book being read, or heard in the open Listening room, colours the whole window, system bars included.
+    val bookThemes by vm.bookThemes.collectAsStateWithLifecycle()
+    val themedBook = reader?.book ?: state.book?.takeIf { playerOpen }
+    val bookChoice = themedBook?.let { bookThemes.choice(it.id, appearance) }
+    LaunchedEffect(themedBook?.id, bookChoice) { themedBook?.let(vm::ensureCoverColours) }
+    val themed = remember(appearance, bookThemes, themedBook?.id, reader != null) { appearance.forBook(themedBook?.id, bookThemes, reading = reader != null) }
+    NarrioTheme(themed) {
         val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
         SideEffect { WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark } }
         val snackbar = remember { SnackbarHostState() }

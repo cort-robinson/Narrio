@@ -106,6 +106,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     var sleepOpen by remember { mutableStateOf(false) }
     var partsOpen by remember { mutableStateOf(false) }
     var bookmarksOpen by remember { mutableStateOf(false) }
+    var coloursOpen by remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -128,10 +129,11 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
             Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             ReadAlongEntry(vm, book, dense = true)
+            BookColoursButton { coloursOpen = true }
             BookmarkNow(vm)
             ClosePlayback(vm)
         } else Column(pullDown) {
-            PlayerHeading(vm, compact)
+            PlayerHeading(vm, compact) { coloursOpen = true }
             ReadAlongEntry(vm, book, dense = false, modifier = Modifier.padding(start = if (compact) 12.dp else 0.dp, bottom = 4.dp))
         }
     }
@@ -207,6 +209,29 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
         }
     }
     if (bookmarksOpen) ListeningBookmarksSheet(vm, state, book) { bookmarksOpen = false }
+    if (coloursOpen) BookColoursSheet(vm, book) { coloursOpen = false }
+}
+
+@Composable
+private fun BookColoursButton(open: () -> Unit) {
+    IconButton(open, Modifier.testTag("book-colours-open")) { Icon(Icons.Rounded.Palette, "Colours for this book") }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -> Unit) {
+    val appearance by vm.appearance.collectAsStateWithLifecycle()
+    val themes by vm.bookThemes.collectAsStateWithLifecycle()
+    val dark = appearance.mode.isDark(isSystemInDarkTheme())
+    ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
+            Text("Colours for this book", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(8.dp))
+            Text("Used in the Listening room and the reader for ${book.title}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(16.dp))
+            BookThemePicker(book, appearance, themes, dark) { vm.setBookTheme(book, it) }
+        }
+    }
 }
 
 /**
@@ -283,11 +308,12 @@ private fun ListeningCover(book: Audiobook, playing: Boolean, modifier: Modifier
 }
 
 @Composable
-private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean) {
+private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
         Text("Now playing", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
+        BookColoursButton(openColours)
         BookmarkNow(vm)
         ClosePlayback(vm)
     }

@@ -119,9 +119,10 @@ class ReaderAnnotationsExperienceTest {
         val source = AudioSource("annotations-source", "Recording", "MP3", listOf(AudioPart("part", "1.mp3", "Chapter", 120_000)))
         val book = Audiobook("annotations-bookmarks", "Shared marks", "Fixture", sources = listOf(source), detailsLoaded = true)
         opened += book
-        val document = seeds.graph.followAlong.importLocal(("Chapter One\n\n" + (1..40).joinToString("\n\n") { "Paragraph $it of the shared bookmark fixture, long enough to fill a line or two." }).toByteArray(), "TXT", book)
+        val document = seeds.graph.followAlong.importLocal(("Chapter One\n\n" + (1..80).joinToString("\n\n") { "Paragraph $it of the shared bookmark fixture, long enough to fill a line or two." }).toByteArray(), "TXT", book)
         val passages = document.chapters.flatMap { it.passages }
-        val anchored = passages[20]
+        // Far enough in that the bookmarked second page never already shows the listening bookmark, even on a tall screen.
+        val anchored = passages[60]
         seeds.graph.followAlong.bind(book.id, TextBinding(document.id, source.id, "part", WHOLE_BOOK,
             listOf(TextAnchor(passages[0].id, 0, 0, true), TextAnchor(anchored.id, 60_000, 0, true), TextAnchor(passages.last().id, 118_000, 0, true))))
         // A listening bookmark from before ebooks: audio columns only.

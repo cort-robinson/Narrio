@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.data.AppearanceStore
+import app.narrio.data.BookThemeStore
 import app.narrio.domain.*
 import app.narrio.ui.*
 import org.junit.After
@@ -83,6 +84,67 @@ class AppearanceExperienceTest {
         compose.runOnIdle { assertEquals(AppearanceSettings(), vm.appearance.value) }
     }
 
+    @Test fun seasonalPalettePureBlackAndCoverMatchingApplyAndPersist() {
+        target("palette-AMETHYST").performClick()
+        target("palette-HALLOWEEN").performClick()
+        compose.onNodeWithTag("palette-HALLOWEEN").assertIsSelected()
+        capture("seasonal-night")
+        target("pure-black-EVERYWHERE").performClick()
+        target("cover-themes").performClick()
+        compose.runOnIdle {
+            assertEquals(Color.Black, colourSchemeFor(vm.appearance.value, true).background)
+        }
+        capture("pure-black")
+        compose.activityRule.scenario.recreate()
+        compose.runOnIdle {
+            assertEquals(ThemePalette.HALLOWEEN, vm.appearance.value.palette)
+            assertEquals(PureBlack.EVERYWHERE, vm.appearance.value.pureBlack)
+            assertTrue(vm.appearance.value.coverThemes)
+        }
+        target("restore-appearance").performClick()
+        compose.runOnIdle { assertEquals(AppearanceSettings(), vm.appearance.value) }
+    }
+
+    @Test fun bookColoursAndPureBlackPagesApplyToTheReaderWithoutChangingTheAppPalette() {
+        val seeds = ReaderSeeds(compose)
+        val book = seeds.book("book-colours", app.narrio.reader.ReaderFixtures.sampleEpub(4), "EPUB", "The Secret Garden")
+        try {
+            val controller = seeds.open(book, AppearanceSettings(palette = ThemePalette.OCEAN))
+            compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("reader-text-settings").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("reader-text-settings").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("reader-typography").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("book-theme-HALLOWEEN").performScrollTo().performClick()
+            compose.onNodeWithText("Pure black pages").performScrollTo().performClick()
+            compose.runOnIdle {
+                assertEquals(BookTheme(BookColours.PALETTE, ThemePalette.HALLOWEEN), vm.bookThemes.value.choices[book.id])
+                assertEquals(ThemePalette.OCEAN, vm.appearance.value.palette)
+                assertEquals(PureBlack.READER, vm.appearance.value.pureBlack)
+            }
+            compose.waitUntil(10_000) {
+                seeds.evaluate(controller, "getComputedStyle(document.documentElement).backgroundColor")?.contains("rgb(0, 0, 0)") == true
+            }
+            capture("reader-book-colours")
+        } finally {
+            compose.runOnIdle { vm.setBookTheme(book, BookTheme()) }
+            seeds.remove(book)
+        }
+    }
+
+    @Test fun matchingTheCoverDerivesAndKeepsAPaletteFromTheCoverImage() {
+        val book = Audiobook("cover-colours", "The Secret Garden", "Frances Hodgson Burnett",
+            coverUrl = "android.resource://${compose.activity.packageName}/${R.drawable.secret_garden}")
+        try {
+            compose.runOnIdle { vm.setBookTheme(book, BookTheme(BookColours.COVER)) }
+            compose.waitUntil(10_000) { book.id in vm.bookThemes.value.covers }
+            compose.runOnIdle {
+                val cover = vm.bookThemes.value.covers.getValue(book.id)
+                assertEquals(cover, BookThemeStore(vm.graph.preferences).read().covers[book.id])
+                assertEquals(cover.night, AppearanceSettings().forBook(book.id, vm.bookThemes.value, reading = false).colours(true))
+            }
+        } finally { compose.runOnIdle { vm.setBookTheme(book, BookTheme()) } }
+    }
+
     @Test fun customThemeValidatesSavesBothModesAndKeepsTheSavedCopyOnCancel() {
         target("edit-custom-theme").performClick()
         target("custom-theme-name").performTextReplacement("Aurora")
@@ -138,7 +200,12 @@ class AppearanceExperienceTest {
         fun pair(foreground: Color, background: Color, minimum: Double = 4.5) {
             assertTrue("${ThemeContrast.hex(rgb(foreground))} on ${ThemeContrast.hex(rgb(background))}", ThemeContrast.ratio(rgb(foreground), rgb(background)) >= minimum)
         }
-        val settings = ThemePalette.entries.filter { it != ThemePalette.CUSTOM }.map { AppearanceSettings(palette = it) } +
+        val random = java.util.Random(7)
+        val covers = List(40) { IntArray(400) { random.nextInt() or 0xFF000000.toInt() } }.map { pixels ->
+            AppearanceSettings(palette = ThemePalette.CUSTOM, custom = CoverColours.theme(pixels))
+        }
+        val presets = ThemePalette.entries.filter { it != ThemePalette.CUSTOM }.map { AppearanceSettings(palette = it) }
+        val settings = presets + presets.map { it.copy(pureBlack = PureBlack.EVERYWHERE) } + covers +
             listOf(0, 0xFFFFFF, 0x747474, 0x777777, 0x7F7F7F, 0xFF00FF, 0x00FF00, 0x0000FF).map {
                 val colours = ThemeColours(it, it, it)
                 AppearanceSettings(palette = ThemePalette.CUSTOM, custom = CustomTheme(night = colours, day = colours))
