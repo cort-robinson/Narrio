@@ -62,8 +62,8 @@ class ShelfOrganizingExperienceTest {
     private fun shown(text: String) = compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
     private fun described(text: String) = compose.onAllNodesWithContentDescription(text).fetchSemanticsNodes().isNotEmpty()
     private fun finishedAt(book: Audiobook) = runBlocking { graph.library.find(book.id)?.finishedAt ?: -1 }
-    private fun seed() = runBlocking {
-        books.forEach { graph.library.save(it) }
+    private fun seed(saved: List<Audiobook> = books) = runBlocking {
+        saved.forEach { graph.library.save(it) }
         graph.library.progress(heard.id, NarrioJson.encodeToString(parts), "shelf-p1", 300_000, 30)
         graph.library.progress(both.id, NarrioJson.encodeToString(parts), "shelf-p4", 60_000, 10)
         compose.runOnIdle { vm.readingLibrary.value = fake; vm.connected.value = false; vm.setShelfSort(ShelfSort.RECENT); vm.clearRecentSearches() }
@@ -127,6 +127,34 @@ class ShelfOrganizingExperienceTest {
         compose.onNodeWithContentDescription("Clear all recent searches").performClick()
         compose.waitUntil(5_000) { !shown("Recent searches") }
         assertTrue(vm.recentSearches.value.isEmpty())
+
+        // Results still on screen while the next search loads belong to the search that found them.
+        val hobbit = Audiobook("recent-hobbit", "The Hobbit", "J. R. R. Tolkien", provider = "archive", detailsLoaded = true)
+        compose.runOnIdle { vm.query.value = "dune"; vm.catalog.value = CatalogState(listOf(hobbit), loading = true, query = "hobbit") }
+        compose.onNode(hasText(hobbit.title) and hasClickAction()).performClick()
+        compose.waitUntil(5_000) { vm.selection.value.book?.id == hobbit.id }
+        assertEquals(listOf("hobbit"), vm.recentSearches.value)
+        compose.runOnIdle { vm.navigate(0) }
+    }
+
+    @Test fun aSmallShelfOpensSearchFromItsButton() {
+        val few = listOf(heard, read, both)
+        seed(few)
+        theme(ThemeMode.DAY)
+        compose.runOnIdle { vm.navigate(1) }
+        compose.waitUntil(10_000) { few.all { book -> vm.shelf.value.any { it.bookId == book.id } } }
+        if (vm.shelf.value.size > SHELF_SEARCH_AT) return // Other books on this device already show the field.
+        compose.onNodeWithTag("shelf-search").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Search your shelf").performClick()
+        compose.onNodeWithTag("shelf-search").assertIsFocused()
+        compose.onNodeWithTag("shelf-search").performTextInput("wren")
+        compose.waitUntil(5_000) { !shown(heard.title) }
+        compose.onNode(hasText(both.title) and hasClickAction()).assertIsDisplayed()
+        capture("shelf-small-search-day")
+        compose.onNodeWithContentDescription("Clear shelf search").performClick()
+        compose.onNodeWithContentDescription("Close shelf search").performClick()
+        compose.onNodeWithTag("shelf-search").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Search your shelf").assertIsDisplayed()
     }
 
     @Test fun shelfSortsSearchesAndKeepsFinishedBooksApart() {

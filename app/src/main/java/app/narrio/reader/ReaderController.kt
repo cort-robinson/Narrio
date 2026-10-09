@@ -48,8 +48,8 @@ data class VisibleRange(val first: ContentCursor, val end: ContentCursor?) {
 }
 
 sealed interface ReaderEvent {
-    /** The reader turned, scrolled, or jumped. [jump] is true for contents, scrubber, and link navigation. */
-    data class Moved(val cursor: ContentCursor, val jump: Boolean) : ReaderEvent
+    /** The reader turned, scrolled, or jumped. [jump] is true for contents, scrubber, and link navigation; [page] is the page it settled on. */
+    data class Moved(val cursor: ContentCursor, val jump: Boolean, val page: VisibleRange? = null) : ReaderEvent
     data class Footnote(val html: String, val target: Link) : ReaderEvent
     data class ExternalLink(val url: AbsoluteUrl) : ReaderEvent
     data class Image(val element: Content.ImageElement) : ReaderEvent
@@ -425,7 +425,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
             _cursor.value = first
             _following.value = false
             followAnchor = null
-            _events.tryEmit(ReaderEvent.Moved(first, jump))
+            _events.tryEmit(ReaderEvent.Moved(first, jump, range))
         }
     }
 

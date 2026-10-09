@@ -41,6 +41,7 @@ class ListeningService : MediaSessionService() {
     private var chapters: List<Chapter> = emptyList()
     private var sleepUntil = 0L
     private var sleepAtEnd = false
+    private val completion = ListeningCompletion()
     private var error: String? = null
     private var lastSave = 0L
     private val activity = ListeningActivityGate()
@@ -77,6 +78,9 @@ class ListeningService : MediaSessionService() {
             }
         }).build()
         graph.playback.service = this
+        // Playing through the last part finishes the book on the shelf; playing it again, from any control, reopens it.
+        player.addListener(CompletionListener(player, completion, { currentBook?.id?.let { id -> currentSource?.let { id to it } } },
+            finished = { id -> scope.launch { graph.library.finished(id) } }, resumed = { id -> scope.launch { graph.library.unfinished(id) } }))
         player.addListener(object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) { publish() }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -96,7 +100,7 @@ class ListeningService : MediaSessionService() {
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) error = null
-                if (playbackState == Player.STATE_ENDED) { sleepAtEnd = false; scope.launch { save(); finishIfEnded() } }
+                if (playbackState == Player.STATE_ENDED) { sleepAtEnd = false; scope.launch { save() } }
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { chapters = emptyList(); readChapters(); scope.launch { save() } }
             override fun onPlayerError(playbackError: PlaybackException) {
@@ -151,6 +155,7 @@ class ListeningService : MediaSessionService() {
                     .setArtist(book.author).setIsPlayable(true).setArtworkUri(book.coverUrl.takeIf { it.isNotBlank() }?.let(Uri::parse)).build()).build()
         }
         player.setMediaItems(items, index, position.coerceAtLeast(0))
+        completion.loaded(book.id, source.id, index, position)
         if (jump?.confidence == MappingConfidence.ESTIMATED) correctionWanted = graph.sharedPositions.current(book.id)?.text
         undoEpoch = navigationEpoch
         // Leave a restored session idle until the listener actually resumes.
@@ -160,10 +165,12 @@ class ListeningService : MediaSessionService() {
 
     fun toggle() {
         error = null
-        if (player.isPlaying) player.pause() else { if (player.playbackState == Player.STATE_IDLE) player.prepare(); player.play() }
+        if (player.isPlaying) player.pause() else { if (player.playbackState == Player.STATE_IDLE) { recovering(); player.prepare() }; player.play() }
         publish()
     }
-    fun retry() { error = null; links.clear(); player.prepare(); player.play(); publish() }
+    fun retry() { error = null; links.clear(); recovering(); player.prepare(); player.play(); publish() }
+    /** Listening restarts here after an error or a stop, so it can count toward finishing again. */
+    private fun recovering() = completion.anchor(player.currentMediaItemIndex, player.currentPosition)
     fun seek(position: Long) { invalidateNavigation(); player.seekTo(position.coerceAtLeast(0)); publish(); scope.launch { save() } }
     fun skip(delta: Long) { seek((player.currentPosition + delta).coerceAtLeast(0).let { if (player.duration > 0) it.coerceAtMost(player.duration) else it }) }
     fun part(index: Int, position: Long = 0) {
@@ -182,7 +189,7 @@ class ListeningService : MediaSessionService() {
     }
     suspend fun forget() {
         // Detach first: clearing the player fires listeners that would otherwise save position 0 over the listener's place.
-        save(); invalidateNavigation(); currentBook = null; currentSource = null; player.stop(); player.clearMediaItems(); parts.clear(); links.clear(); chapters = emptyList()
+        save(); invalidateNavigation(); completion.cleared(); currentBook = null; currentSource = null; player.stop(); player.clearMediaItems(); parts.clear(); links.clear(); chapters = emptyList()
         sleepUntil = 0; sleepAtEnd = false; error = null; publish()
     }
     /** Clear Now playing but keep the shelf entry and position; the next launch stays empty until something plays again. */
@@ -206,12 +213,6 @@ class ListeningService : MediaSessionService() {
         val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return
         graph.library.progress(book.id, NarrioJson.encodeToString(source), part.id, player.currentPosition.coerceAtLeast(0), System.currentTimeMillis())
         lastSave = System.currentTimeMillis()
-    }
-
-    /** Playing through the final part marks the book finished on the shelf. */
-    private suspend fun finishIfEnded() {
-        val book = currentBook ?: return; val source = currentSource ?: return
-        if (app.narrio.ui.listeningFinished(player.currentMediaItemIndex, source.parts.size, player.playbackState == Player.STATE_ENDED)) graph.library.finished(book.id)
     }
 
     /** Flush the paused position before package replacement can stop this process. Called on main. */

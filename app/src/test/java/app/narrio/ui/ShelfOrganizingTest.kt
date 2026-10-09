@@ -86,13 +86,6 @@ class ShelfOrganizingTest {
         assertFalse(matchesShelfQuery(book, "bronte jane"))
     }
 
-    @Test fun listeningFinishesOnlyWhenTheLastPartPlaysThrough() {
-        assertTrue(listeningFinished(partIndex = 3, partCount = 4, ended = true))
-        assertFalse(listeningFinished(partIndex = 3, partCount = 4, ended = false))
-        assertFalse(listeningFinished(partIndex = 2, partCount = 4, ended = true))
-        assertFalse(listeningFinished(partIndex = 0, partCount = 0, ended = true))
-    }
-
     @Test fun readingFinishesWhenThePageShowsTheEditionsEnd() {
         val layout = EditionLayout(listOf("ch1", "ch2", "notes"), mapOf("ch1" to 1000, "ch2" to 1000, "notes" to 0))
         fun at(resource: String, offset: Int) = ContentCursor("e", resource, offset)

@@ -99,7 +99,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.rememberSearch(); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading)) }
+            items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading)) }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
@@ -160,11 +160,13 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val typed by vm.shelfQuery.collectAsStateWithLifecycle()
     var remove by remember { mutableStateOf<Audiobook?>(null) }
     var showFinished by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     val chooser = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     val addEbook: () -> Unit = { vm.beginEbookImport(null); chooser.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) }
     val items = rememberShelfItems(shelf, formats)
-    // Search appears once the shelf outgrows a screen or two; a leftover query stays visible so it can be cleared.
-    val searchable = shelf.size > SHELF_SEARCH_AT || typed.isNotEmpty()
+    // A large shelf always shows its search; a smaller one opens it from the search button. A leftover query stays visible.
+    val alwaysSearchable = shelf.size > SHELF_SEARCH_AT
+    val searchable = alwaysSearchable || typed.isNotEmpty() || searchOpen
     val query = if (searchable) typed.trim() else ""
     val visible = remember(items, filter, query, sort) { sortShelf(items.filter { filter.matches(it.formats) && matchesShelfQuery(it.book, query) }, sort) }
     val (finished, going) = remember(visible) { visible.partition { it.finished } }
@@ -178,8 +180,10 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 TextButton(addEbook, enabled = !importing.working) { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add ebook") }
             }
             if (shelf.isNotEmpty()) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
-            if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp))
-            if (shelf.size > 1) ShelfSortBar(visible.size, shelf.size, sort, vm::setShelfSort, Modifier.padding(top = 8.dp))
+            if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),
+                close = if (alwaysSearchable) null else ({ vm.setShelfQuery(""); searchOpen = false }), focus = searchOpen)
+            if (shelf.isNotEmpty()) ShelfSortBar(visible.size, shelf.size, sort, vm::setShelfSort, Modifier.padding(top = 8.dp),
+                search = if (searchable) null else ({ searchOpen = true }))
         }
         if (importing.working || importing.error != null) item(key = "import") { EbookImportStatus(importing, addEbook, vm::dismissEbookImport, Modifier.animateItem()) }
         if (shelf.isEmpty()) item(key = "empty") {

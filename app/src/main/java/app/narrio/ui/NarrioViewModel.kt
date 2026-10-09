@@ -16,7 +16,8 @@ import app.narrio.playback.ListeningState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null)
+/** [query] is the search [books] answer, which can trail the field while the next search loads. */
+data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null, val query: String = "")
 data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
 data class EbookWebsiteRequest(val book: Audiobook, val link: EbookSearchLink)
 data class EbookWebsiteState(val request: EbookWebsiteRequest? = null, val working: Boolean = false, val step: String = "", val error: String? = null)
@@ -299,11 +300,11 @@ class NarrioViewModel @JvmOverloads constructor(
         query.value = value; category.value = browseCategory
         searchJob?.cancel()
         // The last results stay on screen while the next ones load, so typing never blanks the list.
-        catalog.value = CatalogState(catalog.value.books, true)
+        catalog.value = CatalogState(catalog.value.books, true, query = catalog.value.query)
         searchJob = viewModelScope.launch {
             delay(if (value.isBlank()) 0 else 350)
             try {
-                catalog.value = CatalogState(graph.books.search(value, browseCategory), false)
+                catalog.value = CatalogState(graph.books.search(value, browseCategory), false, query = value)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { catalog.value = CatalogState(emptyList(), false, friendly(error)) }
         }

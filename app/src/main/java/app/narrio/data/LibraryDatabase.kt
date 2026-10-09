@@ -83,7 +83,8 @@ interface LibraryDao {
     @Query("UPDATE shelf SET state = :state WHERE bookId = :id") suspend fun state(id: String, state: String)
     /** Marks a book finished, keeping the first finish time when it already is. */
     @Query("UPDATE shelf SET finishedAt = :time WHERE bookId = :id AND finishedAt = 0") suspend fun finished(id: String, time: Long = System.currentTimeMillis())
-    @Query("UPDATE shelf SET finishedAt = 0 WHERE bookId = :id") suspend fun unfinished(id: String)
+    /** Reopens a finished book; an unfinished one is left untouched, so listening and reading don't wake shelf observers. */
+    @Query("UPDATE shelf SET finishedAt = 0 WHERE bookId = :id AND finishedAt > 0") suspend fun unfinished(id: String)
     @Query("DELETE FROM shelf WHERE bookId = :id") suspend fun deleteShelf(id: String)
     @Query("DELETE FROM bookmarks WHERE bookId = :id") suspend fun deleteBookmarks(id: String)
     @Query("DELETE FROM positions WHERE bookId = :id") suspend fun deletePositions(id: String)

@@ -80,9 +80,6 @@ fun continueHeading(items: List<ContinueItem>): String = when {
     else -> "Continue"
 }
 
-/** Listening finishes when the player plays through the final part; stopping early or in an earlier part doesn't count. */
-fun listeningFinished(partIndex: Int, partCount: Int, ended: Boolean): Boolean = ended && partCount > 0 && partIndex == partCount - 1
-
 /**
  * Reading finishes when a settled page shows the end of the edition: the page after it would start past the last
  * character. [end] is the first character after the page, null when the page runs to its resource's end.
