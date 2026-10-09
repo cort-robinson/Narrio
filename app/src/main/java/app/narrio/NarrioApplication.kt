@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.map
 class NarrioApplication : Application() {
     lateinit var graph: AppGraph
         private set
-    override fun onCreate() { super.onCreate(); graph = AppGraph(this); graph.bookAlignment.start() }
+    override fun onCreate() { super.onCreate(); graph = AppGraph(this); graph.bookAlignment.start(); graph.preparationChecks.start() }
 }
 
 class AppGraph(application: Application) {
@@ -83,4 +83,9 @@ class AppGraph(application: Application) {
     val readingSync = app.narrio.playback.ReadingSync(sharedPositions, positionMapper, mappingRepository, alignmentJobs)
     val bookAlignment = app.narrio.playback.BookAlignmentScheduler(application)
     val updates = app.narrio.updates.AppUpdates(application, playback)
+    val preparations = TorBoxPreparations(RoomPreparationShelf(library),
+        PreferencePreparationHistory(application.getSharedPreferences("torbox-preparations", Application.MODE_PRIVATE)), torbox::refresh, torbox::sources)
+    val preparationChecks = app.narrio.preparation.PreparationChecks(application, library.observeShelf()) { credentials.read() != null }
+    // While Narrio is on screen the shelf and book page show the change; otherwise a notification does.
+    init { preparations.announce = { change -> if (!playback.visible) app.narrio.preparation.PreparationNotifications.show(application, change) } }
 }

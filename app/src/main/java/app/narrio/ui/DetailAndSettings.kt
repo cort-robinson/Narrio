@@ -26,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -115,8 +118,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             showSources = { scope.launch { listState.animateScrollToItem(sourcesIndex) } },
         )
     }
-    LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, connected) {
-        if (preparation != null && preparation?.ready != true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
+    // Live progress while watching; background checks carry on after leaving. A failed one waits for the listener.
+    LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, preparation?.failed, connected) {
+        if (preparation != null && preparation?.ready != true && preparation?.failed != true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
     }
     val scroll = TopAppBarDefaults.pinnedScrollBehavior()
     Column(modifier.fillMaxSize()) {
@@ -216,11 +220,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         preparation?.let { prep -> item(key = "preparation") {
             Column(Modifier.animateItem().fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (prep.ready) Icons.Rounded.CheckCircle else Icons.Rounded.CloudDownload, null, tint = MaterialTheme.colorScheme.primary)
-                    Text(prep.state, style = MaterialTheme.typography.titleMedium)
+                    Icon(if (prep.ready) Icons.Rounded.CheckCircle else if (prep.failed) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDownload, null,
+                        tint = if (prep.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    Text(prep.state, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(Modifier.height(12.dp))
-                if (!prep.ready) {
+                if (!prep.ready && !prep.failed) {
                     val progress by animateFloatAsState(prep.progress, tween(Motion.LONG, easing = Motion.Emphasized), label = "preparation")
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
@@ -228,8 +233,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                     prep.seeds?.let { Text("$it connected ${if (it == 1L) "seed" else "seeds"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     Spacer(Modifier.height(8.dp))
                 }
-                Text(if (prep.ready) "Your source is ready. Choose Listen to begin." else if (book.cacheState == "cached") "TorBox is making the cached source available in your account. You can leave and return from your shelf." else "TorBox is fetching this uncached source. Audio isn't being downloaded to your phone. You can leave and return from your shelf; cached releases can stream now.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton({ vm.refreshPreparation(book) }, enabled = !busy && connected) { Text("Check availability") }
+                Text(preparationNote(prep, book.cacheState), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (prep.failed) OutlinedButton({ vm.findAnotherRecording(book) }, Modifier.padding(top = 12.dp)) { Text("Try another recording") }
+                TextButton({ vm.refreshPreparation(book) }, enabled = !busy && connected) { Text(if (prep.failed) "Check again" else "Check availability") }
             }
         } }
         if (streamed != null && tally != null) listeningSources(streamed, tally, providersById, book, pinned.shown?.recording?.id, connected, wideSources,
