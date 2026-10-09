@@ -34,14 +34,47 @@ class EbookResultsModelTest {
         val choices = ebookChoices(search, book, shownId = "best")
         assertEquals(listOf("en", "sample", "fr", "maybe"), choices.map { it.edition.id })
         assertEquals("Anna's Archive", choices.first().source)
-        assertEquals(ChoiceNote(ChoiceNoteKind.LIKELY, "Likely matches the narration"), ebookChoiceNote(choices[0], recording = true))
-        assertNull(ebookChoiceNote(choices[0], recording = false))
-        assertEquals(ChoiceNote(ChoiceNoteKind.CAUTION, "May not follow the narration: abridged or a sample"), ebookChoiceNote(choices[1], recording = true))
-        assertEquals("Abridged or a sample", ebookChoiceNote(choices[1], recording = false)!!.text)
-        assertEquals(ChoiceNoteKind.CHECK, ebookChoiceNote(choices[3], recording = true)!!.kind)
+        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.LIKELY, "Likely matches the narration")), ebookChoiceNotes(choices[0], recording = true))
+        assertEquals(emptyList<ChoiceNote>(), ebookChoiceNotes(choices[0], recording = false))
+        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.CAUTION, "May not follow the narration: abridged or a sample")), ebookChoiceNotes(choices[1], recording = true))
+        assertEquals(listOf("Abridged or a sample"), ebookChoiceNotes(choices[1], recording = false).map { it.text })
+        assertEquals(listOf(ChoiceNoteKind.CHECK), ebookChoiceNotes(choices[3], recording = true).map { it.kind })
         // The language shows only when it differs from the book's.
         assertEquals("Jane Austen · TXT", ebookChoiceDetail(choices[0], book))
         assertEquals("Jane Austen · French · EPUB", ebookChoiceDetail(choices[2], book))
+    }
+
+    /** Before, a recording's own unnamed file sat below every confirmed edition, and a possible match hid its known difference. */
+    @Test fun recordingFilesLeadAndPossibleMatchesKeepTheirCautions() {
+        val shipped = BookTextSource("book.epub", "book.epub", "", "EPUB", "archive")
+        val sample = BookTextSource("sample", "Pride and Prejudice (Sample)", "Jane Austen", "EPUB", "torbox-cache", language = "en")
+        val maybeShort = BookTextSource("maybe", "Pride and Prejudice - abridged", "", "EPUB", "gutenberg")
+        val search = StreamedEbookSearch(book, listOf(
+            EbookGroup("addon:cache", "Knaben Ebooks", SourceGroupStatus.DONE, editions = listOf(sample)),
+            EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE, possible = listOf(maybeShort)),
+            EbookGroup(DeviceSourceProviderSettings.RECORDING_FILES, "Recording files", SourceGroupStatus.DONE, possible = listOf(shipped)),
+        ), complete = true)
+        val choices = ebookChoices(search, book, shownId = null)
+        assertEquals(listOf("book.epub", "sample", "maybe"), choices.map { it.edition.id })
+        assertEquals("In this recording's files", choices.first().source)
+        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author"), ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")),
+            ebookChoiceNotes(choices.first(), recording = true))
+        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author"), ChoiceNote(ChoiceNoteKind.CAUTION, "May not follow the narration: abridged or a sample")),
+            ebookChoiceNotes(choices.last(), recording = true))
+    }
+
+    /** While a better match waits behind "Better match found", the flat list still offers it and never repeats the card's own. */
+    @Test fun aPinnedBestMatchStaysOutOfTheListAndTheWaitingOneStaysIn() {
+        val first = ebook("first")
+        val better = BookTextSource("better", "Pride and Prejudice", "Jane Austen", "EPUB", "archive")
+        val search = StreamedEbookSearch(book, listOf(
+            EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE, editions = listOf(first)),
+            EbookGroup(DeviceSourceProviderSettings.RECORDING_FILES, "Recording files", SourceGroupStatus.DONE, editions = listOf(better)),
+        ), complete = true)
+        val pinned = PinnedEbook().next(BestEbook(first, emptyList(), "gutenberg"), interacted = false) { true }
+            .next(BestEbook(better, emptyList(), DeviceSourceProviderSettings.RECORDING_FILES), interacted = true) { true }
+        assertEquals(listOf("better"), ebookChoices(search, book, pinned.shown?.edition?.id).map { it.edition.id })
+        assertEquals(listOf("first"), ebookChoices(search, book, pinned.accept().shown?.edition?.id).map { it.edition.id })
     }
 
     @Test fun searchWordSuggestionsComeFromTheBooksOwnDetails() {

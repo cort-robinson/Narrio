@@ -117,20 +117,21 @@ internal fun ebookAlsoFoundBy(search: StreamedEbookSearch, editionId: String): L
 data class EbookChoice(val edition: BookTextSource, val providerId: String, val source: String, val confirmed: Boolean, val fit: NarrationFit)
 
 /**
- * Every found ebook once, without [shownId] (the best match card's own): confirmed before possible, then the likeliest
- * to follow the narration, keeping source order for ties.
+ * Every found ebook once, without [shownId] (the best match card's own): the recording's own files first, as in the
+ * best match, then confirmed before possible, then the likeliest to follow the narration, keeping source order for ties.
  */
 fun ebookChoices(search: StreamedEbookSearch, book: Audiobook, shownId: String?): List<EbookChoice> = search.groups.flatMap { group ->
     val source = if (group.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "In this recording's files" else group.name
     group.editions.map { EbookChoice(it, group.providerId, source, true, NarrationMatch.judge(book, it, group.providerId, confirmed = true)) } +
         group.possible.map { EbookChoice(it, group.providerId, source, false, NarrationMatch.judge(book, it, group.providerId, confirmed = false)) }
 }.distinctBy { it.edition.id }.filter { it.edition.id != shownId }
-    .sortedWith(compareByDescending<EbookChoice> { it.confirmed }.thenByDescending { it.fit.score })
+    .sortedWith(compareByDescending<EbookChoice> { it.providerId == DeviceSourceProviderSettings.RECORDING_FILES }.thenByDescending { it.confirmed }
+        .thenByDescending { it.fit.score })
 
 /** "Jane Austen · French · EPUB": the language only when it differs from the book's. */
 fun ebookChoiceDetail(choice: EbookChoice, book: Audiobook): String {
     val theirs = NarrationMatch.language(choice.edition.language)
-    val ours = NarrationMatch.language(book.language.takeUnless(BookMetadata::unknown).orEmpty())
+    val ours = NarrationMatch.language(book.language)
     val language = theirs?.takeIf { it != ours }?.let(::languageName)
     return listOfNotNull(choice.edition.author.ifBlank { null }, language, choice.edition.format.ifBlank { null }).joinToString(" · ")
 }
@@ -141,25 +142,32 @@ enum class ChoiceNoteKind { LIKELY, CAUTION, CHECK }
 data class ChoiceNote(val kind: ChoiceNoteKind, val text: String)
 
 /**
- * The one note a choice carries: a possible match asks for a check; with a [recording], a likely fit or the reason it
- * may not follow the narration. Never a verified claim: the pairing status decides after adding.
+ * What a choice says about itself, in order: a possible match asks for a check of its title and author; then, with a
+ * [recording], a likely fit, or the reason it may not follow the narration (shown even beside the check, since a known
+ * difference matters either way). Never a verified claim: the pairing status decides after adding.
  */
-fun ebookChoiceNote(choice: EbookChoice, recording: Boolean): ChoiceNote? {
+fun ebookChoiceNotes(choice: EbookChoice, recording: Boolean): List<ChoiceNote> {
     val caution = cautionLabel(choice.fit)
-    return when {
-        !choice.confirmed -> ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author")
-        recording && choice.fit.likely -> ChoiceNote(ChoiceNoteKind.LIKELY, "Likely matches the narration")
-        caution != null -> ChoiceNote(ChoiceNoteKind.CAUTION, if (recording) "May not follow the narration: ${caution.replaceFirstChar(Char::lowercase)}" else caution)
-        else -> null
-    }
+    val shipped = NarrationSignal.WITH_RECORDING in choice.fit.signals
+    return listOfNotNull(
+        ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author").takeIf { !choice.confirmed },
+        when {
+            recording && choice.fit.likely && shipped -> ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")
+            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Likely matches the narration")
+            caution != null -> ChoiceNote(ChoiceNoteKind.CAUTION, if (recording) "May not follow the narration: ${caution.replaceFirstChar(Char::lowercase)}" else caution)
+            else -> null
+        },
+    )
 }
 
 private fun cautionLabel(fit: NarrationFit): String? = when {
     NarrationSignal.OTHER_LANGUAGE in fit.signals -> "In another language"
     NarrationSignal.OTHER_TRANSLATOR in fit.signals -> "A different translation"
+    NarrationSignal.RECORDING_ABRIDGED in fit.signals -> "The recording is abridged"
     NarrationSignal.SHORTENED in fit.signals -> "Abridged or a sample"
+    NarrationSignal.TOO_SHORT in fit.signals -> "Much shorter than the recording"
     NarrationSignal.ADAPTED in fit.signals -> "A retelling or adaptation"
-    NarrationSignal.ONE_PART in fit.signals -> "Only part of the book"
+    NarrationSignal.ONE_PART in fit.signals -> "A different volume or part"
     else -> null
 }
 

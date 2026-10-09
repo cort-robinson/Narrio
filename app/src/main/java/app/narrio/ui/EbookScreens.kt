@@ -172,6 +172,8 @@ class EbookActions(
     val connectTorBox: () -> Unit,
     /** Searches every ebook source with the reader's own words, kept for the book; blank returns to its details. */
     val searchWith: (String) -> Unit = {},
+    /** Ebook website searches for the reader's own words; null keeps the book's own website links. */
+    val linksFor: ((String) -> List<EbookSearchLink>)? = null,
 )
 
 /**
@@ -213,7 +215,10 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
     // Simple first: other choices and the expert detail stay folded until asked for.
     var showChoices by rememberSaveable(book.id) { mutableStateOf(false) }
     var advanced by rememberSaveable(book.id) { mutableStateOf(false) }
-    val choices = remember(streamed, pinned.shown, book) { ebookChoices(streamed, book, pinned.shown?.edition?.id) }
+    // The search's book carries the recording's own language and files, which the narration hints judge against.
+    val choices = remember(streamed, pinned.shown) { ebookChoices(streamed, streamed.book, pinned.shown?.edition?.id) }
+    // Website searches follow the reader's own words too, when they've chosen some.
+    val websites = remember(state.words, searchLinks) { state.words.takeIf(String::isNotBlank)?.let { actions.linksFor?.invoke(it) } ?: searchLinks }
     ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = sheetState) {
         val view = LocalView.current
         val dark = ThemeContrast.foreground(MaterialTheme.colorScheme.background.toArgb()) == 0xFFFFFF
@@ -267,7 +272,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                         color = if (choices.isEmpty()) muted else MaterialTheme.colorScheme.onSurface, modifier = Modifier.semantics { heading() }.testTag("ebook-other-choices"))
                 }
                 items(choices, key = { "choice:${it.edition.id}" }) { choice ->
-                    EbookChoiceRow(choice, book, narrated, adding = state.adding == choice.edition.id, state.step, enabled = !busy, add = { actions.add(choice.edition) },
+                    EbookChoiceRow(choice, streamed.book, narrated, adding = state.adding == choice.edition.id, state.step, enabled = !busy, add = { actions.add(choice.edition) },
                         modifier = Modifier.animateItem())
                 }
             }
@@ -305,12 +310,12 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                         }
                     }
                 }
-                if (searchLinks.isNotEmpty()) item(key = "websites") {
+                if (websites.isNotEmpty()) item(key = "websites") {
                     Text("Search ebook websites", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                     Spacer(Modifier.height(4.dp))
                     Text("Choose an EPUB on the website. Narrio tries TorBox first, then saves the website download when needed. Verification stays inside the app.",
                         style = MaterialTheme.typography.bodySmall, color = muted)
-                    searchLinks.forEach { link ->
+                    websites.forEach { link ->
                         OutlinedButton({ actions.openSearch(link) }, Modifier.fillMaxWidth(), enabled = !busy) {
                             Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Search ${link.name}")
                         }
@@ -362,7 +367,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             shown != null -> AnimatedContent(shown, transitionSpec = { fadeIn(tween(Motion.MEDIUM, 90, Motion.EmphasizedDecelerate)).togetherWith(fadeOut(tween(90))) },
                 contentKey = { it.edition.id }, label = "best ebook") { best ->
                 Column {
-                    val copy = bestEbookCopy(best, book, narrated)
+                    val copy = bestEbookCopy(best, search.book, narrated)
                     Text(copy.headline, style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("best-ebook-reasons"))
                     if (copy.detail.isNotBlank()) Text(copy.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
                     Text(best.edition.title, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
@@ -396,7 +401,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             }
         }
         // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
-        if (shown == null && search.complete) Spacer(Modifier.height(14.dp))
+        if (shown == null && search.complete && others == 0) Spacer(Modifier.height(14.dp))
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {

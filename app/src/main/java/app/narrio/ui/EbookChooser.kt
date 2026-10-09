@@ -50,13 +50,13 @@ internal fun ExpandRow(label: String, expanded: Boolean, toggle: () -> Unit, mod
 internal fun EbookChoiceRow(choice: EbookChoice, book: Audiobook, recording: Boolean, adding: Boolean, step: String, enabled: Boolean, add: () -> Unit,
                             modifier: Modifier = Modifier) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val note = ebookChoiceNote(choice, recording)
+    val notes = ebookChoiceNotes(choice, recording)
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClickLabel = "Add this ebook", onClick = add).heightIn(min = 48.dp)
         .padding(vertical = 8.dp).testTag("ebook-choice:${choice.edition.id}"), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(choice.edition.title, style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
             ebookChoiceDetail(choice, book).takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
-            note?.let { ChoiceNoteLine(it) }
+            notes.forEach { ChoiceNoteLine(it) }
             Text(choice.source, style = MaterialTheme.typography.labelSmall, color = muted)
             if (adding && step.isNotBlank()) Text(step, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall, color = muted)
         }

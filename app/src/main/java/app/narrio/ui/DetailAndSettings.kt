@@ -276,7 +276,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
         sourceSettings = { ebookSheet = false; vm.openSourceSettings() }, connectTorBox = vm::requestTorBoxConnect,
-        searchWith = { vm.searchEbooksWith(book, it) },
+        searchWith = { vm.searchEbooksWith(book, it) }, linksFor = { vm.graph.addons.ebookSearchLinks(book, it) },
     ), dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks)
 }
 

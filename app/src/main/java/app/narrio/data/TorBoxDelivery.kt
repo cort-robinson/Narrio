@@ -57,10 +57,13 @@ class TorBoxDelivery(
     }
 
     /** Book-text files (EPUB/TXT) in already-cached releases, by hash. Nothing is added to the account. */
-    suspend fun cachedTextFiles(hashes: List<String>): Map<String, List<String>> = withContext(Dispatchers.IO) {
+    suspend fun cachedTextFiles(hashes: List<String>): Map<String, List<String>> = cachedText(hashes).mapValues { (_, files) -> files.map { it.first } }
+
+    /** Cached ebook files by release hash, each with its size in bytes (0 when TorBox doesn't say). */
+    suspend fun cachedText(hashes: List<String>): Map<String, List<Pair<String, Long>>> = withContext(Dispatchers.IO) {
         hashes.map { it.lowercase() }.filter { it.matches(Regex("[a-f0-9]{40}")) }.distinct().chunked(100).flatMap { batch ->
             parseCached(request("torrents/checkcached", mapOf("hash" to batch.joinToString(","), "format" to "object", "list_files" to "true"))["data"], ::isBookTextFile)
-                .map { (hash, item) -> hash to item.objects("files").map { it.text("name") } }
+                .map { (hash, item) -> hash to item.objects("files").map { it.text("name") to (it.number("size") ?: 0L).toLong() } }
         }.filter { it.second.isNotEmpty() }.toMap()
     }
 

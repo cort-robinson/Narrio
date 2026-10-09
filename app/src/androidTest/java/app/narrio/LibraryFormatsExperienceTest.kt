@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.data.*
@@ -314,6 +315,15 @@ class LibraryFormatsExperienceTest {
         sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
         compose.onNodeWithText("Check the title and author").assertExists()
         capture("ebook-chooser-possible-day")
+        // With only possible matches, the disclosure still closes and reopens the list.
+        val toggle = compose.onNodeWithTag("ebook-other-choices-toggle")
+        fun state(value: String) = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, value)
+        sheet.performScrollToNode(hasTestTag("ebook-other-choices-toggle"))
+        toggle.assert(state("Expanded")).assertTextContains("Other choices · 1", substring = true).performClick()
+        toggle.assert(state("Collapsed"))
+        compose.onNodeWithTag("ebook-choice:${possible.id}").assertDoesNotExist()
+        toggle.performClick()
+        sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
 
         sheet.performScrollToNode(hasTestTag("ebook-advanced"))
         compose.onNodeWithTag("ebook-advanced").performClick()
@@ -345,6 +355,27 @@ class LibraryFormatsExperienceTest {
         compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == "" && shown("No sure match") }
         assertEquals("", vm.ebookWords(audioOnly.id))
         compose.onNodeWithTag("ebook-custom-words").assertDoesNotExist()
+
+        // Results are kept per set of words: returning to kept words reuses their complete results without searching.
+        compose.runOnIdle { vm.searchEbooksWith(audioOnly, words) }
+        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == words && vm.ebookSearch.value.streamed?.complete == true }
+        val searches = fake.searchedWords.size
+        compose.runOnIdle { graph.preferences.edit().remove("ebookWords:${audioOnly.id}").commit(); vm.findEbooks(audioOnly) }
+        compose.waitUntil(10_000) { fake.searchedWords.size == searches + 1 }
+        assertEquals("", fake.searchedWords.last())
+        compose.runOnIdle { graph.preferences.edit().putString("ebookWords:${audioOnly.id}", words).commit(); vm.findEbooks(audioOnly) }
+        compose.runOnIdle {
+            assertEquals(searches + 1, fake.searchedWords.size)
+            assertEquals(words, vm.ebookSearch.value.words)
+            assertEquals(listOf(found.id), vm.ebookSearch.value.streamed!!.groups.first().editions.map { it.id })
+        }
+        // A fresh view model, as after the app's process restarts, searches with the kept words.
+        val fresh = compose.runOnIdle { NarrioViewModel(compose.activity.application).also { it.readingLibrary.value = fake; it.findEbooks(audioOnly) } }
+        try {
+            compose.waitUntil(10_000) { fake.searchedWords.size == searches + 2 }
+            assertEquals(words, fake.searchedWords.last())
+            assertEquals(words, fresh.ebookSearch.value.words)
+        } finally { compose.runOnIdle { fresh.viewModelScope.cancel() } }
     }
 
     @Test fun addingAnEbookFileOpensItsBookOrExplainsTheFile() {

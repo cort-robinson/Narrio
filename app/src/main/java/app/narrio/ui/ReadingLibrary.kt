@@ -117,7 +117,8 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
     override suspend fun activate(bookId: String, editionId: String) = graph.followAlong.activateEdition(bookId, editionId)
     override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope, words: String): EbookSearchSession {
         val saved = library.find(book.id)?.book()
-        return graph.streamingEbookSearch.start(book, (book.sources + saved?.sources.orEmpty()).distinctBy { it.id }, connected, scope, words)
+        val narrated = NarrationMatch.recordingBook(book, saved)
+        return graph.streamingEbookSearch.start(narrated, narrated.sources, connected, scope, words)
     }
 }
 

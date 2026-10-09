@@ -73,12 +73,12 @@ class BookTextFinder(
         val releases = found.distinctBy { it.torrentHash }.map { it to EbookMatch.confidence(book, it.title, words) }.filter { it.second != MatchConfidence.NONE }
             .sortedWith(compareBy<Pair<Audiobook, MatchConfidence>> { it.second != MatchConfidence.STRONG }.thenByDescending { it.first.seeders }).take(20)
         if (releases.isEmpty()) return emptyList()
-        val cached = torbox.cachedTextFiles(releases.map { it.first.torrentHash })
+        val cached = torbox.cachedText(releases.map { it.first.torrentHash })
         return releases.mapNotNull { (release, confidence) ->
             val files = cached[release.torrentHash.lowercase()].orEmpty()
-            val file = files.firstOrNull { textFileFormat(it) == "EPUB" } ?: files.singleOrNull { textFileFormat(it) == "TXT" } ?: return@mapNotNull null
+            val (file, size) = files.firstOrNull { textFileFormat(it.first) == "EPUB" } ?: files.singleOrNull { textFileFormat(it.first) == "TXT" } ?: return@mapNotNull null
             EbookCandidate(BookTextSource("knaben:${release.torrentHash}:$file", release.title, format = textFileFormat(file)!!, provider = "torbox-cache",
-                attribution = "Cached ebook release via TorBox", torrentHash = release.torrentHash, magnetUri = release.magnetUri, fileName = file), confidence)
+                attribution = "Cached ebook release via TorBox", torrentHash = release.torrentHash, magnetUri = release.magnetUri, fileName = file, sizeBytes = size), confidence)
         }
     }
 
