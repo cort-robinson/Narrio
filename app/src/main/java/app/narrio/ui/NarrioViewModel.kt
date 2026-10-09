@@ -81,6 +81,8 @@ data class EbookSearchState(
     val adding: String? = null, val added: String? = null,
     /** What a slow add is doing right now, such as waiting for a website's download server. */
     val step: String = "",
+    /** The reader's own search words this search used; blank searched by the book's title and author. */
+    val words: String = "",
 ) {
     val results: List<BookTextSource> get() = streamed?.groups.orEmpty().flatMap { it.editions + it.possible }
     /** A source couldn't be checked, so the results may be missing something. */
@@ -535,18 +537,19 @@ class NarrioViewModel @JvmOverloads constructor(
     fun findEbooks(book: Audiobook, force: Boolean = false) {
         ebookJob?.cancel(); ebookSession = null
         ebookBook = book
-        val key = "${book.id}|${connected.value}|$torBoxAccount|${book.sources.joinToString(",") { it.id }}"
+        val words = ebookWords(book.id)
+        val key = "${book.id}|${connected.value}|$torBoxAccount|${book.sources.joinToString(",") { it.id }}|$words"
         ebookResults.get(key, force)?.let { ebookSearch.value = it; return }
-        ebookSearch.value = EbookSearchState(book.id, searching = true, searched = true)
+        ebookSearch.value = EbookSearchState(book.id, searching = true, searched = true, words = words)
         fun update(change: (EbookSearchState) -> EbookSearchState) = ebookSearch.update { if (it.bookId == book.id) change(it) else it }
         ebookJob = viewModelScope.launch {
             try {
-                val session = readingLibrary.value.searchEditions(book, connected.value, this)
+                val session = readingLibrary.value.searchEditions(book, connected.value, this, words)
                 ebookSession = session
                 session.state.collect { snapshot ->
                     update { it.copy(streamed = snapshot, searching = !snapshot.complete) }
                     if (snapshot.complete && snapshot.groups.none { it.status == SourceGroupStatus.FAILED })
-                        ebookResults.put(key, EbookSearchState(book.id, searched = true, streamed = snapshot))
+                        ebookResults.put(key, EbookSearchState(book.id, searched = true, streamed = snapshot, words = words))
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { update { it.copy(searching = false, searchError = friendly(error)) } }
@@ -554,6 +557,16 @@ class NarrioViewModel @JvmOverloads constructor(
     }
 
     fun retryEbookSource(providerId: String) { ebookSession?.retry(providerId) }
+
+    /** The reader's own ebook search words for a book, kept on this phone until reset; blank uses its title and author. */
+    fun ebookWords(bookId: String): String = graph.preferences.getString("ebookWords:$bookId", "").orEmpty()
+
+    /** Searches every ebook source with [words], kept for this book's later searches and retries; blank resets to its details. */
+    fun searchEbooksWith(book: Audiobook, words: String) {
+        val kept = words.trim().take(200)
+        graph.preferences.edit().apply { if (kept.isBlank()) remove("ebookWords:${book.id}") else putString("ebookWords:${book.id}", kept) }.apply()
+        findEbooks(book, force = true)
+    }
 
     /** Opening Find ebook again reuses a running or complete lookup for the same book; a failed one starts over. */
     fun openEbookSearch(book: Audiobook) {

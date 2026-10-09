@@ -36,6 +36,8 @@ enum class EbookMatchReason {
     STRONG_MATCH,
     EPUB,
     LANGUAGE_MATCH,
+    /** Named signals point to the narrated text (same language or translator, nothing shortened); alignment still decides. */
+    LIKELY_NARRATION,
 }
 
 data class BestEbook(val edition: BookTextSource, val reasons: List<EbookMatchReason>, val providerId: String)
@@ -56,6 +58,9 @@ interface EbookSearchSession {
 }
 
 interface StreamingEbookSearch {
-    /** [recordings] are the book's audio sources, whose companion files are checked first. */
-    fun start(book: Audiobook, recordings: List<AudioSource>, connected: Boolean, scope: CoroutineScope): EbookSearchSession
+    /**
+     * [recordings] are the book's audio sources, whose companion files are checked first. [words] are the reader's own
+     * search words, used by every source and its retries; blank searches by the book's title and author.
+     */
+    fun start(book: Audiobook, recordings: List<AudioSource>, connected: Boolean, scope: CoroutineScope, words: String = ""): EbookSearchSession
 }

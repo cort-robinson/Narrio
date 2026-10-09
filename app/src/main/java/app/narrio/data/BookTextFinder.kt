@@ -41,18 +41,22 @@ class BookTextFinder(
         return attempt(read { publicMatches(book).strong() })
     }
 
-    /** Ebook files already in the TorBox account's torrents, with how well each names this book. */
-    suspend fun accountMatches(book: Audiobook) = rated(book, torbox.accountText())
+    /**
+     * Ebook files already in the TorBox account's torrents, with how well each names this book. The reader's own
+     * search [words], when given, also admit files that carry them, as possible matches.
+     */
+    suspend fun accountMatches(book: Audiobook, words: String = "") = rated(book, torbox.accountText(), words)
 
     /** Ready ebooks among the account's web downloads. */
-    suspend fun webAccountMatches(book: Audiobook) = rated(book, webAccountText())
+    suspend fun webAccountMatches(book: Audiobook, words: String = "") = rated(book, webAccountText(), words)
 
-    private fun rated(book: Audiobook, files: List<Pair<String, BookTextSource>>) = files.map { (release, file) ->
-        EbookCandidate(file, maxOf(EbookMatch.confidence(book, release), EbookMatch.confidence(book, file.title)))
+    private fun rated(book: Audiobook, files: List<Pair<String, BookTextSource>>, words: String) = files.map { (release, file) ->
+        EbookCandidate(file, maxOf(EbookMatch.confidence(book, release, words), EbookMatch.confidence(book, file.title, words)))
     }.filter { it.confidence != MatchConfidence.NONE }.sortedBy { if (it.source.format == "EPUB") 0 else 1 }
 
-    suspend fun publicMatches(book: Audiobook) = gutenberg.search("${BookIdentity.title(book.title)} ${book.author}".trim()).map {
-        EbookCandidate(it, EbookMatch.confidence(book, "${it.title.substringBefore(';')} - ${it.author}"))
+    /** Gutenberg searched by the book's title and author, or by the reader's own [words]. */
+    suspend fun publicMatches(book: Audiobook, words: String = "") = gutenberg.search(words.ifBlank { "${BookIdentity.title(book.title)} ${book.author}" }.trim()).map {
+        EbookCandidate(it, EbookMatch.confidence(book, "${it.title.substringBefore(';')} - ${it.author}", words))
     }.filter { it.confidence != MatchConfidence.NONE }
 
     private fun List<EbookCandidate>.strong() = filter { it.confidence == MatchConfidence.STRONG }.map { it.source }
@@ -65,8 +69,8 @@ class BookTextFinder(
      * The releases in [found] whose ebook files TorBox already has, confirmed or possible matches only. Asking TorBox
      * whether a release is cached never adds it to the account.
      */
-    suspend fun cachedFiles(book: Audiobook, found: List<Audiobook>): List<EbookCandidate> {
-        val releases = found.distinctBy { it.torrentHash }.map { it to EbookMatch.confidence(book, it.title) }.filter { it.second != MatchConfidence.NONE }
+    suspend fun cachedFiles(book: Audiobook, found: List<Audiobook>, words: String = ""): List<EbookCandidate> {
+        val releases = found.distinctBy { it.torrentHash }.map { it to EbookMatch.confidence(book, it.title, words) }.filter { it.second != MatchConfidence.NONE }
             .sortedWith(compareBy<Pair<Audiobook, MatchConfidence>> { it.second != MatchConfidence.STRONG }.thenByDescending { it.first.seeders }).take(20)
         if (releases.isEmpty()) return emptyList()
         val cached = torbox.cachedTextFiles(releases.map { it.first.torrentHash })
@@ -111,6 +115,22 @@ object EbookMatch {
     private val separators = Regex("\\s+[-\u2013\u2014]\\s+|\\s+by\\s+|\\s*:\\s+")
 
     fun matches(book: Audiobook, release: String): Boolean = confidence(book, release) == MatchConfidence.STRONG
+
+    /**
+     * As [confidence], but the reader's own search [words] can also name a possible match: the release carries every
+     * one of them (author names may be left out) and nothing unrelated they didn't ask for. Words alone are never
+     * [MatchConfidence.STRONG], since they don't establish the book's identity.
+     */
+    fun confidence(book: Audiobook, release: String, words: String): MatchConfidence {
+        val named = confidence(book, release)
+        if (words.isBlank() || named == MatchConfidence.STRONG || release.isBlank()) return named
+        val asked = BookIdentity.normalize(words)
+        val name = " " + BookIdentity.normalize(release.substringAfterLast('/').replace('_', ' ').replace(extension, "").replace(noise, " ")) + " "
+        if (unrelated.containsMatchIn(name) && !unrelated.containsMatchIn(asked)) return named
+        val authors = BookIdentity.normalize(book.author).split(' ').toSet()
+        val needed = asked.split(' ').filter { it.isNotBlank() && it !in authors }
+        return if (needed.isNotEmpty() && needed.all { " $it " in name }) maxOf(named, MatchConfidence.POSSIBLE) else named
+    }
 
     /**
      * [MatchConfidence.STRONG] names the exact title and every author name. [MatchConfidence.POSSIBLE] names the exact

@@ -48,8 +48,8 @@ class AnnasArchive(http: OkHttpClient, private val pages: BrowserPages, private 
     }
 
     /** Matched records only; [host] is the mirror the search ran on, which also serves the record's download pages. */
-    fun candidates(book: Audiobook, records: List<AnnasRecord>, host: String): List<EbookCandidate> = records.mapNotNull { record ->
-        val confidence = EbookMatch.confidence(book, listOf(record.title, record.author).filter(String::isNotBlank).joinToString(" - "))
+    fun candidates(book: Audiobook, records: List<AnnasRecord>, host: String, words: String = ""): List<EbookCandidate> = records.mapNotNull { record ->
+        val confidence = EbookMatch.confidence(book, listOf(record.title, record.author).filter(String::isNotBlank).joinToString(" - "), words)
         if (confidence == MatchConfidence.NONE) return@mapNotNull null
         EbookCandidate(BookTextSource("annas:${record.md5}", record.title, record.author, record.format, PROVIDER,
             "https://$host/md5/${record.md5}", attribution = "Anna's Archive", language = record.language), confidence)
@@ -133,12 +133,12 @@ class AnnasArchive(http: OkHttpClient, private val pages: BrowserPages, private 
 
 /** Anna's Archive results in their own ebook-source section; no TorBox account is needed. */
 class AnnasArchiveEbookLookup(private val archive: AnnasArchive, private val addons: AddonManager, private val id: String) : EbookLookup {
-    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult {
-        val url = addons.ebookSearchUrl(id, book) ?: return EbookLookupResult(emptyList())
+    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult {
+        val url = addons.ebookSearchUrl(id, if (words.isBlank()) book else wordsBook(book, words)) ?: return EbookLookupResult(emptyList())
         status(SourceGroupStatus.SEARCHING)
         // Its browser check can take longer than the shared lookup budget the API sources use.
         val records = try { withTimeout(AnnasArchive.SEARCH_TIMEOUT_MS + 5_000) { archive.search(url) } }
             catch (check: BrowserCheckException) { return EbookLookupResult(emptyList(), check.message, check.url) }
-        return EbookLookupResult(archive.candidates(book, records, url.toHttpUrl().host))
+        return EbookLookupResult(archive.candidates(book, records, url.toHttpUrl().host, words))
     }
 }
