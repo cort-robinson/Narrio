@@ -2,6 +2,7 @@ package app.narrio.data
 
 import app.narrio.domain.Audiobook
 import app.narrio.domain.BookTextSource
+import app.narrio.domain.NarrationContext
 import java.util.Locale
 
 /** One piece of evidence about whether an ebook's text follows a recording, read from names and metadata. */
@@ -94,10 +95,21 @@ object NarrationMatch {
      * The book as its recording describes it, for judging ebooks: every known recording, and the saved recording's
      * language when the book's own is a catalog placeholder such as "Language depends on source".
      */
-    fun recordingBook(book: Audiobook, saved: Audiobook?): Audiobook {
+    fun recordingBook(book: Audiobook, saved: Audiobook?, narration: NarrationContext? = null): Audiobook {
+        if (narration != null) return narrationBook(book, narration)
         val sources = (book.sources + saved?.sources.orEmpty()).distinctBy { it.id }
         val language = if (language(book.language) == null && saved != null && language(saved.language) != null) saved.language else book.language
         return book.copy(sources = sources, language = language)
+    }
+
+    /**
+     * The book's identity (id, title, author, used to name matches) with only the given recording's narration details
+     * and chosen files. An unknown recording language stays unknown rather than borrowing the catalog's.
+     */
+    fun narrationBook(book: Audiobook, narration: NarrationContext): Audiobook {
+        val recording = narration.recording
+        return book.copy(language = recording.language, narrator = recording.narrator, releaseTitle = recording.releaseTitle.ifBlank { recording.title },
+            description = recording.description, durationMs = recording.durationMs, sources = listOfNotNull(narration.source).ifEmpty { recording.sources })
     }
 
     private val WEIGHTS = mapOf(

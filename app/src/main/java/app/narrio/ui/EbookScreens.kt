@@ -170,8 +170,8 @@ class EbookActions(
     val openSearch: (EbookSearchLink) -> Unit,
     val sourceSettings: () -> Unit,
     val connectTorBox: () -> Unit,
-    /** Searches every ebook source with the reader's own words, kept for the book; blank returns to its details. */
-    val searchWith: (String) -> Unit = {},
+    /** Searches every ebook source with the reader's own words, kept for the book; blank returns to its details. Required, so Advanced never silently does nothing. */
+    val searchWith: (String) -> Unit,
     /** Ebook website searches for the reader's own words; null keeps the book's own website links. */
     val linksFor: ((String) -> List<EbookSearchLink>)? = null,
 )
@@ -180,11 +180,14 @@ class EbookActions(
  * Find ebook and Choose another edition, simple first: editions already on this phone, one best match with a single
  * action, Other choices as one flat list, and a file from the phone. Advanced holds each ebook source's own section,
  * searching with different words, and ebook websites. Adding one keeps the sheet's place; a successful add closes it.
+ * Pass [narration] (and the same context to `NarrioViewModel.openEbookSearch`) when the screen shows a particular
+ * recording, so hints follow that recording alone.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, providers: List<SourceProvider>, connected: Boolean,
-               openLabel: String, actions: EbookActions, dismiss: () -> Unit, searchLinks: List<EbookSearchLink> = emptyList()) {
+               openLabel: String, actions: EbookActions, dismiss: () -> Unit, searchLinks: List<EbookSearchLink> = emptyList(),
+               narration: NarrationContext? = null) {
     val state = search.takeIf { it.bookId == book.id } ?: EbookSearchState(book.id)
     var removing by remember { mutableStateOf<EbookEdition?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -192,7 +195,8 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
     // A successful add slides the sheet away, revealing Read in its place.
     LaunchedEffect(state.added) { if (state.added != null) close {} }
     val providersById = remember(providers) { providers.associateBy { it.id } }
-    val recording = remember(book.sources) { book.sources.isNotEmpty() }
+    // The recording on screen, when the caller knows it; otherwise any recording the book carries.
+    val recording = remember(book.sources, narration) { narration != null || book.sources.isNotEmpty() }
     // With a recording, choices say which likely follow the narration.
     val narrated = formats.audio || recording
     val streamed = state.streamed?.takeIf { it.book.id == book.id }

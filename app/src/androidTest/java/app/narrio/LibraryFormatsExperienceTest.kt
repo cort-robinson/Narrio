@@ -376,6 +376,23 @@ class LibraryFormatsExperienceTest {
             assertEquals(words, fake.searchedWords.last())
             assertEquals(words, fresh.ebookSearch.value.words)
         } finally { compose.runOnIdle { fresh.viewModelScope.cancel() } }
+
+        // The recording on screen is part of the search: another recording or file choice searches again, and later
+        // searches for the book (Search again, own words) keep following it.
+        val first = NarrationContext(audioOnly.copy(id = "rec-a", recordingId = "rec-a", language = "English"), parts)
+        val second = NarrationContext(audioOnly.copy(id = "rec-b", recordingId = "rec-b", language = "English"), parts.copy(id = "other-parts"))
+        compose.runOnIdle { vm.openEbookSearch(audioOnly, first) }
+        compose.waitUntil(10_000) { fake.searchedNarrations.lastOrNull() == first.key && !vm.ebookSearch.value.searching }
+        val before = fake.searchedNarrations.size
+        compose.runOnIdle { vm.openEbookSearch(audioOnly, first) }
+        compose.runOnIdle { assertEquals(before, fake.searchedNarrations.size) }
+        compose.runOnIdle { vm.openEbookSearch(audioOnly, second) }
+        compose.waitUntil(10_000) { fake.searchedNarrations.size == before + 1 }
+        assertEquals(second.key, fake.searchedNarrations.last())
+        compose.runOnIdle { vm.findEbooks(audioOnly, force = true) }
+        compose.waitUntil(10_000) { fake.searchedNarrations.size == before + 2 }
+        assertEquals(second.key, fake.searchedNarrations.last())
+        assertEquals(second.key, vm.ebookSearch.value.narration)
     }
 
     @Test fun addingAnEbookFileOpensItsBookOrExplainsTheFile() {
@@ -431,6 +448,8 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
     @Volatile var websiteDownload: EbookDownloadRequest? = null
     /** The reader's own search words each search used, in order; blank is the default search. */
     val searchedWords: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    /** The recording each search followed ([NarrationContext.key]); blank when the caller gave none. */
+    val searchedNarrations: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     override fun observeShelf(): Flow<Map<String, BookFormats>> = formats
     override fun observeBook(book: Audiobook): Flow<BookFormats> =
         formats.map { it[book.id] ?: BookFormats(book.id, audio = book.provider != "catalog" && book.sources.isNotEmpty()) }
@@ -454,7 +473,8 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
         return edition
     }
     override suspend fun activate(bookId: String, editionId: String) = Unit
-    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope, words: String): EbookSearchSession {
+    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope, words: String, narration: NarrationContext?): EbookSearchSession {
+        searchedNarrations += narration?.key.orEmpty()
         searchedWords += words
         val groups = found(book)
         val state = MutableStateFlow(StreamedEbookSearch(book, groups.map { EbookGroup(it.providerId, it.name, SourceGroupStatus.SEARCHING) }))

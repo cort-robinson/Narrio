@@ -41,6 +41,39 @@ class NarrationMatchTest {
         listOf("Language depends on source", "Language not verified", "Your TorBox library", "xx", "any", "").forEach { assertNull(it, NarrationMatch.language(it)) }
     }
 
+    /**
+     * On a catalog book page, the recording on screen decides the hints: its language, cut, and translator, and only its
+     * own files, never the catalog's placeholders or another saved recording's companion ebook.
+     */
+    @Test fun aNarrationContextUsesOnlyThatRecording() {
+        val chosen = AudioSource("chosen", "M4B", "M4B", emptyList(), textFiles = listOf(BookTextSource("mine", "book.epub", format = "EPUB", provider = "archive")))
+        val other = AudioSource("other", "MP3", "MP3", emptyList(), textFiles = listOf(BookTextSource("theirs", "other.epub", format = "EPUB", provider = "archive")))
+        val page = Audiobook("catalog:crime", "Crime and Punishment", "Fyodor Dostoevsky", language = "Language depends on source", provider = "catalog",
+            description = "Translated by Constance Garnett.")
+        val saved = page.copy(sources = listOf(chosen, other))
+        val recording = Audiobook("knaben:abc", "Crime and Punishment (Abridged)", "Fyodor Dostoevsky", language = "English", releaseTitle = "Crime and Punishment (Abridged) [M4B]",
+            sources = listOf(chosen, other), recordingId = "knaben:abc")
+        val narration = NarrationContext(recording, chosen)
+        val narrated = NarrationMatch.recordingBook(page, saved, narration)
+        assertEquals(listOf(chosen), narrated.sources)
+        assertEquals(page.title, narrated.title)
+        assertEquals(page.id, narrated.id)
+        assertEquals("English", narrated.language)
+        val full = judge(ebook("full", language = "en", author = "Garnett, Constance (Translator)"), recorded = narrated)
+        // The catalog's translator isn't this recording's, and this recording is abridged.
+        assertEquals(setOf(NarrationSignal.SAME_LANGUAGE, NarrationSignal.RECORDING_ABRIDGED), full.signals)
+        assertEquals(listOf("mine"), RecordingEbookLookupFiles(narrated))
+        // Results for one recording or file choice are never reused for another.
+        assertNotEquals(narration.key, NarrationContext(recording, other).key)
+        assertNotEquals(narration.key, NarrationContext(recording.copy(id = "knaben:def", recordingId = "knaben:def"), chosen).key)
+        // An unknown recording language stays unknown, rather than borrowing the catalog's.
+        assertNull(NarrationMatch.language(NarrationMatch.narrationBook(page.copy(language = "French"), NarrationContext(recording.copy(language = "Language not verified"), chosen)).language))
+    }
+
+    private fun RecordingEbookLookupFiles(book: Audiobook) = kotlinx.coroutines.runBlocking {
+        RecordingEbookLookup.search(book, book.sources, SourceSearchBudget()) {}.found.map { it.source.id }
+    }
+
     @Test fun shortenedAdaptedAndOtherPartEditionsCountAgainstTheNarration() {
         assertTrue(NarrationSignal.SHORTENED in judge(ebook("abridged", "Crime and Punishment (Abridged) - Fyodor Dostoevsky", language = "en")).signals)
         val sample = judge(ebook("sample", "Crime and Punishment - Fyodor Dostoevsky - Free Sample", language = "en"))
