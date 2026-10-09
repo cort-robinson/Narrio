@@ -43,6 +43,8 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.domain.*
 import app.narrio.playback.ListeningState
+import app.narrio.playback.SKIP_BACK_MS
+import app.narrio.playback.SKIP_FORWARD_MS
 import kotlinx.coroutines.launch
 
 @Composable
@@ -87,7 +89,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                         Text(if (state.buffering) "Buffering…" else "${state.part?.title ?: "Ready to listen"} · ${formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                SkipButton(true, 48.dp, 24.dp) { vm.graph.playback.service?.skip(30_000) }
+                SkipButton(true, 48.dp, 24.dp) { vm.graph.playback.service?.skip(it) }
                 IconButton({ haptics.performHapticFeedback(if (state.playing) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn); vm.graph.playback.service?.toggle() }) {
                     PlayGlyph(state, 24.dp, MaterialTheme.colorScheme.primary, 20.dp)
                 }
@@ -343,26 +345,21 @@ private fun BookmarkNow(vm: NarrioViewModel) {
 private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> Unit, sleep: () -> Unit, parts: () -> Unit, bookmarks: () -> Unit, dense: Boolean = false) {
     val sync by vm.readingSync.collectAsStateWithLifecycle()
     val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
-    var dragging by remember { mutableStateOf(false) }
-    var slider by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(state.positionMs, state.partIndex) { if (!dragging) slider = state.positionMs.toFloat() }
+    var scrub by remember { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxWidth()) {
         Text(state.part?.title ?: "Ready to listen", style = MaterialTheme.typography.titleSmall, maxLines = if (dense) 1 else 2, overflow = TextOverflow.Ellipsis)
         if (!dense) Spacer(Modifier.height(4.dp))
         if (!dense) Text("Part ${state.partIndex + 1} of ${state.source?.parts?.size ?: 1} · ${if (state.source?.delivery == "torbox") "TorBox" else "Internet Archive"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Slider(value = slider.coerceIn(0f, state.durationMs.coerceAtLeast(1).toFloat()), onValueChange = { dragging = true; slider = it },
-            onValueChangeFinished = { vm.graph.playback.service?.seek(slider.toLong()); dragging = false },
-            valueRange = 0f..state.durationMs.coerceAtLeast(1).toFloat(), enabled = state.durationMs > 0,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Listening position" })
+        SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            EstimatedPlace(formatTime(if (dragging) slider.toLong() else state.positionMs), if (dragging) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (if (dragging) slider.toLong() else state.positionMs)).coerceAtLeast(0))}" else "Loading length", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))}" else "Loading length", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(-30_000) }
+            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
             PlayButton(state, if (dense) 64.dp else 82.dp, if (dense) 34.dp else 42.dp) { vm.graph.playback.service?.toggle() }
-            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(30_000) }
+            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
         }
         Spacer(Modifier.height(if (dense) 4.dp else 20.dp))
         // A quiet tool tray: four equal slots that never wrap into an orphaned row.
@@ -441,17 +438,17 @@ private fun PlayGlyph(state: ListeningState, iconSize: Dp, tint: Color, spinner:
     }
 }
 
-/** Skips give a small turn in their direction, so thirty seconds feels like a physical nudge. */
+/** Back 10 s, ahead 30 s. Skips give a small turn in their direction, so the jump feels like a physical nudge. */
 @Composable
-internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: () -> Unit) {
+internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: (deltaMs: Long) -> Unit) {
     val turn = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     IconButton({
-        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); skip()
+        haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); skip(if (forward) SKIP_FORWARD_MS else -SKIP_BACK_MS)
         scope.launch { turn.animateTo(if (forward) 1f else -1f, tween(90, easing = Motion.EmphasizedDecelerate)); turn.animateTo(0f, spring(dampingRatio = .45f, stiffness = Spring.StiffnessLow)) }
     }, Modifier.size(size)) {
-        Icon(if (forward) Icons.Rounded.Forward30 else Icons.Rounded.Replay30, if (forward) "Skip forward 30 seconds" else "Rewind 30 seconds",
+        Icon(if (forward) Icons.Rounded.Forward30 else Icons.Rounded.Replay10, if (forward) "Skip forward 30 seconds" else "Rewind 10 seconds",
             Modifier.size(iconSize).graphicsLayer { rotationZ = turn.value * 30f })
     }
 }

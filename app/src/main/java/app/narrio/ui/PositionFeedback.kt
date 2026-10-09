@@ -6,15 +6,21 @@ import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import app.narrio.domain.MappingConfidence
 import app.narrio.domain.PositionOrigin
+import kotlin.math.abs
 
 /*
  * Shared feedback for moving between reading and listening. The reader, together mode, and the library use these
@@ -55,11 +61,23 @@ class JumpSnackbarVisuals(val jump: PositionJump) : SnackbarVisuals {
 suspend fun SnackbarHostState.showJump(jump: PositionJump): Boolean =
     (showSnackbar(JumpSnackbarVisuals(jump)) == SnackbarResult.ActionPerformed).also { if (it) jump.undo() }
 
-/** The app's snackbar: jumps get their own treatment; everything else stays a standard Material snackbar. */
+/**
+ * The app's snackbar: jumps get their own treatment; everything else stays a standard Material snackbar.
+ * Any of them can be swiped sideways to dismiss, fading as it goes; TalkBack offers the same as a Dismiss action.
+ */
 @Composable
 fun NarrioSnackbar(data: SnackbarData) {
     val jump = (data.visuals as? JumpSnackbarVisuals)?.jump
-    if (jump == null) Snackbar(data) else JumpSnackbar(jump, data::performAction)
+    key(data) {
+        val swipe = rememberSwipeToDismissBoxState()
+        SwipeToDismissBox(swipe, backgroundContent = {}, onDismiss = { data.dismiss() },
+            modifier = Modifier.semantics { customActions = listOf(CustomAccessibilityAction("Dismiss") { data.dismiss(); true }) }) {
+            val width = LocalWindowInfo.current.containerSize.width.coerceAtLeast(1)
+            Box(Modifier.graphicsLayer { alpha = 1f - (abs(runCatching { swipe.requireOffset() }.getOrDefault(0f)) / (width * .6f)).coerceIn(0f, 1f) }) {
+                if (jump == null) Snackbar(data) else JumpSnackbar(jump, data::performAction)
+            }
+        }
+    }
 }
 
 @Composable

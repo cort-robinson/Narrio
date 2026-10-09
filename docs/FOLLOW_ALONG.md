@@ -2,7 +2,7 @@
 
 ## Reading along
 
-Open **Listening room → Read along**, or turn on **Read along with the narration** (the headphones in the reader's top bar) when the book has a recording. The full reader becomes the listening surface: the narrated sentence carries a soft copper wash, pages turn or scroll to keep narration on screen, and a compact player stays in reach (a tray with speed, 30-second skips, play/pause, and the sleep timer on phones; a side panel with the player and chapters when unfolded; the lower half in tabletop posture). The decision record is [EREADER.md](EREADER.md#reading-and-listening-together).
+Open **Listening room → Read along**, or turn on **Read along with the narration** (the headphones in the reader's top bar) when the book has a recording. The full reader becomes the listening surface: the narrated sentence carries a soft copper wash, pages turn or scroll to keep narration on screen, and a compact player stays in reach (a tray with speed, back 10 / ahead 30 second skips, play/pause, and the sleep timer on phones; a side panel with the player and chapters when unfolded; the lower half in tabletop posture). The decision record is [EREADER.md](EREADER.md#reading-and-listening-together).
 
 - **Following.** A page turn by hand pauses following; **Back to narration** returns, and turning back to the narrated page resumes it. Rotation and folding keep the narrated sentence on screen and never interrupt playback.
 - **Taps.** Tapping a sentence plays from its start and keeps the playing/paused state. Taps beside the text show the reader's controls; the outer edges still turn pages.

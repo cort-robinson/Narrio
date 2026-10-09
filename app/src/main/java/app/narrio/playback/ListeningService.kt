@@ -23,6 +23,10 @@ import kotlinx.serialization.encodeToString
 import okhttp3.Request
 import java.util.concurrent.ConcurrentHashMap
 
+/** Skip distances shared by the app's controls, the notification, and headset/car controls. */
+const val SKIP_BACK_MS = 10_000L
+const val SKIP_FORWARD_MS = 30_000L
+
 @androidx.annotation.OptIn(UnstableApi::class)
 class ListeningService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -58,7 +62,7 @@ class ListeningService : MediaSessionService() {
         val network = DataSource.Factory { RefreshingDataSource(upstream.createDataSource(), graph.torbox, parts, links) }
         val factory = graph.offline.playbackFactory(network)
         player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(factory))
-            .setSeekBackIncrementMs(30_000).setSeekForwardIncrementMs(30_000)
+            .setSeekBackIncrementMs(SKIP_BACK_MS).setSeekForwardIncrementMs(SKIP_FORWARD_MS)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(30_000, 90_000, 1_000, 3_000).build())
             .setAudioAttributes(AudioAttributes.Builder().setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).setUsage(C.USAGE_MEDIA).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).build()
