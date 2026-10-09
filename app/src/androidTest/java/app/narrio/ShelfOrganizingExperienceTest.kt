@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.data.*
 import app.narrio.domain.*
 import app.narrio.ui.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.encodeToString
@@ -80,8 +81,10 @@ class ShelfOrganizingExperienceTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("continue-row").fetchSemanticsNodes().isNotEmpty() }
         // Each book resumes in the mode that last moved it; the newest place comes first.
         compose.onNodeWithContentDescription("Resume ${heard.title}").assertIsDisplayed()
-        val left = { title: String -> compose.onNode(hasText(title) and hasClickAction()).fetchSemanticsNode().boundsInRoot.left }
-        assertTrue(left(heard.title) < left(read.title) && left(read.title) < left(both.title))
+        // Cards scrolled off screen have no visible bounds, so the row's own child order is compared.
+        val cards = compose.onNodeWithTag("continue-row").onChildren().fetchSemanticsNodes().map { it.config.getOrElse(SemanticsProperties.Text) { emptyList() }.joinToString() }
+        val at = { title: String -> cards.indexOfFirst { title in it }.also { assertTrue("$title on the row", it >= 0) } }
+        assertTrue(at(heard.title) < at(read.title) && at(read.title) < at(both.title))
         compose.onNodeWithContentDescription("Continue reading ${read.title}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription("Resume ${both.title}").performScrollTo().assertIsDisplayed()
         capture("continue-row-night")
@@ -130,8 +133,9 @@ class ShelfOrganizingExperienceTest {
         seed()
         theme(ThemeMode.NIGHT)
         compose.runOnIdle { vm.navigate(1) }
-        compose.waitUntil(10_000) { shown(heard.title) }
+        compose.waitUntil(10_000) { books.all { book -> vm.shelf.value.any { it.bookId == book.id } } }
         val total = vm.shelf.value.size
+        compose.onNodeWithText("$total books").assertExists()
 
         // Search narrows by title or author, and the count follows.
         compose.onNodeWithTag("shelf-search").performTextInput("ines")
@@ -142,7 +146,8 @@ class ShelfOrganizingExperienceTest {
         compose.onNodeWithTag("shelf-search").performTextReplacement("nothing like this")
         compose.onNodeWithText("No books match").assertIsDisplayed()
         compose.onNodeWithContentDescription("Clear shelf search").performClick()
-        compose.waitUntil(5_000) { shown(heard.title) }
+        compose.waitUntil(5_000) { shown("$total books") }
+        compose.onNodeWithTag("shelf-search").performImeAction()
 
         // Title order files "The Lantern Keeper" under L, and the choice is kept.
         compose.onNodeWithTag("shelf-sort").performClick()
@@ -165,6 +170,9 @@ class ShelfOrganizingExperienceTest {
         compose.onNodeWithContentDescription("More for ${heard.title}").performClick()
         compose.onNodeWithText("Mark as finished").performClick()
         compose.waitUntil(5_000) { finishedAt(heard) > 0 }
+        // The confirmation can sit over the heading at the bottom of the list; let it go first.
+        compose.waitUntil(15_000) { shown("Marked as finished") }
+        compose.waitUntil(15_000) { !shown("Marked as finished") }
         compose.onNodeWithTag("shelf").performScrollToNode(hasTestTag("finished-section"))
         compose.onNodeWithTag("finished-section").assert(hasStateDescription("Collapsed"))
         assertFalse(shown(heard.title))
@@ -180,5 +188,5 @@ class ShelfOrganizingExperienceTest {
         compose.onNodeWithTag("shelf").performScrollToNode(hasText("Part 2 of 6 · 25%"))
     }
 
-    private fun hasStateDescription(value: String) = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, value)
+    private fun hasStateDescription(value: String) = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, value)
 }
