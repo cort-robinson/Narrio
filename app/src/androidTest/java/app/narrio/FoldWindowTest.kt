@@ -43,7 +43,7 @@ class FoldWindowTest {
         postures.overrideWindowLayoutInfo(TestWindowLayoutInfo(listOf(vertical)))
         compose.waitForIdle()
         val search = compose.onNodeWithText("Search books or authors").fetchSemanticsNode().boundsInRoot
-        val rewind = compose.onNodeWithContentDescription("Rewind 30 seconds").fetchSemanticsNode().boundsInRoot
+        val rewind = compose.onNodeWithContentDescription("Rewind 10 seconds").fetchSemanticsNode().boundsInRoot
         assertTrue("Discovery must stay left of a separating hinge", search.right < vertical.bounds.left)
         assertTrue("Transport must stay right of a separating hinge", rewind.left > vertical.bounds.right)
         capture("fold-hinge.png")
@@ -52,7 +52,7 @@ class FoldWindowTest {
         postures.overrideWindowLayoutInfo(TestWindowLayoutInfo(listOf(horizontal)))
         compose.waitForIdle()
         val heading = compose.onNodeWithText("Now playing").fetchSemanticsNode().boundsInRoot
-        val controls = compose.onNodeWithContentDescription("Rewind 30 seconds").fetchSemanticsNode().boundsInRoot
+        val controls = compose.onNodeWithContentDescription("Rewind 10 seconds").fetchSemanticsNode().boundsInRoot
         assertTrue("Artwork belongs above the tabletop hinge", heading.bottom < horizontal.bounds.top)
         assertTrue("Controls belong below the tabletop hinge", controls.top > horizontal.bounds.bottom)
         assertEquals(source.parts[1].id, graph.playback.state.value.part!!.id)

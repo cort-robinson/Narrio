@@ -309,7 +309,7 @@ fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Com
     }
 }
 
-/** The phone's tray: speed · −30 · play · +30 · sleep, under a line of narration status. */
+/** The phone's tray: speed · −10 · play · +30 · sleep, under a line of narration status. */
 @Composable
 fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: ListeningState, options: () -> Unit, modifier: Modifier = Modifier, above: Dp = 0.dp) {
     var speedOpen by remember { mutableStateOf(false) }
@@ -335,9 +335,9 @@ fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: Listening
                         StatusRow(readAlong, playback, options, Modifier.padding(start = 20.dp, end = 12.dp, top = 6.dp))
                         Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                             ToolSlot(Icons.Rounded.Speed, { speedOpen = true }) { FitLabel(speedLabel(playback.speed)) }
-                            SkipButton(false, 52.dp, 28.dp) { vm.graph.playback.service?.skip(-30_000) }
+                            SkipButton(false, 52.dp, 28.dp) { vm.graph.playback.service?.skip(it) }
                             PlayButton(playback, 56.dp, 30.dp) { vm.graph.playback.service?.toggle() }
-                            SkipButton(true, 52.dp, 28.dp) { vm.graph.playback.service?.skip(30_000) }
+                            SkipButton(true, 52.dp, 28.dp) { vm.graph.playback.service?.skip(it) }
                             ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleepAtEnd || playback.sleepUntil > 0) { FitLabel(sleepLabel(playback)) }
                         }
                     }
@@ -391,9 +391,7 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
     var sleepOpen by remember { mutableStateOf(false) }
     if (!readAlong.playingHere) { ListenHere(vm, readAlong); return }
     if (readAlong.matching) { MatchRow(vm, readAlong, playback); return }
-    var dragging by remember { mutableStateOf(false) }
-    var slider by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(playback.positionMs, playback.partIndex) { if (!dragging) slider = playback.positionMs.toFloat() }
+    var scrub by remember { mutableStateOf<Long?>(null) }
     val confidence = readAlong.place?.confidence ?: MappingConfidence.UNMAPPED
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -401,19 +399,16 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
             if (chapters != null) ReadAlongOptionsButton(options)
         }
         StatusRow(readAlong, playback, options, showTime = false)
-        Slider(value = slider.coerceIn(0f, playback.durationMs.coerceAtLeast(1).toFloat()), onValueChange = { dragging = true; slider = it },
-            onValueChangeFinished = { vm.graph.playback.service?.seek(slider.toLong()); dragging = false },
-            valueRange = 0f..playback.durationMs.coerceAtLeast(1).toFloat(), enabled = playback.durationMs > 0,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Listening position" })
+        SeekSlider(playback.positionMs, playback.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            EstimatedPlace(formatTime(if (dragging) slider.toLong() else playback.positionMs), if (dragging) MappingConfidence.EXACT else confidence, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (playback.durationMs > 0) "−${formatTime((playback.durationMs - (if (dragging) slider.toLong() else playback.positionMs)).coerceAtLeast(0))}" else "Loading length",
+            EstimatedPlace(formatTime(scrub ?: playback.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (playback.durationMs > 0) "−${formatTime((playback.durationMs - (scrub ?: playback.positionMs)).coerceAtLeast(0))}" else "Loading length",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(-30_000) }
+            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
             PlayButton(playback, 72.dp, 38.dp) { vm.graph.playback.service?.toggle() }
-            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(30_000) }
+            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
         }
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ToolSlot(Icons.Rounded.Speed, { speedOpen = true }) { FitLabel(speedLabel(playback.speed)) }

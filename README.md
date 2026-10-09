@@ -27,7 +27,7 @@ Read along is available on this development branch and its Narrio Dev preview. S
 - Metadata-only title/author search with one result per book, followed by explicit discovery of matching narrated recordings.
 - TorBox account connection, batched hash/file cache checks, cached-source filtering, existing-source reuse, torrent/magnet creation, detailed cloud preparation status, and temporary per-file playback links.
 - Explicit offline phone downloads with storage estimates, Wi-Fi preference, progress, pause/resume/retry, and removal. Ordinary streaming does not write to the offline audio cache.
-- Whole-book M4B and naturally ordered multipart MP3 playback, 30-second skip controls, speed, a sleep timer, and bookmarks.
+- Whole-book M4B and naturally ordered multipart MP3 playback, 10-second back and 30-second forward skips, precise seeking (slide up from the bar for finer control), speed, a sleep timer, and bookmarks.
 - Room-backed library and independent saved positions for different recordings and source layouts.
 - **Listening room → Read along**: the full reader highlights the narrated sentence and turns pages with the narration, with a compact player (a side panel when unfolded, controls below the hinge in tabletop). Find ebook searches the recording's own files, your TorBox account, TorBox-cached ebook releases, and Project Gutenberg at once, each in its own section with one best match to add and read, and Narrio recognizes the narration on the phone to sync text to audio. EPUB/text imports, chapter choice, and manual timing fixes remain available. Text and timing are saved locally.
 - Media3 background service and system media controls; pause on headphone disconnection and Android audio-focus handling.
