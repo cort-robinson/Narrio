@@ -84,7 +84,13 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
                         val snapshot = sourceId?.let { graph.mappingRepository.snapshot(bookId, it) }
                         if (snapshot == null || graph.readingSync.pairing(bookId, snapshot) == PairingStatus.MISMATCH) null
                         else graph.positionMapper.audioFor(bookId, cursor, snapshot.source.id)
-                    }, onCommitted = { cursor -> graph.preferences.edit().putString(historyKey, NarrioJson.encodeToString(cursor)).apply() })
+                    }, onCommitted = { cursor ->
+                        graph.preferences.edit().putString(historyKey, NarrioJson.encodeToString(cursor)).apply()
+                        // Settling on the page that shows the end of the edition finishes the book.
+                        val page = controller.visible.value
+                        val layout = opened.layout.value
+                        if (page != null && layout != null && readingFinished(layout, page.first, page.end)) scope.launch { graph.library.finished(bookId) }
+                    })
                 val shared = graph.sharedPositions.current(bookId)
                 val history = if (shared == null) null else graph.preferences.getString(historyKey, null)?.let {
                     runCatching { NarrioJson.decodeFromString<ContentCursor>(it) }.getOrNull()

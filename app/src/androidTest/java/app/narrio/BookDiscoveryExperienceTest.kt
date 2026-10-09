@@ -104,7 +104,7 @@ class BookDiscoveryExperienceTest {
             old.execSQL("INSERT INTO book_text VALUES (?, ?)", arrayOf(catalogBook.id, document.id))
             old.version = 4
         }
-        val migrated = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration4To5).build()
+        val migrated = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration4To5, LibraryMigration5To6).build()
         try {
             val dao = migrated.library()
             assertFalse(dao.find(catalogBook.id)!!.hasAudio)

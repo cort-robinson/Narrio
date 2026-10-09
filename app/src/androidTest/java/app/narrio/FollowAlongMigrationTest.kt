@@ -34,7 +34,7 @@ class FollowAlongMigrationTest {
             old.execSQL("INSERT INTO positions VALUES (?, ?, ?, ?, ?, ?)", arrayOf<Any>(book.id, source.id, NarrioJson.encodeToString(source), "legacy-part", 123456, 1))
             old.version = 3
         }
-        val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration3To4, LibraryMigration4To5).build()
+        val database = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration3To4, LibraryMigration4To5, LibraryMigration5To6).build()
         try {
             val dao = database.library()
             assertEquals(123456L, dao.find(book.id)!!.positionMs)

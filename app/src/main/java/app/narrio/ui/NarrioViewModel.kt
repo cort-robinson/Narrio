@@ -501,6 +501,28 @@ class NarrioViewModel @JvmOverloads constructor(
     val readerTarget = MutableStateFlow<ContentCursor?>(null)
     fun readAt(bookId: String, cursor: ContentCursor) { readerTarget.value = cursor; read(bookId) }
     fun setShelfFilter(filter: ShelfFilter) { shelfFilter.value = filter }
+    /** The shelf's order, kept on this phone. */
+    val shelfSort = MutableStateFlow(ShelfSort.from(graph.preferences.getString(ShelfSort.PREFERENCE, null)))
+    fun setShelfSort(sort: ShelfSort) { shelfSort.value = sort; graph.preferences.edit().putString(ShelfSort.PREFERENCE, sort.name).apply() }
+    /** Words to find on the shelf by title or author. */
+    val shelfQuery = MutableStateFlow("")
+    fun setShelfQuery(value: String) { shelfQuery.value = value }
+    /** Moves a book into or out of the shelf's Finished section; finished books leave Continue. */
+    fun setFinished(bookId: String, finished: Boolean) = viewModelScope.launch {
+        if (finished) graph.library.finished(bookId) else graph.library.unfinished(bookId)
+        messages.emit(if (finished) "Marked as finished" else "Marked as not finished")
+    }
+    /** Recent Discover searches, newest first; stored only on this phone. */
+    val recentSearches = MutableStateFlow(RecentSearches.decode(graph.preferences.getString(RecentSearches.PREFERENCE, null)))
+    /** Remembers a submitted search, or the one a result was opened from. */
+    fun rememberSearch(value: String = query.value) = saveRecentSearches(RecentSearches.add(recentSearches.value, value))
+    fun forgetSearch(value: String) = saveRecentSearches(RecentSearches.remove(recentSearches.value, value))
+    fun clearRecentSearches() = saveRecentSearches(emptyList())
+    private fun saveRecentSearches(next: List<String>) {
+        if (next == recentSearches.value) return
+        recentSearches.value = next
+        graph.preferences.edit().putString(RecentSearches.PREFERENCE, RecentSearches.encode(next)).apply()
+    }
     private var announcedJump: PositionJump? = null
     fun announceJump(jump: PositionJump) { announcedJump = jump; positionJumps.tryEmit(jump) }
     fun finishJump(jump: PositionJump) { if (announcedJump === jump) { announcedJump = null; clearSyncJump() } }

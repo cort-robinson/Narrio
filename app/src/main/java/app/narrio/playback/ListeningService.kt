@@ -96,7 +96,7 @@ class ListeningService : MediaSessionService() {
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) error = null
-                if (playbackState == Player.STATE_ENDED) { sleepAtEnd = false; scope.launch { save() } }
+                if (playbackState == Player.STATE_ENDED) { sleepAtEnd = false; scope.launch { save(); finishIfEnded() } }
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { chapters = emptyList(); readChapters(); scope.launch { save() } }
             override fun onPlayerError(playbackError: PlaybackException) {
@@ -206,6 +206,12 @@ class ListeningService : MediaSessionService() {
         val part = source.parts.getOrNull(player.currentMediaItemIndex) ?: return
         graph.library.progress(book.id, NarrioJson.encodeToString(source), part.id, player.currentPosition.coerceAtLeast(0), System.currentTimeMillis())
         lastSave = System.currentTimeMillis()
+    }
+
+    /** Playing through the final part marks the book finished on the shelf. */
+    private suspend fun finishIfEnded() {
+        val book = currentBook ?: return; val source = currentSource ?: return
+        if (app.narrio.ui.listeningFinished(player.currentMediaItemIndex, source.parts.size, player.playbackState == Player.STATE_ENDED)) graph.library.finished(book.id)
     }
 
     /** Flush the paused position before package replacement can stop this process. Called on main. */

@@ -21,6 +21,8 @@ data class ShelfEntry(
     val preparationId: Long = 0,
     val pendingFormat: String = "",
     @ColumnInfo(defaultValue = "0") val hasAudio: Boolean = false,
+    /** When the listener finished the book, by hand or by reaching its end; 0 while unfinished. */
+    @ColumnInfo(defaultValue = "0") val finishedAt: Long = 0,
 ) {
     fun book(): Audiobook = NarrioJson.decodeFromString(bookJson)
     fun source(): AudioSource? = sourceJson.takeIf { it.isNotBlank() }?.let { NarrioJson.decodeFromString(it) }
@@ -79,6 +81,9 @@ interface LibraryDao {
     @Query("UPDATE shelf SET state = 'preparing', preparationId = :torrent, pendingFormat = :format WHERE bookId = :id") suspend fun preparing(id: String, torrent: Long, format: String)
     @Query("UPDATE shelf SET state = 'listening', preparationId = 0, pendingFormat = '' WHERE bookId = :id") suspend fun finishPreparation(id: String)
     @Query("UPDATE shelf SET state = :state WHERE bookId = :id") suspend fun state(id: String, state: String)
+    /** Marks a book finished, keeping the first finish time when it already is. */
+    @Query("UPDATE shelf SET finishedAt = :time WHERE bookId = :id AND finishedAt = 0") suspend fun finished(id: String, time: Long = System.currentTimeMillis())
+    @Query("UPDATE shelf SET finishedAt = 0 WHERE bookId = :id") suspend fun unfinished(id: String)
     @Query("DELETE FROM shelf WHERE bookId = :id") suspend fun deleteShelf(id: String)
     @Query("DELETE FROM bookmarks WHERE bookId = :id") suspend fun deleteBookmarks(id: String)
     @Query("DELETE FROM positions WHERE bookId = :id") suspend fun deletePositions(id: String)
@@ -242,8 +247,13 @@ interface LibraryDao {
     fun observeShelfState(audio: Boolean = false, ebook: Boolean = false): Flow<List<LibraryShelfEntry>>
 }
 
-@Database(entities = [ShelfEntry::class, BookmarkEntry::class, SourcePosition::class, BookTextEntry::class, TextBindingEntry::class, EbookEditionEntry::class, SharedPositionEntry::class, AnnotationEntry::class, AlignmentJobEntry::class], version = 5, exportSchema = true)
+@Database(entities = [ShelfEntry::class, BookmarkEntry::class, SourcePosition::class, BookTextEntry::class, TextBindingEntry::class, EbookEditionEntry::class, SharedPositionEntry::class, AnnotationEntry::class, AlignmentJobEntry::class], version = 6, exportSchema = true)
 abstract class LibraryDatabase : RoomDatabase() { abstract fun library(): LibraryDao }
+
+/** Adds the Finished state; every existing book starts unfinished. */
+val LibraryMigration5To6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE shelf ADD COLUMN finishedAt INTEGER NOT NULL DEFAULT 0") }
+}
 
 val LibraryMigration3To4 = object : Migration(3, 4) {
     override fun migrate(db: SupportSQLiteDatabase) {
