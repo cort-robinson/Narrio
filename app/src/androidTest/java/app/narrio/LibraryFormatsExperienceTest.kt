@@ -328,8 +328,9 @@ class LibraryFormatsExperienceTest {
         assertEquals(words, vm.ebookWords(audioOnly.id))
         sheet.performScrollToNode(hasTestTag("ebook-custom-words"))
         compose.onNodeWithText("Searching for “$words”").assertIsDisplayed()
+        // Other choices stay open from reviewing possible matches, now listing what the reader's words found.
         sheet.performScrollToNode(hasTestTag("ebook-other-choices-toggle"))
-        compose.onNodeWithTag("ebook-other-choices-toggle").performClick()
+        compose.onNodeWithTag("ebook-other-choices-toggle").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Expanded"))
         sheet.performScrollToNode(hasTestTag("ebook-choice:${sample.id}"))
         compose.onNodeWithText("May not follow the narration: abridged or a sample").assertExists()
         theme(ThemeMode.NIGHT)
