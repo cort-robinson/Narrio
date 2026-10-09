@@ -48,7 +48,7 @@ fun extendSleep(timer: SleepTimer, remainingMs: Long?, nowMs: Long, extraMs: Lon
  * kept at that part's start (the part change itself pauses); the last part's end stops playback anyway.
  */
 fun sleepPausesNow(timer: SleepTimer, partIndex: Int, remainingMs: Long?): Boolean =
-    remainingMs != null && remainingMs <= 0 && !(timer.stop?.positionMs == PART_END && timer.stop?.partIndex == partIndex)
+    remainingMs != null && remainingMs <= 0 && !(timer.stop?.positionMs == PART_END && timer.stop.partIndex == partIndex)
 
 /**
  * Narration volume while a timer runs out: full until the last [fadeMs], then down to silence. Squaring the ramp keeps

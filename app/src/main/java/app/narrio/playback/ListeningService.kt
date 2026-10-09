@@ -27,6 +27,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -105,7 +106,7 @@ class ListeningService : MediaSessionService() {
                     .setAvailableSessionCommands(sessionCommands).build()
             }
             override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo, customCommand: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
-                if (customCommand.customAction != EXTEND_SLEEP.customAction) return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
+                if (customCommand.customAction != EXTEND_SLEEP.customAction) return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
                 extendSleep()
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
