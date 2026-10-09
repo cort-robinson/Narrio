@@ -83,6 +83,38 @@ class BookSourceDiscoveryTest {
         assertEquals(listOf("Eragon/Eragon.m4b"), SourceQuality.filter(eragon, listOf(cached.copy(title = "Christopher Paolini", provider = "torbox"))).single().sources.single().parts.map { it.name })
     }
 
+    @Test fun seriesBundleNamedLikeItsFirstBookKeepsOnlyThatBook() {
+        val carl = book.copy(title = "Dungeon Crawler Carl", author = "Matt Dinniman")
+        fun bundle(format: String, vararg names: String) = release("Matt Dinniman - Dungeon Crawler Carl").copy(cachedFormats = listOf(format),
+            sources = listOf(AudioSource("source", "Audio", format, names.mapIndexed { i, name -> AudioPart("file:$i", name, name) }, delivery = "torbox")))
+        fun parts(recording: Audiobook) = SourceQuality.filter(carl, listOf(recording)).map { it.sources.single().parts.map(AudioPart::name) }
+
+        // One whole-book file per book, in a release folder named after the series.
+        val books = bundle("M4B", "Dungeon Crawler Carl/Book 1 - Dungeon Crawler Carl.m4b", "Dungeon Crawler Carl/Book 2 - Carl's Doomsday Scenario.m4b",
+            "Dungeon Crawler Carl/Book 3 - The Dungeon Anarchist's Cookbook.m4b", "Dungeon Crawler Carl/Book 6 - The Butcher's Masquerade.m4b")
+        assertEquals(listOf(listOf("Dungeon Crawler Carl/Book 1 - Dungeon Crawler Carl.m4b")), parts(books))
+        val chosen = SourceQuality.filter(carl, listOf(books)).single()
+        assertTrue(chosen.bookFilesSelected)
+        assertNotEquals(books.id, chosen.id)
+        // The series name before every book's own title.
+        assertEquals(listOf(listOf("Dungeon Crawler Carl 1 - Dungeon Crawler Carl.m4b")),
+            parts(bundle("M4B", "Dungeon Crawler Carl 1 - Dungeon Crawler Carl.m4b", "Dungeon Crawler Carl 2 - Carl's Doomsday Scenario.m4b")))
+        // A folder of chapters per book.
+        assertEquals(listOf(listOf("DCC/01 - Dungeon Crawler Carl/01 Chapter 1.mp3", "DCC/01 - Dungeon Crawler Carl/02 Chapter 2.mp3")),
+            parts(bundle("MP3", "DCC/01 - Dungeon Crawler Carl/01 Chapter 1.mp3", "DCC/01 - Dungeon Crawler Carl/02 Chapter 2.mp3",
+                "DCC/02 - Carl's Doomsday Scenario/01 Chapter 1.mp3")))
+        // Numbered books that never name this one can't be split safely, so they aren't chosen automatically.
+        assertEquals(emptyList<List<String>>(), parts(bundle("MP3", "Book 1/01.mp3", "Book 2/01.mp3")))
+
+        // One book in pieces stays whole.
+        for (single in listOf(bundle("MP3", "Dungeon Crawler Carl/CD 1/01.mp3", "Dungeon Crawler Carl/CD 2/01.mp3"),
+            bundle("M4B", "Dungeon Crawler Carl Part 1.m4b", "Dungeon Crawler Carl Part 2.m4b"),
+            bundle("MP3", "01 - The Tutorial.mp3", "02 - Floor Two.mp3"),
+            bundle("MP3", "Disc 1 - The Tutorial/01.mp3", "Disc 2 - Floor Two/01.mp3"))) {
+            assertEquals(listOf(single.sources.single().parts.map(AudioPart::name)), parts(single))
+        }
+    }
+
     @Test fun catalogSubtitleFallbackFindsBaseTitleAndPreservesPartialProviderSuccess() = runBlocking {
         val detailed = book.copy(title = "Project Hail Mary: A Novel")
         val recording = release("Project Hail Mary", "Andy Weir", "archive")
