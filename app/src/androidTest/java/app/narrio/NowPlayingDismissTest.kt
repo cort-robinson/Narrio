@@ -47,7 +47,11 @@ class NowPlayingDismissTest {
             main { service.load(book, source, false, source.parts.single().id, 42_000) }
             compose.runOnIdle { graph.preferences.edit().putBoolean("notificationAsked", true).apply(); vm.playerOpen.value = true }
 
-            compose.onNodeWithContentDescription("Close player").performClick()
+            // Close sits in the heading's menu, away from Bookmark.
+            compose.onNodeWithContentDescription("Bookmark this moment").assertIsDisplayed()
+            compose.onAllNodesWithText("Close player").assertCountEquals(0)
+            compose.onNodeWithContentDescription("More options").performClick()
+            compose.onNodeWithText("Close player").performClick()
             compose.waitUntil(5_000) { graph.playback.state.value.book == null }
             compose.runOnIdle { assertFalse(vm.playerOpen.value) }
             compose.onAllNodesWithText("Now playing").assertCountEquals(0)

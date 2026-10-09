@@ -75,9 +75,7 @@ fun readingPlace(cursor: ContentCursor, chapter: Int?): PlaceSummary {
 fun listeningPlace(cursor: AudioCursor, source: AudioSource?): PlaceSummary {
     val parts = source?.parts.orEmpty()
     val index = resumeIndex(parts, cursor.partId)
-    val fraction = parts.takeIf { it.isNotEmpty() && it.all { part -> part.durationMs > 0 } }?.let { known ->
-        ((known.take(index).sumOf { it.durationMs } + cursor.positionMs).toFloat() / known.sumOf { it.durationMs }).coerceIn(0f, 1f)
-    }
+    val fraction = bookTime(parts, index, cursor.positionMs)?.fraction
     val time = formatTime(cursor.positionMs)
     val label = when {
         parts.size > 1 && fraction != null -> "Part ${index + 1} of ${parts.size} · ${percent(fraction)}%"

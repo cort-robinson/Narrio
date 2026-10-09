@@ -61,7 +61,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
     val scope = rememberCoroutineScope()
     val lift = remember { Animatable(0f) }
     var armed by remember { mutableStateOf(false) }
-    val progress by animateFloatAsState(if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f, tween(1000, easing = LinearEasing), label = "mini progress")
+    val progress by animateFloatAsState(state.progress, tween(1000, easing = LinearEasing), label = "mini progress")
     // A short upward flick opens the listening room, the same way the player can be pulled back down.
     // Pulling it down past the threshold closes Now playing; the shell offers Undo.
     Surface(open, modifier.fillMaxWidth().testTag("mini-player").pressScale(interaction, .985f)
@@ -98,7 +98,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
                     PlayGlyph(state, 24.dp, MaterialTheme.colorScheme.primary, 20.dp)
                 }
             }
-            if (state.durationMs > 0) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
+            if (state.hasLength) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
         }
     }
 }
@@ -137,7 +137,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             ReadAlongEntry(vm, book, dense = true)
             BookColoursButton { coloursOpen = true }
             BookmarkNow(vm)
-            ClosePlayback(vm)
+            PlayerMenu(vm)
         } else Column(pullDown) {
             PlayerHeading(vm, compact) { coloursOpen = true }
             ReadAlongEntry(vm, book, dense = false, modifier = Modifier.padding(start = if (compact) 12.dp else 0.dp, bottom = 4.dp))
@@ -321,15 +321,25 @@ private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: ()
         Spacer(Modifier.weight(1f))
         BookColoursButton(openColours)
         BookmarkNow(vm)
-        ClosePlayback(vm)
+        PlayerMenu(vm)
     }
 }
 
-/** Stops listening and clears Now playing; the shelf keeps the book and its place. */
+/**
+ * Close player stops listening and clears Now playing; the shelf keeps the book and its place. It sits behind a menu
+ * so a sleepy tap meant for Bookmark can't end the session (the mini-player keeps it as a TalkBack action).
+ */
 @Composable
-private fun ClosePlayback(vm: NarrioViewModel) {
+private fun PlayerMenu(vm: NarrioViewModel) {
     val haptics = LocalHapticFeedback.current
-    IconButton({ haptics.performHapticFeedback(HapticFeedbackType.Reject); vm.dismissPlayback() }) { Icon(Icons.Rounded.Close, "Close player") }
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton({ open = true }, Modifier.testTag("player-menu")) { Icon(Icons.Rounded.MoreVert, "More options") }
+        DropdownMenu(open, { open = false }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            DropdownMenuItem({ Text("Close player") }, { open = false; haptics.performHapticFeedback(HapticFeedbackType.Reject); vm.dismissPlayback() },
+                leadingIcon = { Icon(Icons.Rounded.Close, null) }, modifier = Modifier.testTag("close-player"))
+        }
+    }
 }
 
 /** Bookmarking gives a small pop and a confirming tick: the moment has been kept. */
@@ -351,14 +361,13 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
     val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
     var scrub by remember { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxWidth()) {
-        Text(state.part?.title ?: "Ready to listen", style = MaterialTheme.typography.titleSmall, maxLines = if (dense) 1 else 2, overflow = TextOverflow.Ellipsis)
-        if (!dense) Spacer(Modifier.height(4.dp))
-        if (!dense) Text("Part ${state.partIndex + 1} of ${state.source?.parts?.size ?: 1} · ${if (state.source?.delivery == "torbox") "TorBox" else "Internet Archive"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ChapterTitleRow(vm, state, dense, if (dense) null else "Part ${state.partIndex + 1} of ${state.source?.parts?.size ?: 1} · ${if (state.source?.delivery == "torbox") "TorBox" else "Internet Archive"}")
         SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))}" else "Loading length", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        if (!dense) TimeLeftLine(state, Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
@@ -369,7 +378,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         // A quiet tool tray: four equal slots that never wrap into an orphaned row.
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent(speedLabel(state.speed), transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { FitLabel(it) } }
-            ToolSlot(Icons.Rounded.Bedtime, sleep, active = state.sleepAtEnd || state.sleepUntil > 0) {
+            ToolSlot(Icons.Rounded.Bedtime, sleep, active = state.sleep.active) {
                 FitLabel(sleepLabel(state))
             }
             ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel("Parts") }
@@ -393,28 +402,6 @@ internal fun SpeedDialog(vm: NarrioViewModel, state: ListeningState, dismiss: ()
         }
     }
 }
-
-/** Sleep timer choices, shared by the Listening room and read along. */
-@Composable
-internal fun SleepDialog(vm: NarrioViewModel, state: ListeningState, dismiss: () -> Unit) {
-    ChoiceDialog("Sleep timer", dismiss) {
-        Text(when {
-            state.sleepAtEnd -> "Playback pauses at the end of this audio part."
-            state.sleepUntil > 0 -> "Playback pauses in about ${sleepMinutes(state)} minutes."
-            else -> "Choose when playback pauses."
-        }, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 12.dp))
-        Column(Modifier.selectableGroup()) {
-            listOf(15, 30, 45, 60, 90).forEach { minutes -> OptionRow("In $minutes minutes", false) { vm.graph.playback.service?.sleep(minutes); dismiss() } }
-            OptionRow("At the end of this audio part", state.sleepAtEnd) { vm.graph.playback.service?.sleep(0, true); dismiss() }
-            OptionRow("Turn timer off", !state.sleepAtEnd && state.sleepUntil == 0L) { vm.graph.playback.service?.sleep(0); dismiss() }
-        }
-    }
-}
-
-internal fun sleepMinutes(state: ListeningState) = ((state.sleepUntil - System.currentTimeMillis()).coerceAtLeast(0) / 60_000) + 1
-
-/** The sleep slot's short label: "Sleep", minutes left, or the end of the part. */
-internal fun sleepLabel(state: ListeningState) = if (state.sleepAtEnd) "End of part" else if (state.sleepUntil > 0) "${sleepMinutes(state)}m" else "Sleep"
 
 /** Circle while paused, a softened square while playing: the control's shape tells you the state. */
 @Composable
@@ -478,7 +465,7 @@ internal fun FitLabel(text: String) {
 }
 
 @Composable
-private fun OptionRow(label: String, selected: Boolean, choose: () -> Unit) {
+internal fun OptionRow(label: String, selected: Boolean, choose: () -> Unit) {
     val background by animateColorAsState(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent, label = "option")
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).background(background)
         .selectable(selected, role = Role.RadioButton, onClick = choose).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -490,6 +477,7 @@ private fun OptionRow(label: String, selected: Boolean, choose: () -> Unit) {
 
 internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}×"
 @Composable
-private fun ChoiceDialog(title: String, dismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) }, confirmButton = { TextButton(dismiss) { Text("Done") } })
+internal fun ChoiceDialog(title: String, dismiss: () -> Unit, extra: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) },
+        confirmButton = { TextButton(dismiss) { Text("Done") } }, dismissButton = extra)
 }
