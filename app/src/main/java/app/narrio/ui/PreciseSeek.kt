@@ -118,7 +118,7 @@ internal fun SeekSlider(positionMs: Long, durationMs: Long, seek: (Long) -> Unit
             onValueChangeFinished = { seek(value.toLong()); active = false; scrubbing(null) },
             valueRange = 0f..duration, enabled = durationMs > 0, interactionSource = interaction,
             modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Listening position" })
-        // Drawn over the slider so it takes the touch; the slider still answers TalkBack and keyboard adjustments.
+        // Drawn over the slider so it takes the touch (a tap never jumps); the slider still answers TalkBack and keyboard adjustments.
         Box(Modifier.matchParentSize().pointerInput(durationMs) {
             if (durationMs <= 0) return@pointerInput
             awaitEachGesture {
@@ -128,9 +128,8 @@ internal fun SeekSlider(positionMs: Long, durationMs: Long, seek: (Long) -> Unit
                 val track = (size.width - inset * 2).coerceAtLeast(1f)
                 val fullMsPerDp = duration / track * density
                 val drag = DragInteraction.Start()
-                // A press away from the thumb jumps there, as a slider does; a press on it keeps the exact place.
-                val jumped = abs(down.position.x - (inset + value / duration * track)) > 24.dp.toPx()
-                if (jumped) value = ((down.position.x - inset) / track).coerceIn(0f, 1f) * duration
+                // A press never moves the place: in a ten-hour part, a finger's width on the bar is most of an hour.
+                // Seeking is always relative to where you were, wherever the bar is touched.
                 val origin = value
                 active = true
                 latestScrubbing(value.toLong())
@@ -151,7 +150,10 @@ internal fun SeekSlider(positionMs: Long, durationMs: Long, seek: (Long) -> Unit
                             if (band != s.band) { s.band = band; tick = Long.MIN_VALUE; haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate) }
                             s.msPerDp = PreciseSeek.msPerDp(band, fullMsPerDp)
                             s.liftPx = (down.position.y - change.position.y).coerceAtLeast(0f)
-                            value = (value + (change.position.x - last.x).toDp().value * s.msPerDp).coerceIn(0f, duration)
+                            val dx = change.position.x - last.x
+                            // Sliding up to a finer band drifts sideways a little; only deliberate sideways motion seeks.
+                            if (abs(dx) * 2 >= abs(change.position.y - last.y))
+                                value = (value + dx.toDp().value * s.msPerDp).coerceIn(0f, duration)
                             // A tick for every mark on the ruler that passes under the needle.
                             val step = PreciseSeek.step(s.msPerDp, RULER_MIN_DP)
                             val index = floor(value / step).toLong()
@@ -163,7 +165,7 @@ internal fun SeekSlider(positionMs: Long, durationMs: Long, seek: (Long) -> Unit
                         change.consume()
                     }
                 } finally {
-                    if (released && (jumped || value != origin)) {
+                    if (released && value != origin) {
                         if (current != null) haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
                         latestSeek(value.toLong())
                     } else value = latestPosition.toFloat()

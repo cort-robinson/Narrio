@@ -55,10 +55,16 @@ class PreciseSeekTest {
             compose.onNodeWithContentDescription("Rewind 10 seconds").performClick()
             compose.waitUntil(5_000) { position == 290_000L }
 
-            // At the bar, the place follows the finger: a quarter of the bar is about a quarter of the part.
+            // Touching the bar anywhere never moves the place; only dragging does.
             val bar = compose.onNodeWithContentDescription("Listening position")
             val quarter = bar.fetchSemanticsNode().size.width / 4f
             val density = compose.activity.resources.displayMetrics.density
+            bar.performTouchInput { click(centerLeft + Offset(12 * density, 0f)) }
+            bar.performTouchInput { down(centerRight - Offset(12 * density, 0f)); advanceEventTime(600); up() }
+            compose.waitForIdle()
+            assertEquals(290_000L, position)
+
+            // At the bar, the place follows the finger: a quarter of the bar is about a quarter of the part.
             bar.performTouchInput { down(center); moveBy(Offset(quarter / 2, 0f)); moveBy(Offset(quarter / 2, 0f)) }
             compose.onNodeWithText("Slide up to seek more precisely").assertExists()
             capture("precise-seek-follow.png")
@@ -67,10 +73,9 @@ class PreciseSeekTest {
             assertTrue("Following the finger moves minutes", position - 290_000L > 100_000L)
             val coarse = position
 
-            // Slid well above the bar, the same quarter moves only seconds.
-            // Press on the thumb so the press itself does not jump.
-            val thumb = Offset(10 * density + coarse / 600_000f * (quarter * 4 - 20 * density), bar.fetchSemanticsNode().size.height / 2f)
-            bar.performTouchInput { down(thumb); moveBy(Offset(0f, -120 * density)); moveBy(Offset(0f, -120 * density)) }
+            // Slid well above the bar, the same quarter moves only seconds, even pressed far from the thumb.
+            // The small sideways drift of sliding up does not seek.
+            bar.performTouchInput { down(centerLeft + Offset(12 * density, 0f)); moveBy(Offset(-10 * density, -120 * density)); moveBy(Offset(-10 * density, -120 * density)) }
             bar.performTouchInput { moveBy(Offset(quarter / 2, 0f)); moveBy(Offset(quarter / 2, 0f)) }
             compose.waitForIdle()
             compose.onNodeWithText("Fine seeking").assertExists()
