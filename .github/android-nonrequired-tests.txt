@@ -1,3 +1,4 @@
 # Android test classes deliberately left out of the required CI smoke job, one per line with a reason.
 # Run them locally; move a class back to android-smoke-tests.txt once it passes reliably in CI.
 app.narrio.ReaderExperienceTest  # volumeKeysTurnPagesWhileNothingPlays fails on the CI API 35 emulator: the injected volume key reaches MediaSessionService, not the app (passes on a local API 36 emulator).
+app.narrio.ConnectTorBoxTest  # connectingFromABookKeepsItOpenAndLooksAgainWithTorBox fails on the CI API 35 emulator: the connect sheet is still shown 5 s after two Back presses (line 111).

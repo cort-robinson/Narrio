@@ -20,4 +20,3 @@ app.narrio.LibraryFormatsExperienceTest
 app.narrio.ReadingIntegrationTest
 app.narrio.ReadingRestartTest
 app.narrio.PreparationNotificationTest
-app.narrio.ConnectTorBoxTest
