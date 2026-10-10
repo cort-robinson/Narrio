@@ -47,11 +47,11 @@ class NarrioListeningTest {
         val secondPart = graph.playback.state.value.source!!.parts[1]
         assertTrue(secondPart.durationMs > 2000)
         compose.runOnIdle {
-            graph.playback.service!!.sleep(0, true)
+            graph.playback.service!!.sleep(app.narrio.playback.SleepMode.END_OF_PART)
             graph.playback.service!!.seek(secondPart.durationMs - 1500)
         }
         compose.waitUntil(30_000) { graph.playback.state.value.partIndex == 2 && !graph.playback.state.value.playing }
-        assertFalse(graph.playback.state.value.sleepAtEnd)
+        assertFalse(graph.playback.state.value.sleep.active)
         compose.runOnIdle { graph.playback.service!!.part(1, 120_000) }
         compose.waitUntil(30_000) { graph.playback.state.value.partIndex == 1 && graph.playback.state.value.positionMs >= 120_000 && graph.playback.state.value.playing }
         compose.onNodeWithContentDescription("Bookmark this moment").performClick()
@@ -65,7 +65,7 @@ class NarrioListeningTest {
         compose.onNodeWithText("Sleep").performScrollTo().performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("In 15 minutes").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("In 15 minutes").performScrollTo().performClick()
-        assertTrue(graph.playback.state.value.sleepUntil > System.currentTimeMillis())
+        assertTrue(graph.playback.state.value.sleep.untilMs > System.currentTimeMillis())
         val before = graph.playback.state.value.positionMs
         compose.runOnIdle { compose.activity.moveTaskToBack(true) }
         compose.waitUntil(20_000) { graph.playback.state.value.positionMs > before + 1500 }

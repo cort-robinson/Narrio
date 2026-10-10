@@ -329,7 +329,7 @@ fun ReaderMiniPlayer(vm: NarrioViewModel) {
 fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: ListeningState, options: () -> Unit, modifier: Modifier = Modifier, above: Dp = 0.dp) {
     var speedOpen by remember { mutableStateOf(false) }
     var sleepOpen by remember { mutableStateOf(false) }
-    val progress = if (playback.durationMs > 0) (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f) else 0f
+    val progress = playback.progress
     val lift = LocalSnackbarLift.current
     val density = LocalDensity.current
     var height by remember { mutableStateOf(0.dp) }
@@ -339,7 +339,7 @@ fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: Listening
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth().testTag("read-along-tray")
         .onSizeChanged { height = with(density) { it.height.toDp() } }) {
         Column(Modifier.navigationBarsIgnoringVisibilityPadding()) {
-            if (readAlong.playingHere && playback.durationMs > 0) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp).clearAndSetSemantics { },
+            if (readAlong.playingHere && playback.hasLength) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp).clearAndSetSemantics { },
                 color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
             AnimatedContent(when { !readAlong.playingHere -> 0; readAlong.matching -> 1; else -> 2 }, label = "tray",
                 transitionSpec = { fadeIn(tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate)).togetherWith(fadeOut(tween(Motion.SHORT))) }) { mode ->
@@ -353,7 +353,7 @@ fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: Listening
                             SkipButton(false, 52.dp, 28.dp) { vm.graph.playback.service?.skip(it) }
                             PlayButton(playback, 56.dp, 30.dp) { vm.graph.playback.service?.toggle() }
                             SkipButton(true, 52.dp, 28.dp) { vm.graph.playback.service?.skip(it) }
-                            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleepAtEnd || playback.sleepUntil > 0) { FitLabel(sleepLabel(playback)) }
+                            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleep.active) { FitLabel(sleepLabel(playback)) }
                         }
                     }
                 }
@@ -427,7 +427,7 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
         }
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ToolSlot(Icons.Rounded.Speed, { speedOpen = true }) { FitLabel(speedLabel(playback.speed)) }
-            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleepAtEnd || playback.sleepUntil > 0) { FitLabel(sleepLabel(playback)) }
+            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleep.active) { FitLabel(sleepLabel(playback)) }
             if (chapters != null) ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, chapters) { FitLabel("Chapters") }
         }
         AnimatedVisibility(playback.error != null) { RecoveryState("Playback stopped", playback.error.orEmpty()) { vm.graph.playback.service?.retry() } }
