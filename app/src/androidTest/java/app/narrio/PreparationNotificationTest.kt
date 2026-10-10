@@ -62,6 +62,8 @@ class PreparationNotificationTest {
 
     private fun announce(book: Audiobook, ready: Boolean, generation: String = "generation-1", problem: String = ""): Notification {
         PreparationNotifications.show(compose.activity, PreparationChange(book, ready, problem, generation))
+        // The notification service posts asynchronously, so a just-shown notification can take a moment to be listed.
+        compose.waitUntil(10_000) { notifications.activeNotifications.any { it.tag == book.id } }
         return notifications.activeNotifications.single { it.tag == book.id }.notification
     }
 
@@ -103,7 +105,8 @@ class PreparationNotificationTest {
             compose.waitUntil(15_000) { vm.playback.value.book?.id == book.id && vm.playerOpen.value }
             assertEquals("prepared-fixture-source", vm.playback.value.source?.id)
             compose.waitUntil(5_000) { runBlocking { graph.library.find(book.id)?.state } == "listening" }
-            assertTrue("Listen dismisses its notification", notifications.activeNotifications.none { it.tag == book.id })
+            // Listen dismisses its notification; cancelling is asynchronous too.
+            compose.waitUntil(10_000) { notifications.activeNotifications.none { it.tag == book.id } }
         } finally { cleanUp(book, wave) }
     }
 

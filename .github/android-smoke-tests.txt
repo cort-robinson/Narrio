@@ -26,3 +26,9 @@ app.narrio.SleepTimerDialogTest
 app.narrio.PreparationCheckWorkerTest
 app.narrio.AdvancedSourcingExperienceTest
 app.narrio.LocalAudioPlaybackTest
+app.narrio.ReaderExperienceTest
+app.narrio.ConnectTorBoxTest
+app.narrio.BookDiscoveryExperienceTest
+app.narrio.RecordingChoiceTest
+app.narrio.PreparationNotificationTest
+app.narrio.AppearanceExperienceTest

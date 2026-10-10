@@ -106,8 +106,13 @@ class ConnectTorBoxTest {
         compose.onNodeWithTag("torbox-key").performTextInput("2")
         compose.onNodeWithTag("torbox-error", useUnmergedTree = true).assertDoesNotExist()
 
-        // Back closes the sheet (after the keyboard, when one is open) and leaves the book as it was.
-        repeat(2) { if (fixture.torBox.value.prompt) { InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); compose.waitForIdle() } }
+        // Back closes the sheet and leaves the book as it was. The keyboard and the key field's focus may each take a
+        // press first (how many varies by API level), so Back is pressed only while the sheet is still asking.
+        for (press in 1..4) {
+            if (!fixture.torBox.value.prompt) break
+            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); compose.waitForIdle()
+            runCatching { compose.waitUntil(1_500) { !fixture.torBox.value.prompt } }
+        }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("connect-torbox-sheet").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertFalse(fixture.torBox.value.prompt); assertEquals(book.id, fixture.selection.value.book?.id) }
         compose.onNodeWithTag("listen-slot").assertIsDisplayed()

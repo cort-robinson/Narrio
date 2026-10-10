@@ -149,9 +149,15 @@ class ReaderExperienceTest {
         val book = seed("reader-volume-test", ReaderFixtures.sampleEpub(), "EPUB", "The Secret Garden")
         val controller = seeds.open(book)
         val first = controller.visible.value!!.first
-        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent KEYCODE_VOLUME_DOWN").close()
+        // The keys go to Narrio's window as the system delivers them; injecting them through the shell lets the emulator
+        // route volume to a media session first (API 35 on CI), which isn't what this test is about.
+        fun press(code: Int) = compose.runOnIdle {
+            compose.activity.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+            compose.activity.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+        }
+        press(android.view.KeyEvent.KEYCODE_VOLUME_DOWN)
         compose.waitUntil(10_000) { (controller.visible.value?.first?.offset ?: 0) > first.offset }
-        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand("input keyevent KEYCODE_VOLUME_UP").close()
+        press(android.view.KeyEvent.KEYCODE_VOLUME_UP)
         compose.waitUntil(10_000) { controller.visible.value?.first?.offset == first.offset }
     }
 
