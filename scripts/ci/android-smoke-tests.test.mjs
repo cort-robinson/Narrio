@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
 import test from 'node:test';
 import { SMOKE_TEST_LIST, executedTests, missingClasses, parseSmokeTests } from './android-smoke-tests.mjs';
 
@@ -10,6 +11,17 @@ test('the checked-in lists parse, give reasons, and do not overlap', () => {
   for (const line of deferred) assert.match(line, /^\S+\s+#\s*\S/, `${line} needs a reason`);
   const names = parseSmokeTests(deferred.map(line => line.split('#')[0]).join('\n'));
   assert.deepEqual(names.filter(name => required.includes(name)), []);
+
+  // Every instrumentation test file is either required or deliberately listed as non-required.
+  const testFiles = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+    entry.isDirectory() ? testFiles(join(dir, entry.name)) : /\.(kt|java)$/.test(entry.name) ? [join(dir, entry.name)] : []);
+  const unlisted = testFiles('app/src/androidTest').flatMap(file => {
+    const source = readFileSync(file, 'utf8');
+    if (!/@Test\b/.test(source)) return [];
+    const name = `${source.match(/^package\s+([\w.]+)/m)[1]}.${basename(file).replace(/\.\w+$/, '')}`;
+    return required.includes(name) || names.includes(name) ? [] : [name];
+  });
+  assert.deepEqual(unlisted, [], 'add each Android test class to one of the lists');
 });
 
 test('list parsing ignores comments and rejects ambiguous entries', () => {
