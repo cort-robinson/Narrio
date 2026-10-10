@@ -110,7 +110,7 @@ class ConnectTorBoxTest {
         repeat(2) { if (fixture.torBox.value.prompt) { InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); compose.waitForIdle() } }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("connect-torbox-sheet").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertFalse(fixture.torBox.value.prompt); assertEquals(book.id, fixture.selection.value.book?.id) }
-        compose.onNodeWithText("The book").assertIsDisplayed()
+        compose.onNodeWithTag("listen-slot").assertIsDisplayed()
 
         // Connecting through the form: it shows progress, then closes and the page searches TorBox in place.
         compose.onNodeWithText("Connect TorBox").performScrollTo().performClick()
@@ -127,7 +127,7 @@ class ConnectTorBoxTest {
         compose.waitUntil(10_000) { fixture.sourceSearch.value.streamed?.complete == true }
         compose.runOnIdle { assertEquals(book.id, fixture.selection.value.book?.id); assertEquals(cached.id, fixture.sourceSearch.value.choice?.id) }
         compose.onNodeWithTag("book-details").performScrollToIndex(0)
-        compose.onNodeWithTag("best-match-reasons").assertTextContains("Ready to stream · M4B", substring = true)
+        compose.onNodeWithTag("recording-summary").assertTextContains("Ready now", substring = true)
     }
 
     @Test fun reconnectingSearchesAfreshAndKeepsTheListenersRecording() {

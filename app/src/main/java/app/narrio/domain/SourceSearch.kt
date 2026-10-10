@@ -63,6 +63,8 @@ data class SourceGroup(
 
 /** Why the best match was chosen; the UI words these for less technical listeners. */
 enum class BestMatchReason {
+    /** The recording the listener already uses for this book. */
+    LISTENING_NOW,
     ON_PHONE,
     READY_TO_STREAM,
     FREE_PUBLIC_RECORDING,

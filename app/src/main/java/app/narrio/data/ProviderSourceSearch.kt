@@ -34,6 +34,8 @@ class ProviderSourceSearch(
     private val preferredFormat: (Audiobook) -> String = { "M4B" },
     private val timeoutMs: Long = 15_000,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+    /** Ids of the recording the listener already uses for a book; it stays the best match. */
+    private val listening: (Audiobook) -> Set<String> = { emptySet() },
 ) : StreamingSourceSearch {
     override fun start(book: Audiobook, connected: Boolean, scope: CoroutineScope): SourceSearchSession = Session(book, connected, scope)
 
@@ -209,7 +211,7 @@ class ProviderSourceSearch(
                     alsoFoundBy = group.alsoFoundBy + (recording.id to origins.drop(1).map { it.name }))
             }
             val ordered = providers.map { output.getValue(it.id) }
-            mutable.value = StreamedSourceSearch(book, ordered, BestMatchRanking.choose(book, ordered, phoneIds, preferredFormat(book)), reported() && inspected && !inspecting)
+            mutable.value = StreamedSourceSearch(book, ordered, BestMatchRanking.choose(book, ordered, phoneIds, preferredFormat(book), listening(book)), reported() && inspected && !inspecting)
         }
     }
 

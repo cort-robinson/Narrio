@@ -38,11 +38,11 @@ class SourceResultsModelTest {
     @Test fun reasonsReadAsPlainWords() {
         val recording = release("a", title = "Project Hail Mary - Andy Weir (read by Ray Porter) [Unabridged]")
         val copy = bestMatchCopy(best(recording, BestMatchReason.READY_TO_STREAM, BestMatchReason.PREFERRED_FORMAT, BestMatchReason.NARRATOR_KNOWN, BestMatchReason.STRONG_MATCH), book)
-        assertEquals("Ready to stream · M4B · Read by Ray Porter", copy.headline)
+        assertEquals("Ready now · M4B · Read by Ray Porter", copy.headline)
         assertEquals("Matches this title and author", copy.detail)
         val uncached = release("u", cache = "uncached").copy(seeders = 12)
         val prep = best(uncached, BestMatchReason.NEEDS_PREPARING, BestMatchReason.WELL_SEEDED)
-        assertEquals("Needs preparing in TorBox · M4B", bestMatchCopy(prep, book).headline)
+        assertEquals("Needs time to get ready · M4B", bestMatchCopy(prep, book).headline)
         assertEquals("12 seeders", bestMatchCopy(prep, book).detail)
         assertTrue(needsPreparing(prep))
         assertFalse(needsPreparing(best(release("p", provider = "archive", cache = "unchecked"), BestMatchReason.FREE_PUBLIC_RECORDING)))

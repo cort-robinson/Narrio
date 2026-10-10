@@ -13,7 +13,7 @@ fun shelfPreparationLabel(state: String): String? = when (state) {
 
 /** What the book page's preparation card says under its status. */
 fun preparationNote(prep: Preparation, cacheState: String): String = when {
-    prep.ready -> "Your source is ready. Choose Listen to begin."
+    prep.ready -> "Ready in TorBox. Choose Listen to start."
     prep.failed -> "${prep.problem} Try another recording, or check again if you restarted it in TorBox."
     prep.paused -> "${prep.problem} Nothing is lost; TorBox keeps the recording."
     cacheState == "cached" -> "TorBox already has this recording and is adding it to your account. You can leave; Narrio keeps checking and tells you when it's ready."

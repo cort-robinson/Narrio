@@ -159,7 +159,8 @@ class ListeningService : MediaSessionService() {
             }
         })
         scope.launch {
-            try { restorable()?.let { entry -> entry.source()?.let { load(entry.book(), it, false) } } }
+            // The row's book may be a recording being got ready since; the played audio's own recording is restored.
+            try { restorable()?.let { entry -> entry.source()?.let { load(graph.recordingFor(entry) ?: entry.book(), it, false) } } }
             finally { initialized = true }
             while (isActive) {
                 if (player.isPlaying && System.currentTimeMillis() - lastSave >= 5000) save()

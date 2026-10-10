@@ -44,7 +44,8 @@ import kotlinx.coroutines.launch
 /** Compact navigation states. Identity is by key so detail refreshes never restart a transition. */
 private sealed interface Screen { val depth: Int }
 private data object Home : Screen { override val depth = 0 }
-private data class Details(val id: String, val catalog: Boolean) : Screen { override val depth = if (catalog) 1 else 2 }
+/** A book has one page however it was reached, so its key is the book alone. */
+private data class Details(val id: String) : Screen { override val depth = 1 }
 private data object Listening : Screen { override val depth = 3 }
 private data class Reading(val id: String) : Screen { override val depth = 3 }
 
@@ -86,7 +87,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     val recentBooks = remember { HashMap<String, Audiobook>() }
     selected.book?.let { recentBooks[it.id] = it }
     val bookFor: (String) -> Audiobook? = { id -> selected.book?.takeIf { it.id == id } ?: recentBooks[id] }
-    // Each book keeps its scroll position, so returning from a recording lands back among its sources.
+    // Each book keeps its scroll position, so returning to a book lands where the listener left it.
     val detailScroll = remember { object : LinkedHashMap<String, LazyListState>(16, .75f, true) { override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LazyListState>) = size > 12 } }
     val scrollFor: (String) -> LazyListState = { id -> detailScroll.getOrPut(id) { LazyListState() } }
     // A closing reader keeps rendering the book it showed while it animates away.
@@ -138,7 +139,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             val current: Screen = when {
                 reader != null -> Reading(reader!!.book.id)
                 playerOpen && state.book != null -> Listening
-                selected.book != null -> selected.book!!.let { Details(it.id, it.provider == "catalog") }
+                selected.book != null -> Details(selected.book!!.id)
                 else -> Home
             }
             when {
@@ -251,13 +252,11 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
 /** Mirrors [NarrioViewModel.back] so a gesture can preview its destination before committing. */
 private fun predictBack(vm: NarrioViewModel, current: Screen): Screen {
     val selected = vm.selection.value.book
-    val origin = vm.sourceSearch.value.book
     val reader = vm.reader.value
     return when {
         // Back from read along returns to the Listening room, or stays in the reader with read along turned off.
         current is Reading && reader?.together == true -> if (reader.fromListening && vm.playback.value.book != null) Listening else current
-        current == Listening || current is Reading -> selected?.let { Details(it.id, it.provider == "catalog") } ?: Home
-        current is Details && origin != null && selected?.recordingId?.isNotBlank() == true && selected.recordingId != origin.recordingId -> Details(origin.id, origin.provider == "catalog")
+        current == Listening || current is Reading -> selected?.let { Details(it.id) } ?: Home
         else -> Home
     }
 }
