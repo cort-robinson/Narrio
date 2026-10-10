@@ -55,8 +55,9 @@ class SourceExperienceTest {
         compose.onNodeWithTag("advanced-sources").performScrollToIndex(0)
         compose.onNodeWithTag("advanced-back").performClick()
         compose.onNodeWithTag("recording-chooser").assertExists()
-        compose.runOnIdle { vm.back(); vm.selection.value = SelectionState(book()) }
+        compose.runOnIdle { vm.back() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle { vm.selection.value = SelectionState(book()) }
         compose.runOnIdle { vm.chooseFormat(book(), "M4B"); vm.preparation.value = Preparation(7, false, .35f, "Preparing in TorBox", 1_000_000, 3600, 2); vm.selection.value = SelectionState(book().copy(cacheState = "uncached", cachedFormats = emptyList())) }
         compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("preparation"))
         compose.onNodeWithText("35%", substring = true).performScrollTo().assertIsDisplayed()
