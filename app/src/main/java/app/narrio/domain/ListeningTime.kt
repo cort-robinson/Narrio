@@ -24,22 +24,24 @@ fun bookTime(parts: List<AudioPart>, partIndex: Int, positionMs: Long, currentDu
 fun chapterIndexAt(chapters: List<Chapter>, positionMs: Long): Int = chapters.indexOfLast { it.startMs <= positionMs }
 
 /**
- * Where the chapter playing at [positionMs] ends: the next chapter's start, or null when it runs to the end of the
- * part. A chapter ending within [graceMs] counts as finished, so a timer set just before a boundary (or resumed right
- * after one paused there) waits for the following chapter rather than stopping at once.
+ * Where the chapter playing at [positionMs] ends: the first chapter start after it, or null when it runs to the end of
+ * the part. A place exactly on a boundary (where a timer paused, or a chapter step landed) is in the chapter that
+ * starts there, so re-arming the timer stops at that chapter's end rather than at once.
  */
-fun chapterEndMs(chapters: List<Chapter>, positionMs: Long, graceMs: Long = CHAPTER_GRACE_MS): Long? =
-    chapters.asSequence().map { it.startMs }.sorted().firstOrNull { it > positionMs + graceMs }
+fun chapterEndMs(chapters: List<Chapter>, positionMs: Long): Long? =
+    chapters.asSequence().map { it.startMs }.sorted().firstOrNull { it > positionMs }
 
 /** A place in a recording: part [partIndex] at [positionMs]. */
 data class PartPlace(val partIndex: Int, val positionMs: Long)
 
 /**
  * Previous/next chapter. Within a part's chapters it moves between chapter starts; past either end, and in parts
- * without chapters, it moves to a neighbouring part. Like a CD player, "previous" first returns to the start of the
- * current chapter or part once it has played for [restartMs]. Null when there is nowhere to go.
+ * without chapters, it moves to a neighbouring part: forward to its start, back to its last chapter when
+ * [previousPartChapters] are known (otherwise its start). Like a CD player, "previous" first returns to the start of
+ * the current chapter or part once it has played for [restartMs]. Null when there is nowhere to go.
  */
-fun chapterStep(chapters: List<Chapter>, partIndex: Int, partCount: Int, positionMs: Long, forward: Boolean, restartMs: Long = RESTART_MS): PartPlace? {
+fun chapterStep(chapters: List<Chapter>, partIndex: Int, partCount: Int, positionMs: Long, forward: Boolean,
+    previousPartChapters: List<Chapter> = emptyList(), restartMs: Long = RESTART_MS): PartPlace? {
     val starts = chapters.map { it.startMs }.distinct().sorted()
     val current = starts.indexOfLast { it <= positionMs }
     if (forward) {
@@ -49,7 +51,8 @@ fun chapterStep(chapters: List<Chapter>, partIndex: Int, partCount: Int, positio
     val start = starts.getOrNull(current) ?: 0L
     if (positionMs - start >= restartMs) return PartPlace(partIndex, start)
     if (current > 0) return PartPlace(partIndex, starts[current - 1])
-    return if (partIndex > 0) PartPlace(partIndex - 1, 0) else if (positionMs > 0) PartPlace(partIndex, 0) else null
+    return if (partIndex > 0) PartPlace(partIndex - 1, previousPartChapters.maxOfOrNull { it.startMs } ?: 0)
+        else if (positionMs > 0) PartPlace(partIndex, 0) else null
 }
 
 /** "9 h 41 m", "41 m", or "1 m" for the last seconds; rounds up so a timer never reads 0 while time remains. */
@@ -73,5 +76,4 @@ fun spokenTimeLeft(ms: Long): String {
 /** Listening time at [speed]: an hour of audio at 2× takes half an hour. */
 fun atSpeed(ms: Long, speed: Float): Long = if (speed > 0f) (ms / speed.toDouble()).toLong() else ms
 
-const val CHAPTER_GRACE_MS = 3_000L
 const val RESTART_MS = 3_000L

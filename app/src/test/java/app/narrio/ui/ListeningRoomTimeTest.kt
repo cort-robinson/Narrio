@@ -49,6 +49,14 @@ class ListeningRoomTimeTest {
         assertEquals("Chapter 2, 9 hours 41 minutes left in book, 7 hours 45 minutes at 1.25 times speed", faster.spoken)
     }
 
+    @Test fun previousFromAPartsStartUsesThatEarlierPartsOwnChapters() {
+        val start = ListeningState(source = mp3, partIndex = 1, positionMs = 1_000, chapters = listOf(Chapter("B1", 0)))
+        assertEquals(PartPlace(0, 0), start.step(forward = false))
+        val known = start.copy(partChapters = mapOf("p0" to listOf(Chapter("A1", 0), Chapter("A2", 1_800_000)), "p1" to start.chapters))
+        assertEquals(PartPlace(0, 1_800_000), known.step(forward = false))
+        assertEquals(PartPlace(2, 0), known.step(forward = true))
+    }
+
     @Test fun timeLeftFallsBackToThePartRatherThanGuessingTheBook() {
         val parts = ListeningState(source = mp3, partIndex = 1, positionMs = 1_200_000, durationMs = 3_600_000)
         assertEquals("1 h 40 m left in book", timeLeft(parts)!!.text)

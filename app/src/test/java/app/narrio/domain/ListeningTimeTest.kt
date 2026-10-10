@@ -19,12 +19,14 @@ class ListeningTimeTest {
         assertNull(bookTime(emptyList(), 0, 0))
     }
 
-    @Test fun chapterEndIsTheNextStartAndAChapterAboutToEndCountsAsFinished() {
+    @Test fun chapterEndIsTheFirstBoundaryAfterThePlace() {
         assertEquals(1, chapterIndexAt(chapters, 300_000))
         assertEquals(-1, chapterIndexAt(listOf(Chapter("Late", 5_000)), 1_000))
         assertEquals(600_000L, chapterEndMs(chapters, 300_000))
-        // Two seconds before chapter Two starts: stop at the end of Two, not in two seconds.
-        assertEquals(1_200_000L, chapterEndMs(chapters, 598_000))
+        // Two seconds before chapter Two starts, this chapter still ends at Two.
+        assertEquals(600_000L, chapterEndMs(chapters, 598_000))
+        // On a boundary (where a timer paused, or a chapter step landed) the chapter starting there is the one that ends next.
+        assertEquals(1_200_000L, chapterEndMs(chapters, 600_000))
         // The last chapter runs to the end of the part.
         assertNull(chapterEndMs(chapters, 1_500_000))
     }
@@ -41,6 +43,8 @@ class ListeningTimeTest {
     @Test fun chaptersRunIntoNeighbouringPartsAndPartsWithoutChaptersStepByPart() {
         assertEquals(PartPlace(3, 0), chapterStep(chapters, 2, 5, 1_300_000, forward = true))
         assertEquals(PartPlace(1, 0), chapterStep(chapters, 2, 5, 1_000, forward = false))
+        // Back from the start of a part lands on the previous part's last chapter when its chapters were read.
+        assertEquals(PartPlace(1, 1_200_000), chapterStep(chapters, 2, 5, 1_000, forward = false, previousPartChapters = chapters))
         assertEquals(PartPlace(3, 0), chapterStep(emptyList(), 2, 5, 40_000, forward = true))
         assertEquals(PartPlace(2, 0), chapterStep(emptyList(), 2, 5, 40_000, forward = false))
         assertEquals(PartPlace(1, 0), chapterStep(emptyList(), 2, 5, 1_000, forward = false))

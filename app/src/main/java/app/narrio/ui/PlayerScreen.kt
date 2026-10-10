@@ -367,7 +367,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))}" else "Loading length", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (!dense) TimeLeftLine(state, Modifier.padding(top = 4.dp))
+        TimeLeftLine(state, Modifier.padding(top = if (dense) 0.dp else 4.dp), dense)
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }

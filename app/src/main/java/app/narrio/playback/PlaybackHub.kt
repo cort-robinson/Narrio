@@ -15,6 +15,8 @@ data class ListeningState(
     val sleep: SleepTimer = SleepTimer(),
     val chapters: List<Chapter> = emptyList(),
     val error: String? = null,
+    /** Chapters read so far for this recording's parts, by part id; [chapters] are the playing part's. */
+    val partChapters: Map<String, List<Chapter>> = emptyMap(),
 ) {
     val part: AudioPart? get() = source?.parts?.getOrNull(partIndex)
     /** Whole-book place when every part's length is known. */
@@ -24,6 +26,9 @@ data class ListeningState(
     /** Progress for thin progress lines: the whole book when known, otherwise this part. */
     val progress: Float get() = bookTime?.fraction ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     val hasLength: Boolean get() = durationMs > 0 || bookTime != null
+    /** Previous/next chapter (or part) from here; null when there is nowhere to go. */
+    fun step(forward: Boolean): PartPlace? = chapterStep(chapters, partIndex, source?.parts?.size ?: 1, positionMs, forward,
+        source?.parts?.getOrNull(partIndex - 1)?.let { partChapters[it.id] }.orEmpty())
     fun sleepRemainingMs(nowMs: Long = System.currentTimeMillis()): Long? = app.narrio.playback.sleepRemainingMs(sleep, partIndex, positionMs, durationMs, speed, nowMs)
 }
 

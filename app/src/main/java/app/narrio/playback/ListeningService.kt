@@ -35,6 +35,7 @@ import app.narrio.*
 import app.narrio.data.*
 import app.narrio.domain.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.serialization.encodeToString
 import okhttp3.Request
 import java.util.concurrent.ConcurrentHashMap
@@ -56,9 +57,14 @@ class ListeningService : MediaSessionService() {
     private var currentBook: Audiobook? = null
     private var currentSource: AudioSource? = null
     private var chapterJob: Job? = null
-    private var chapters: List<Chapter> = emptyList()
+    /** Chapters read for this recording's parts, by part id. A part's chapters never stand in for another's. */
+    private val partChapters = mutableMapOf<String, List<Chapter>>()
+    private fun chaptersOf(index: Int): List<Chapter> = currentSource?.parts?.getOrNull(index)?.let { partChapters[it.id] }.orEmpty()
+    private val chapters: List<Chapter> get() = chaptersOf(player.currentMediaItemIndex)
     private var sleep = SleepTimer()
     private var sleepJob: Job? = null
+    /** Wakes the sleep loop when playback changes (play/pause, seeks, speed, length), so it needn't poll while paused. */
+    private val sleepWake = Channel<Unit>(Channel.CONFLATED)
     private var extendShown = false
     private val shake = ShakeDetector()
     private var shakeListening = false
@@ -116,8 +122,10 @@ class ListeningService : MediaSessionService() {
         player.addListener(CompletionListener(player, completion, { currentBook?.id?.let { id -> currentSource?.let { id to it } } },
             finished = { id -> scope.launch { graph.library.finished(id) } }, resumed = { id -> scope.launch { graph.library.unfinished(id) } }))
         player.addListener(object : Player.Listener {
-            override fun onEvents(player: Player, events: Player.Events) { publish() }
+            override fun onEvents(player: Player, events: Player.Events) { publish(); if (sleep.active) sleepWake.trySend(Unit) }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Resuming mid-fade continues the fade at once rather than at full volume until the loop catches up.
+                player.volume = sleepVolume(sleep, isPlaying, remaining())
                 publish()
                 if (isPlaying) startCorrection() else correctionJob?.cancel()
                 scope.launch { save() }
@@ -138,20 +146,16 @@ class ListeningService : MediaSessionService() {
                 if (playbackState == Player.STATE_READY) error = null
                 if (playbackState == Player.STATE_ENDED) { setSleep(SleepTimer()); scope.launch { save() } }
             }
-            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { chapters = emptyList(); readChapters(); scope.launch { save() } }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { readChapters(); scope.launch { save() } }
             override fun onPlayerError(playbackError: PlaybackException) {
                 error = "Audio couldn't continue. Check your connection, then retry. TorBox sources also need a connected account."
                 publish(); scope.launch { save() }
             }
-            override fun onMetadata(metadata: Metadata) {
-                val parsed = (0 until metadata.length()).mapNotNull { i ->
-                    (metadata[i] as? ChapterFrame)?.let { frame ->
-                        val title = (0 until frame.subFrameCount).mapNotNull { frame.getSubFrame(it) as? TextInformationFrame }
-                            .firstOrNull()?.values?.firstOrNull() ?: frame.chapterId
-                        Chapter(title, frame.startTimeMs.toLong())
-                    }
-                }
-                if (parsed.isNotEmpty()) { chapters = parsed.sortedBy { it.startMs }; chaptersArrived(); publish() }
+            override fun onMetadata(metadata: Metadata) { id3Chapters(listOf(metadata)).takeIf { it.isNotEmpty() }?.let { storeChapters(player.currentMediaItemIndex, it) } }
+            // MP3 files carry ID3 chapter frames in the file's tag, which Media3 reports on the track format, not as timed metadata.
+            override fun onTracksChanged(tracks: Tracks) {
+                val parsed = id3Chapters(tracks.groups.flatMap { group -> (0 until group.length).mapNotNull { group.getTrackFormat(it).metadata } })
+                if (parsed.isNotEmpty()) storeChapters(player.currentMediaItemIndex, parsed)
             }
         })
         scope.launch {
@@ -180,7 +184,10 @@ class ListeningService : MediaSessionService() {
         val jump = if (partId == null && positionMs == null) graph.readingSync.listeningStart(book.id, source, previousCursor) else null
         val index = resumeIndex(source.parts, partId ?: jump?.destination?.partId ?: history?.partId ?: if (sameLayout) previous?.partId.orEmpty() else "")
         val position = positionMs ?: jump?.destination?.positionMs ?: history?.positionMs ?: if (sameLayout) previous?.positionMs ?: 0 else 0
-        currentBook = book; currentSource = source; error = null; chapters = emptyList()
+        // A chapter or part timer belongs to the recording it was set in; the same recording reloaded keeps it.
+        val sameRecording = currentBook?.id == book.id && currentSource?.id == source.id
+        if (!sameRecording) { partChapters.clear(); if (sleep.stop != null) setSleep(SleepTimer()) }
+        currentBook = book; currentSource = source; error = null
         parts.clear(); links.clear()
         val items = source.parts.map { part ->
             val stableUri = stableAudioUri(part)
@@ -191,6 +198,8 @@ class ListeningService : MediaSessionService() {
         }
         player.setMediaItems(items, index, position.coerceAtLeast(0))
         completion.loaded(book.id, source.id, index, position)
+        if (sameRecording) retargetSleep()
+        readChapters()
         if (jump?.confidence == MappingConfidence.ESTIMATED) correctionWanted = graph.sharedPositions.current(book.id)?.text
         undoEpoch = navigationEpoch
         // Leave a restored session idle until the listener actually resumes.
@@ -226,7 +235,7 @@ class ListeningService : MediaSessionService() {
         setSleep(when (mode) {
             SleepMode.OFF -> SleepTimer()
             SleepMode.MINUTES -> if (minutes > 0) SleepTimer(mode, minutes, System.currentTimeMillis() + minutes * 60_000L) else SleepTimer()
-            else -> SleepTimer(mode, stop = sleepStop(mode, player.currentMediaItemIndex, player.currentPosition, chapters))
+            else -> boundaryTimer(mode, PartPlace(player.currentMediaItemIndex, player.currentPosition), chapters)
         })
     }
     /** "+15 min": from the timer dialog, the notification, or a shake in its last minute. */
@@ -248,14 +257,19 @@ class ListeningService : MediaSessionService() {
         publish()
     }
 
-    /** Fades the narration over the last seconds, then pauses. Checks finely only while fading. */
+    /**
+     * Fades the narration over the last seconds, then pauses. Checks finely only while fading; while paused it waits for
+     * playback to change (a minute timer also wakes when its clock runs out) with the volume back at full.
+     */
     private suspend fun runSleep() {
         while (sleep.active) {
             val left = remaining()
             if (sleepPausesNow(sleep, player.currentMediaItemIndex, left)) { finishSleep(); return }
-            player.volume = sleepFadeVolume(left)
-            listenForShake(left != null && left <= SHAKE_WINDOW_MS && player.isPlaying && graph.preferences.getBoolean(SHAKE_TO_EXTEND, true))
-            delay(sleepCheckDelayMs(left))
+            val playing = player.isPlaying
+            player.volume = sleepVolume(sleep, playing, left)
+            listenForShake(playing && left != null && left <= SHAKE_WINDOW_MS && graph.preferences.getBoolean(SHAKE_TO_EXTEND, true))
+            val wait = sleepWaitMs(sleep, playing, left)
+            if (wait == null) sleepWake.receive() else withTimeoutOrNull(wait) { sleepWake.receive() }
         }
     }
 
@@ -266,17 +280,23 @@ class ListeningService : MediaSessionService() {
         publish(); scope.launch { save() }
     }
 
+    /** Aims a chapter/part timer from the current place. During a seek into another part this already names that part. */
     private fun retargetSleep() {
         if (sleep.stop == null) return
-        sleep = sleep.copy(stop = sleepStop(sleep.mode, player.currentMediaItemIndex, player.currentPosition, chapters))
-        player.volume = sleepFadeVolume(remaining())
-        publish()
+        sleep = boundaryTimer(sleep.mode, PartPlace(player.currentMediaItemIndex, player.currentPosition), chapters)
+        player.volume = sleepVolume(sleep, player.isPlaying, remaining())
+        sleepWake.trySend(Unit); publish()
     }
 
-    /** A chapter timer set before this part's chapters loaded runs to the part's end; narrow it to the chapter now. */
-    private fun chaptersArrived() {
-        val stop = sleep.stop ?: return
-        if (sleep.mode == SleepMode.END_OF_CHAPTER && stop.positionMs == PART_END && stop.partIndex == player.currentMediaItemIndex) retargetSleep()
+    /** Keeps a part's chapters and narrows a chapter timer that was aimed at that part before they were known. */
+    private fun storeChapters(index: Int, parsed: List<Chapter>) {
+        val part = currentSource?.parts?.getOrNull(index) ?: return
+        val sorted = parsed.distinctBy { it.startMs }.sortedBy { it.startMs }
+        if (partChapters[part.id] == sorted) return
+        partChapters[part.id] = sorted
+        val narrowed = withChapters(sleep, index, sorted)
+        if (narrowed != sleep) { sleep = narrowed; sleepWake.trySend(Unit) }
+        publish()
     }
 
     private fun listenForShake(on: Boolean) {
@@ -310,7 +330,7 @@ class ListeningService : MediaSessionService() {
     }
     suspend fun forget() {
         // Detach first: clearing the player fires listeners that would otherwise save position 0 over the listener's place.
-        save(); invalidateNavigation(); completion.cleared(); currentBook = null; currentSource = null; player.stop(); player.clearMediaItems(); parts.clear(); links.clear(); chapters = emptyList()
+        save(); invalidateNavigation(); completion.cleared(); currentBook = null; currentSource = null; player.stop(); player.clearMediaItems(); parts.clear(); links.clear(); partChapters.clear()
         error = null; setSleep(SleepTimer())
     }
     /** Clear Now playing but keep the shelf entry and position; the next launch stays empty until something plays again. */
@@ -357,7 +377,7 @@ class ListeningService : MediaSessionService() {
         }
         graph.playback.state.value = ListeningState(currentBook, currentSource, player.currentMediaItemIndex.coerceAtLeast(0),
             player.currentPosition.coerceAtLeast(0), player.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: currentSource?.parts?.getOrNull(player.currentMediaItemIndex)?.durationMs ?: 0,
-            player.isPlaying, player.playbackState == Player.STATE_BUFFERING, player.playbackParameters.speed, sleep, chapters, error)
+            player.isPlaying, player.playbackState == Player.STATE_BUFFERING, player.playbackParameters.speed, sleep, chapters, error, partChapters.toMap())
     }
 
     private fun invalidateNavigation() {
@@ -471,8 +491,9 @@ class ListeningService : MediaSessionService() {
 
     private fun readChapters() {
         chapterJob?.cancel()
-        val part = currentSource?.parts?.getOrNull(player.currentMediaItemIndex) ?: return
-        if (!part.name.endsWith(".m4b", true)) return
+        val index = player.currentMediaItemIndex
+        val part = currentSource?.parts?.getOrNull(index) ?: return
+        if (!part.name.endsWith(".m4b", true) || part.id in partChapters) return
         chapterJob = scope.launch {
             val parsed = withContext(Dispatchers.IO) {
                 runCatching {
@@ -490,7 +511,18 @@ class ListeningService : MediaSessionService() {
                     }
                 }.getOrDefault(emptyList())
             }
-            if (currentSource?.parts?.getOrNull(player.currentMediaItemIndex)?.id == part.id && parsed.isNotEmpty()) { chapters = parsed; chaptersArrived(); publish() }
+            if (currentSource?.parts?.getOrNull(index)?.id == part.id && parsed.isNotEmpty()) storeChapters(index, parsed)
+        }
+    }
+
+    /** ID3 chapter frames (CHAP) with their title subframe, from timed metadata or an MP3's tag. */
+    private fun id3Chapters(entries: List<Metadata>): List<Chapter> = entries.flatMap { metadata ->
+        (0 until metadata.length()).mapNotNull { i ->
+            (metadata[i] as? ChapterFrame)?.let { frame ->
+                val title = (0 until frame.subFrameCount).mapNotNull { frame.getSubFrame(it) as? TextInformationFrame }
+                    .firstOrNull()?.values?.firstOrNull() ?: frame.chapterId
+                Chapter(title, frame.startTimeMs.toLong())
+            }
         }
     }
 

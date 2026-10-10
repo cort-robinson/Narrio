@@ -8,17 +8,36 @@ enum class SleepMode { OFF, MINUTES, END_OF_CHAPTER, END_OF_PART }
 /**
  * The sleep timer as the listener chose it. [minutes] remembers the preset so the dialog can show it selected (0 after
  * an extension, which no preset describes); [untilMs] is the wall-clock deadline of a minute timer. Chapter and part
- * timers stop at [stop], which follows the listener's seeks but not playback carrying on past it.
+ * timers stop at [stop], resolved from [from] (where they were set, or where the listener last seeked to); it follows
+ * the listener's seeks but not playback carrying on past it. They belong to one recording: choosing another cancels
+ * them, while a minute timer keeps counting.
  */
-data class SleepTimer(val mode: SleepMode = SleepMode.OFF, val minutes: Int = 0, val untilMs: Long = 0, val stop: PartPlace? = null) {
+data class SleepTimer(val mode: SleepMode = SleepMode.OFF, val minutes: Int = 0, val untilMs: Long = 0, val stop: PartPlace? = null, val from: PartPlace? = null) {
     val active: Boolean get() = mode != SleepMode.OFF
 }
 
-/** Where a chapter or part timer stops, from the current place; [PART_END] when it runs to the end of the part. */
+/**
+ * Where a chapter or part timer stops, from a place in part [partIndex] whose own [chapters] are given; [PART_END] when
+ * it runs to the end of the part, including while that part's chapters are still unknown.
+ */
 fun sleepStop(mode: SleepMode, partIndex: Int, positionMs: Long, chapters: List<Chapter>): PartPlace? = when (mode) {
     SleepMode.END_OF_CHAPTER -> PartPlace(partIndex, chapterEndMs(chapters, positionMs) ?: PART_END)
     SleepMode.END_OF_PART -> PartPlace(partIndex, PART_END)
     else -> null
+}
+
+/** A chapter or part timer aimed from [from], in that part's [chapters]. */
+fun boundaryTimer(mode: SleepMode, from: PartPlace, chapters: List<Chapter>): SleepTimer =
+    SleepTimer(mode, stop = sleepStop(mode, from.partIndex, from.positionMs, chapters), from = from)
+
+/**
+ * A chapter timer aimed before its part's chapters were known runs to the part's end; once they arrive, aim it at the
+ * end of the chapter it was set in. Anything else is unchanged.
+ */
+fun withChapters(timer: SleepTimer, partIndex: Int, chapters: List<Chapter>): SleepTimer {
+    val from = timer.from ?: return timer
+    if (timer.mode != SleepMode.END_OF_CHAPTER || chapters.isEmpty() || from.partIndex != partIndex || timer.stop != PartPlace(partIndex, PART_END)) return timer
+    return boundaryTimer(timer.mode, from, chapters)
 }
 
 /**
@@ -60,7 +79,20 @@ fun sleepFadeVolume(remainingMs: Long?, fadeMs: Long = SLEEP_FADE_MS): Float {
     return ramp * ramp
 }
 
-/** How long the service waits before checking the timer again: rarely while far off, finely while fading. */
+/**
+ * How long the service waits before checking again, or null to wait for playback to change. While paused a chapter or
+ * part end can't come closer, so nothing polls; a minute timer's clock keeps running, so it wakes when that expires.
+ */
+fun sleepWaitMs(timer: SleepTimer, playing: Boolean, remainingMs: Long?): Long? = when {
+    playing -> sleepCheckDelayMs(remainingMs)
+    timer.mode == SleepMode.MINUTES -> (remainingMs ?: 0).coerceAtLeast(10)
+    else -> null
+}
+
+/** The narration's volume now: faded while the timer runs out during playback, full while paused or without a timer. */
+fun sleepVolume(timer: SleepTimer, playing: Boolean, remainingMs: Long?): Float = if (timer.active && playing) sleepFadeVolume(remainingMs) else 1f
+
+/** How long the service waits before checking the timer again during playback: rarely while far off, finely while fading. */
 fun sleepCheckDelayMs(remainingMs: Long?, fadeMs: Long = SLEEP_FADE_MS): Long = when {
     remainingMs == null -> 1_000
     remainingMs <= 0 -> 100

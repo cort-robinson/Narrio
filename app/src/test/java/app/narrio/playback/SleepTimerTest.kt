@@ -16,6 +16,34 @@ class SleepTimerTest {
         assertNull(sleepStop(SleepMode.MINUTES, 0, 0, chapters))
     }
 
+    @Test fun aChapterTimerAimedBeforeChaptersLoadedNarrowsToTheChapterItWasSetIn() {
+        // Seeked into part 2 at 1:00 before its chapters were read: the part's end for now.
+        val early = boundaryTimer(SleepMode.END_OF_CHAPTER, PartPlace(2, 60_000), emptyList())
+        assertEquals(PartPlace(2, PART_END), early.stop)
+        assertEquals(PartPlace(2, 600_000), withChapters(early, 2, chapters).stop)
+        // Another part's chapters never aim it.
+        assertEquals(early, withChapters(early, 1, chapters))
+        // Already aimed, or a part timer: unchanged.
+        val aimed = boundaryTimer(SleepMode.END_OF_CHAPTER, PartPlace(2, 60_000), chapters)
+        assertEquals(aimed, withChapters(aimed, 2, listOf(Chapter("Other", 0), Chapter("Later", 900_000))))
+        val part = boundaryTimer(SleepMode.END_OF_PART, PartPlace(2, 60_000), emptyList())
+        assertEquals(part, withChapters(part, 2, chapters))
+    }
+
+    @Test fun pausedTimersRestoreTheVolumeAndOnlyMinuteTimersKeepTheirClock() {
+        val chapter = SleepTimer(SleepMode.END_OF_CHAPTER, stop = PartPlace(0, 600_000))
+        // Paused mid-fade: full volume, and nothing to poll until playback changes.
+        assertEquals(1f, sleepVolume(chapter, playing = false, remainingMs = 2_000), 0f)
+        assertNull(sleepWaitMs(chapter, playing = false, remainingMs = 2_000))
+        assertEquals(.25f, sleepVolume(chapter, playing = true, remainingMs = SLEEP_FADE_MS / 2), .0001f)
+        assertEquals(100L, sleepWaitMs(chapter, playing = true, remainingMs = 2_000))
+        // A minute timer's clock runs while paused: it wakes when it expires.
+        val minutes = SleepTimer(SleepMode.MINUTES, 15, untilMs = 100_000)
+        assertEquals(40_000L, sleepWaitMs(minutes, playing = false, remainingMs = 40_000))
+        assertEquals(10L, sleepWaitMs(minutes, playing = false, remainingMs = -5))
+        assertEquals(1f, sleepVolume(SleepTimer(), playing = true, remainingMs = 0), 0f)
+    }
+
     @Test fun remainingTimeFollowsSpeedAndPausesOncePlaybackCarriesPastTheStop() {
         val chapter = SleepTimer(SleepMode.END_OF_CHAPTER, stop = PartPlace(1, 600_000))
         assertEquals(480_000L, sleepRemainingMs(chapter, 1, 120_000, 3_000_000, 1f, 0))

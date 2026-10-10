@@ -130,11 +130,12 @@ internal fun timeLeft(state: ListeningState): TimeLeft? {
     return TimeLeft(text, spoken)
 }
 
+/** [dense] (short windows) keeps it to one line. */
 @Composable
-internal fun TimeLeftLine(state: ListeningState, modifier: Modifier = Modifier) {
+internal fun TimeLeftLine(state: ListeningState, modifier: Modifier = Modifier, dense: Boolean = false) {
     val line = timeLeft(state) ?: return
     Text(line.text, modifier.testTag("book-time-left").semantics { contentDescription = line.spoken }, style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        color = MaterialTheme.colorScheme.secondary, maxLines = if (dense) 1 else 2, overflow = TextOverflow.Ellipsis)
 }
 
 /**
@@ -155,7 +156,7 @@ internal fun ChapterTitleRow(vm: NarrioViewModel, state: ListeningState, dense: 
         }
         if (chapters || parts > 1) {
             listOf(false, true).forEach { forward ->
-                val target = chapterStep(state.chapters, state.partIndex, parts, state.positionMs, forward)
+                val target = state.step(forward)
                 IconButton({ target?.let { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); vm.graph.playback.service?.go(it) } }, enabled = target != null,
                     modifier = Modifier.testTag(if (forward) "next-chapter" else "previous-chapter")) {
                     Icon(if (forward) Icons.AutoMirrored.Rounded.NavigateNext else Icons.AutoMirrored.Rounded.NavigateBefore, if (forward) "Next $noun" else "Previous $noun")
