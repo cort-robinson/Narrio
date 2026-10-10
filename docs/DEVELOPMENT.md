@@ -20,6 +20,8 @@ gh pr create --base dev
 
 PR policy checks Conventional Commit titles and meaningful release-note summaries. CI runs JVM tests, Android lint/build checks, release-tooling tests, and emulator smoke tests for persistence, encrypted credential removal, link renewal, metadata-only book details and source selection, fixing sources yourself in Advanced (own search words, hiding releases, a mistyped link, phone audio without TorBox, choosing files, and starting near your place), phone audio files playing end to end (import, playback, file choice, bookmarks, downloads, restart, and a missing file), choosing between a book's recordings (each keeping its own place) and a pending TorBox preparation surviving Continue, source choices, connecting TorBox from a book (the sheet keeps the book open, source settings open on Add-ons, and the Discover hint), TorBox preparation notifications (opening the book, playing the prepared recording, and showing a failed preparation on the shelf), closing Now playing, back skips, the sleep timer (its options, end of part with a fade, and +15 min), part steps and time left in the book, precise seeking and swiping banners away, the player staying docked on details and in the reader, offline settings, the shelf's sort, search, and Finished section with Discover's Continue row and recent searches, the finished-books migration, reading along (narration highlighting, following, sentence taps, estimated places, rotation, and starting from a page), the text-schema migration, and the ebook reader (opening EPUB and text, the hostile-EPUB filter, keeping the place across font changes and rotation, reading-position commits, search, highlights and notes, and bookmarks shared with listening). These required tests use controlled fixtures; live provider and listening checks remain separate because provider availability should not decide whether a release can build.
 
+The required emulator classes are listed in [`.github/android-smoke-tests.txt`](../.github/android-smoke-tests.txt), one fully qualified class name per line. To add a required class, append one line with its name, such as `app.narrio.MyFeatureExperienceTest`, to the end of that file. Do not edit the workflow. The job passes the file to the instrumentation runner as a device test list. It then uses the same file as the expected inventory and fails, naming the class, when a listed class has no executed (non-skipped) test in the JUnit results. The file uses Git's `union` merge driver, so parallel branches that each append a line rebase without conflicts. Classes that currently fail in CI are listed with a one-line reason in [`.github/android-nonrequired-tests.txt`](../.github/android-nonrequired-tests.txt) rather than silently dropped; move a class back to the required list once it passes reliably. `node --test scripts/ci/*.test.mjs`, which also runs in CI, checks both lists and fails when an `app/src/androidTest` class with `@Test` methods is in neither, so a new test class must be made required or given a documented reason.
+
 ### Local development verification
 
 This policy applies to agents working on Narrio. Keep it in this repository; it does not belong in user-wide agent instructions, skills, settings, or memory.
@@ -46,7 +48,23 @@ Prefer incremental builds and the Gradle wrapper's default local daemon. Reserve
 .\gradlew.bat :app:compileDebugKotlin -PnarrioLocal=true
 ```
 
-For instrumentation, select the affected class or method with `-Pandroid.testInstrumentationRunnerArguments.class=<class>` or `<class>#<method>`, as the CI smoke job does. For example, Android source matching uses `app.narrio.BookSourceDiscoveryAndroidTest`. Bind the run to an explicitly selected, isolated project test device; keep synthetic fixture data separate from the user's stable and signed Dev installs.
+For instrumentation, select one affected class or method with `-Pandroid.testInstrumentationRunnerArguments.class=<class>` or `<class>#<method>`. For example, Android source matching uses `app.narrio.BookSourceDiscoveryAndroidTest`. Bind the run to an explicitly selected, isolated project test device; keep synthetic fixture data separate from the user's stable and signed Dev installs. Add `-PnarrioPreview=true` so the tested app is `app.narrio.dev`; an ordinary debug build uses the stable `app.narrio` ID, and connected Gradle tests uninstall the tested app afterward.
+
+Do not pass several classes as a comma-separated `class` value to Gradle. AGP 9 splits instrumentation arguments on commas and silently runs only the first class, and `gradlew.bat` also splits unquoted commas. To run the CI smoke list locally on Windows, push it as a device file, as CI does. Alternatively, install both APKs and call the instrumentation runner directly, which accepts a comma list:
+
+```powershell
+$env:ANDROID_SERIAL = 'emulator-5556'  # the selected test device
+
+# The CI list, with Gradle's JUnit results and the same completeness check as CI.
+node scripts/ci/android-smoke-tests.mjs list | Out-File -Encoding ascii "$env:TEMP\narrio-smoke-tests.txt"
+adb push "$env:TEMP\narrio-smoke-tests.txt" /data/local/tmp/narrio-smoke-tests.txt
+.\gradlew.bat :app:connectedDebugAndroidTest -PnarrioPreview=true "-Pandroid.testInstrumentationRunnerArguments.testFile=/data/local/tmp/narrio-smoke-tests.txt"
+node scripts/ci/android-smoke-tests.mjs verify app/build/outputs/androidTest-results/connected
+
+# Or run chosen classes directly; the apps remain installed.
+.\gradlew.bat :app:installDebug :app:installDebugAndroidTest -PnarrioPreview=true
+adb shell am instrument -w -e class "app.narrio.ATest,app.narrio.BTest" app.narrio.dev.test/androidx.test.runner.AndroidJUnitRunner
+```
 
 Reuse a booted project test emulator across iterations. Reset fixture/app state only when the test requires isolation, and use a fresh-device boot for startup, installation, or clean-state checks. Preserve devices and sessions used by other agents. Do not start a new emulator or run the full device suite merely because another file was edited or a task is finishing. Scripted and AI-driven UI testing use the same policy: exercise the affected flow or a planned QA milestone.
 
