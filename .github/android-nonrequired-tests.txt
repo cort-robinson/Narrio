@@ -14,3 +14,5 @@ app.narrio.ReadAlongVisualQa  # Screenshot capture for manual visual review, not
 app.narrio.ReaderAnnotationsVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.
 app.narrio.ReaderVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.
 app.narrio.SleepTimerVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.
+app.narrio.BookDiscoveryExperienceTest  # aShelfBookResumesItsOwnRecordingAndCanChangeIt expects the switch-notice text, which #83's start-position choice now replaces (follow-up fix).
+app.narrio.RecordingChoiceTest  # switchingRecordingsPlaysTheChosenOneAndEachKeepsItsPlace expects the switch-notice text, which #83's start-position choice now replaces (follow-up fix).

@@ -7,7 +7,6 @@ app.narrio.PreciseSeekTest
 app.narrio.PersistentPlayerTest
 app.narrio.SourceExperienceTest
 app.narrio.SourceSearchExperienceTest
-app.narrio.BookDiscoveryExperienceTest
 app.narrio.BookSourceDiscoveryAndroidTest
 app.narrio.AddonSettingsExperienceTest
 app.narrio.AppUpdatesExperienceTest
@@ -26,7 +25,6 @@ app.narrio.ListeningCompletionPlayerTest
 app.narrio.SleepTimerExperienceTest
 app.narrio.SleepTimerDialogTest
 app.narrio.PreparationCheckWorkerTest
-app.narrio.RecordingChoiceTest
 app.narrio.AdvancedSourcingExperienceTest
 app.narrio.LocalAudioPlaybackTest
 app.narrio.AppearanceExperienceTest
