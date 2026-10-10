@@ -20,3 +20,6 @@ app.narrio.LibraryFormatsExperienceTest
 app.narrio.ReadingIntegrationTest
 app.narrio.ReadingRestartTest
 app.narrio.PreparationNotificationTest
+app.narrio.ShelfOrganizingExperienceTest
+app.narrio.ShelfFinishedMigrationTest
+app.narrio.ListeningCompletionPlayerTest
