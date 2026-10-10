@@ -94,6 +94,9 @@ class BookPageModelTest {
         // Unless the audio that played is the prepared torrent's: then the row's recording did play.
         val playedKim = preparingKim.copy(sourceJson = NarrioJson.encodeToString(rayAudio.copy(parts = rayAudio.parts.map { it.copy(torrentId = 9) })))
         assertTrue(sameRecording(playedRecording(playedKim, null, null)!!, kim))
+        // An older row still holding the recording that played (another one getting ready, no record) keeps its narrator.
+        val rayRow = shelf(ray.copy(sources = ray.sources + rayAudio), rayAudio, "ray-1", 60_000, state = "preparing").copy(preparationId = 9)
+        assertTrue(sameRecording(playedRecording(rayRow, null, null)!!, ray))
         // Resuming Ray puts Ray back in the row; the remembered pending recording is still Kim.
         val resumed = shelf(ray, rayAudio, "ray-1", 61_000, state = "preparing").copy(preparationId = 9)
         val pending = PreparationRecord(book.id, "generation", kim, 9, "M4B")

@@ -6,17 +6,10 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
-import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,30 +17,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.window.DialogWindowProvider
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.material.icons.automirrored.rounded.MenuBook
-import kotlinx.coroutines.launch
-import androidx.core.view.WindowCompat
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.domain.*
 import app.narrio.BuildConfig
 import app.narrio.data.OfflineBook
 import app.narrio.data.SourceQuality
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 /** The leading format is the filled action; the other available format is tonal. */
 @Composable
@@ -104,6 +80,8 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val addonsOpen by vm.sourceSettingsOpen.collectAsStateWithLifecycle()
     // Every sub-page, not only Appearance, slides in and back out along the same axis.
     val page = when { addonsOpen -> "addons"; appearanceOpen -> "appearance"; else -> "home" }
+    // Leaving Settings cancels a connection its form started, so the key is never saved later; the sheet keeps its own.
+    DisposableEffect(vm) { onDispose { if (!vm.torBox.value.prompt) vm.dismissTorBoxConnect() } }
     AnimatedContent(page, modifier, transitionSpec = { Motion.sharedAxisX(targetState != "home") }, label = "settings page") { shown ->
         when (shown) {
             "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, vm::requestTorBoxConnect, vm::addonsChanged, { vm.sourceSettingsOpen.value = false })

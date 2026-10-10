@@ -140,10 +140,21 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         },
         navigationIcon = { if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") } },
         actions = {
-            TextButton({ vm.save(book) }, Modifier.padding(end = 8.dp), enabled = !saved) {
+            TextButton({ vm.save(book) }, Modifier.padding(end = if (saved) 0.dp else 8.dp), enabled = !saved) {
                 AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (done) Icons.Rounded.LibraryAddCheck else Icons.Rounded.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
+                    }
+                }
+            }
+            // A shelved book can be moved into or out of Finished from here, as on the shelf.
+            if (saved) {
+                var menu by remember(book.id) { mutableStateOf(false) }
+                Box {
+                    IconButton({ menu = true }, Modifier.testTag("book-more")) { Icon(Icons.Rounded.MoreVert, "More options") }
+                    DropdownMenu(menu, { menu = false }) {
+                        if (finished) DropdownMenuItem({ Text("Mark as not finished") }, { menu = false; vm.setFinished(book.id, false) })
+                        else DropdownMenuItem({ Text("Mark as finished") }, { menu = false; vm.setFinished(book.id, true) }, Modifier.testTag("mark-finished"))
                     }
                 }
             }
