@@ -25,3 +25,4 @@ app.narrio.ShelfFinishedMigrationTest
 app.narrio.ListeningCompletionPlayerTest
 app.narrio.SleepTimerExperienceTest
 app.narrio.SleepTimerDialogTest
+app.narrio.PreparationCheckWorkerTest
