@@ -86,7 +86,7 @@ private fun HowItPlays(picked: Audiobook, current: CurrentRecording?, connected:
             val cached = picked.provider == "archive" || source.format in picked.cachedFormats
             OptionRow(source.format == shownFormat, { choose(source.format, shownDelivery) }, Modifier.testTag("format:${source.format}")) {
                 Text(source.label, style = MaterialTheme.typography.titleSmall)
-                Text("${source.format} · ${source.parts.size} ${if (source.parts.size == 1) "file" else "parts"}${if (picked.provider != "archive") if (cached) " · Cached in TorBox" else " · Not cached in TorBox" else ""}",
+                Text("${source.format} · ${source.parts.size} ${if (source.parts.size == 1) "file" else "parts"}${if (onThisPhone(picked)) " · On this phone" else if (picked.provider != "archive") if (cached) " · Cached in TorBox" else " · Not cached in TorBox" else ""}",
                     style = MaterialTheme.typography.bodySmall, color = muted)
             }
         }

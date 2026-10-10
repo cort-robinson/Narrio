@@ -31,11 +31,25 @@ data class SourceSearchState(
     val streamed: StreamedSourceSearch? = null,
     /** The listener's pick carried into a new search of the same book until its results include it again. */
     val kept: Audiobook? = null,
+    /** The listener's own search words for this lookup; null for the automatic search. */
+    val words: String? = null,
+    /** Releases the listener brought in themselves (a link, their TorBox library, phone files); kept across searches. */
+    val added: List<Audiobook> = emptyList(),
 ) {
     /** The listener may pick any match, including a possible one; otherwise the best verified recording leads. */
     val choice: Audiobook? get() = results.firstOrNull { it.id == chosenId } ?: streamed?.best?.recording ?: recordings.firstOrNull()
     val versions: List<Audiobook> by lazy { SourceQuality.versions(recordings) }
-    val results: List<Audiobook> get() = recordings + possible
+    val results: List<Audiobook> get() = (recordings + possible + added).distinctBy { it.id }
+
+    /** Without releases the listener said aren't this book: in every section, the best match, added ones, and the pick. */
+    fun withoutHidden(keys: Set<String>): SourceSearchState {
+        if (keys.isEmpty()) return this
+        fun hidden(recording: Audiobook) = HiddenReleases.hidden(recording, keys)
+        val pick = results.firstOrNull { it.id == chosenId }
+        return copy(recordings = recordings.filterNot(::hidden), possible = possible.filterNot(::hidden), added = added.filterNot(::hidden),
+            chosenId = chosenId.takeUnless { pick != null && hidden(pick) },
+            streamed = streamed?.let { it.copy(groups = HiddenReleases.exclude(it.groups, keys), best = it.best?.takeUnless { best -> hidden(best.recording) }) })
+    }
 
     fun withSnapshot(snapshot: StreamedSourceSearch): SourceSearchState {
         val all = snapshot.groups.flatMap { it.recordings }
@@ -43,12 +57,12 @@ data class SourceSearchState(
         val recordings = if (best == null) all else listOf(best) + all.filter { it.id != best.id }
         val possible = snapshot.groups.flatMap { it.possible }
         val picked = results.firstOrNull { it.id == chosenId } ?: kept?.takeIf { it.id == chosenId }
-        val chosen = (recordings + possible).firstOrNull {
+        val chosen = (recordings + possible + added).firstOrNull {
             picked != null && (it.id == picked.id || picked.torrentHash.isNotBlank() && it.torrentHash.equals(picked.torrentHash, true))
         }?.id ?: chosenId
         return SourceSearchState(snapshot.book, recordings, loading = !snapshot.complete, searched = true,
             error = snapshot.groups.filter { it.status == SourceGroupStatus.FAILED }.mapNotNull { it.message }.distinct().joinToString(" ").ifBlank { null },
-            possible = possible, chosenId = chosen, streamed = snapshot, kept = picked)
+            possible = possible, chosenId = chosen, streamed = snapshot, kept = picked, words = words, added = added)
     }
 
     /**
@@ -207,6 +221,8 @@ class NarrioViewModel @JvmOverloads constructor(
     private val sourceResults = RecentSourceResults<SourceSearchState>()
     private var detailMetadataJob: Job? = null
     private var metadataRequest = 0
+    /** Fix-it-yourself sourcing on the Advanced layer: search words, hidden releases, links, files, phone audio. */
+    val advanced = AdvancedSourcing(this)
     private var controller: MediaController? = null
     private val controllerFuture = MediaController.Builder(application, SessionToken(application, ComponentName(application, ListeningService::class.java))).buildAsync()
 
@@ -217,6 +233,8 @@ class NarrioViewModel @JvmOverloads constructor(
             downloads.map { list -> list.filter { it.complete }.map { it.source.id }.toSet() }.distinctUntilChanged().drop(1)
                 .collect { sourceResults.clear() }
         }
+        // A running search re-ranks itself when releases are hidden; remembered results must not show them again.
+        viewModelScope.launch { graph.hiddenReleases.hidden.drop(1).collect { sourceResults.clear(); refilterHidden() } }
         viewModelScope.launch {
             combine(sourceProviderSettings.providers.map { list -> list.map { listOf(it.id, it.enabled, it.order) } }.distinctUntilChanged(),
                 graph.addons.installed) { providers, addons -> providers to addons }.drop(1).collect {
@@ -336,24 +354,30 @@ class NarrioViewModel @JvmOverloads constructor(
 
     /**
      * Runs when a book without a recording of its own opens, and when the recording chooser opens on one that has
-     * one. Complete results are reused briefly so returning to a book is instant.
+     * one. Complete results are reused briefly so returning to a book is instant. [words] searches every source with
+     * the listener's own words instead of the book's title variants.
      */
-    fun findSources(book: Audiobook, force: Boolean = false) {
+    fun findSources(book: Audiobook, force: Boolean = false, words: String? = null) {
         sourceSearchJob?.cancel()
         sourceSession = null
-        val key = "${book.id}|${connected.value}|$torBoxAccount|${graph.listeningRecordings.keys(book.id).sorted().joinToString(",")}"
+        val query = SourceWords.clean(words)
+        val key = "${book.id}|${connected.value}|$torBoxAccount|${graph.listeningRecordings.keys(book.id).sorted().joinToString(",")}|${query.orEmpty()}"
         val previous = sourceSearch.value
-        sourceResults.get(key, force)?.let { sourceSearch.value = it.keepingChoiceOf(previous); return }
-        sourceSearch.value = SourceSearchState(book = book, loading = true, searched = true).keepingChoiceOf(previous)
+        // Releases the listener brought in for this book stay through every search of it.
+        val added = previous.takeIf { it.book?.id == book.id }?.added.orEmpty()
+        sourceResults.get(key, force)?.let { sourceSearch.value = it.copy(added = added).keepingChoiceOf(previous); return }
+        sourceSearch.value = SourceSearchState(book = book, loading = true, searched = true, words = query, added = added).keepingChoiceOf(previous)
         sourceSearchJob = viewModelScope.launch {
             try {
-                sourceSession = sourceEngine.start(book, connected.value, this)
+                val engine = sourceEngine
+                sourceSession = if (query != null && engine is CustomWordsSourceSearch) engine.start(book, connected.value, this, query)
+                    else sourceEngine.start(book, connected.value, this)
                 sourceSession!!.state.collect { snapshot ->
                     sourceSearch.update { it.withSnapshot(snapshot) }
-                    if (snapshot.complete && sourceSearch.value.error == null) sourceResults.put(key, sourceSearch.value)
+                    if (snapshot.complete && sourceSearch.value.error == null) sourceResults.put(key, sourceSearch.value.copy(added = emptyList()))
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { sourceSearch.value = SourceSearchState(book, searched = true, error = friendly(error)) }
+            catch (error: Exception) { sourceSearch.value = SourceSearchState(book, searched = true, error = friendly(error), words = query, added = added) }
         }
     }
 
@@ -367,6 +391,29 @@ class NarrioViewModel @JvmOverloads constructor(
         val book = selection.value.book?.catalogIdentity() ?: return
         val search = sourceSearch.value
         if (search.book?.id != book.id || !search.searched) findSources(book)
+    }
+
+    /**
+     * A release the listener brought in for [bookId] becomes one of its results and the chosen one; false when that book
+     * isn't open any more. Bringing it in again undoes an earlier Not this book.
+     */
+    fun addRecording(bookId: String, recording: Audiobook): Boolean {
+        if (sourceSearch.value.book?.id != bookId || selection.value.book?.id != bookId) return false
+        graph.hiddenReleases.keys(bookId).filter { HiddenReleases.hidden(recording, setOf(it)) }.forEach { graph.hiddenReleases.unhide(bookId, it) }
+        sourceSearch.update { state -> state.copy(added = listOf(recording) + state.added.filterNot { sameRecording(it, recording) }, chosenId = recording.id) }
+        return true
+    }
+
+    /**
+     * Hidden releases leave the open results at once. A running search re-ranks itself; results reused from the recent
+     * cache, which have no running search, are looked up again so the best match is chosen without them (or with an
+     * unhidden release back).
+     */
+    private fun refilterHidden() {
+        val state = sourceSearch.value
+        val book = state.book ?: return
+        sourceSearch.value = state.withoutHidden(graph.hiddenReleases.keys(book.id))
+        if (sourceSession == null && state.searched && !state.loading) findSources(book, force = true, words = state.words)
     }
 
     fun chooseVersion(recording: Audiobook) {
@@ -429,7 +476,9 @@ class NarrioViewModel @JvmOverloads constructor(
         val entry = graph.library.find(book.id)
         val mine = currentFor(book, entry)?.takeIf { sameRecording(it.recording, recording) }
         val described = adopt(recording, book)
-        fun play(target: Audiobook, source: AudioSource, how: String) { if (format != null) chooseFormat(described, format); start(target, source, how) }
+        // Another recording than the listener's own starts where they chose: near their place, its own, or the beginning.
+        val place = if (mine == null) advanced.switchPlace(book) else null
+        fun play(target: Audiobook, source: AudioSource, how: String) { if (format != null) chooseFormat(described, format); start(target, source, how, place) }
         mine?.offline?.takeIf { format == null || it.source.format == format }?.let { play(described, it.source, it.source.delivery); return@launch }
         val earlier = mine?.source ?: earlierPlay(book.id, recording)?.let { runCatching { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }.getOrNull() }
         earlier?.takeIf { format == null || it.format == format }?.let { play(described, it, delivery ?: it.delivery); return@launch }
@@ -519,7 +568,8 @@ class NarrioViewModel @JvmOverloads constructor(
     }
 
     private fun loadMetadata(book: Audiobook, force: Boolean = false) {
-        if (book.provider == "archive" || book.provider == "catalog") return
+        // Phone audio keeps the book's own details; its folder name isn't a release to look up.
+        if (book.provider == "archive" || book.provider == "catalog" || book.provider == LocalAudio.PROVIDER) return
         val request = ++metadataRequest
         detailMetadataJob?.cancel()
         selection.update { if (it.book?.id == book.id) it.copy(metadataLoading = true) else it }
@@ -548,6 +598,7 @@ class NarrioViewModel @JvmOverloads constructor(
         if (reader.value?.book?.id == book.id) reader.value = null
         if (playback.value.book?.id == book.id) graph.playback.service?.forget()
         downloads.value.filter { it.book.id == book.id }.forEach { graph.offline.remove(it.source) }
+        advanced.forget(book.id)
         graph.followAlong.remove(book.id)
         graph.listeningRecordings.remove(book.id)
         graph.library.remove(book.id); graph.preparations.forget(book.id); app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
@@ -777,16 +828,19 @@ class NarrioViewModel @JvmOverloads constructor(
         finally { ebookSearch.update { if (it.bookId == book.id) it.copy(adding = null, step = "") else it } }
     }
 
-    fun start(book: Audiobook, source: AudioSource, delivery: String) = viewModelScope.launch {
+    /** [place] chooses where the resolved source starts, such as near the place in another recording. */
+    fun start(book: Audiobook, source: AudioSource, delivery: String, place: ((AudioSource) -> StartAt?)? = null) = viewModelScope.launch {
         if (busy.value) return@launch
         busy.value = true; starting.value = true
         try {
-            val resolved = playableSource(book, source, delivery) ?: return@launch
+            val resolved = playableSource(book, source, delivery)?.let { graph.releaseFiles.apply(book, it) } ?: return@launch
             // Loading replaces the row's book, so the recording being got ready is pinned down first.
             graph.library.find(book.id)?.let { rememberOlderShelf(it) }
-            awaitService().load(book, resolved)
-            // Only the prepared recording itself completes its preparation; another one leaves it pending.
-            if (graph.preparations.played(book.id, resolved)) app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
+            val at = place?.invoke(resolved)
+            if (at == null || at.approximate) awaitService().load(book, resolved, near = at?.cursor)
+            else awaitService().load(book, resolved, partId = at.cursor.partId, positionMs = at.cursor.positionMs)
+            // Only the prepared recording itself completes its preparation; another one (or phone audio) leaves it pending.
+            if (resolved.delivery != LocalAudio.DELIVERY && graph.preparations.played(book.id, resolved)) app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
             if (book.provider != "catalog") graph.listeningRecordings.played(book, resolved.id)
             playerOpen.value = true
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -796,6 +850,15 @@ class NarrioViewModel @JvmOverloads constructor(
 
     private suspend fun playableSource(book: Audiobook, source: AudioSource, delivery: String): AudioSource? {
         if (graph.offline.complete(source)) return source
+        if (source.delivery == LocalAudio.DELIVERY) {
+            if (!graph.localAudio.available(source)) throw ProviderException("Narrio can no longer open these audio files. They may have been moved or deleted, or access was removed. Add them again in Advanced.")
+            return source
+        }
+        // Usenet and web downloads from the TorBox library are listed only once they're ready.
+        if (source.delivery != "torbox" && source.delivery.startsWith("torbox")) {
+            if (!connected.value) throw ProviderException("Connect TorBox in Settings to stream this source.")
+            return source
+        }
         if (delivery != "torbox") return source
         if (!connected.value) throw ProviderException("Connect TorBox in Settings to stream this source.")
         preferredFormat.value = source.format
@@ -842,7 +905,8 @@ class NarrioViewModel @JvmOverloads constructor(
         if (busy.value) return@launch
         busy.value = true
         try {
-            val resolved = playableSource(book, source, delivery) ?: return@launch
+            if (source.delivery == LocalAudio.DELIVERY) { messages.emit("These audio files are already on your phone."); return@launch }
+            val resolved = playableSource(book, source, delivery)?.let { graph.releaseFiles.apply(book, it) } ?: return@launch
             graph.library.save(book); graph.offline.queue(book, resolved)
             messages.emit(if (wifiOnly.value) "Phone download queued. It will use Wi-Fi." else "Phone download queued for offline listening.")
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -852,7 +916,28 @@ class NarrioViewModel @JvmOverloads constructor(
     fun setWifiOnly(value: Boolean) { wifiOnly.value = value; graph.preferences.edit().putBoolean("downloadWifi", value).apply(); graph.offline.setWifiOnly(value) }
     fun chooseFormat(book: Audiobook, format: String) { preferredFormat.value = format; graph.preferences.edit().putString("format:${book.id}", format).apply(); sourceResults.clear() }
     fun pauseDownload(download: OfflineBook) = graph.offline.pause(download.source)
-    fun resumeDownload(download: OfflineBook) = graph.offline.resume(download.book, download.source)
+    /** Resumes or retries a phone download with the recording's files as chosen now. */
+    fun resumeDownload(download: OfflineBook) = viewModelScope.launch {
+        try { graph.offline.resume(download.book, reconcile(download.book, download.source)) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) { messages.emit(friendly(error)) }
+    }
+
+    /**
+     * After the listener changes a recording's files, its phone download follows: chosen files are queued (under the
+     * download's usual network rules) and files no longer chosen are removed. Nothing happens without a download.
+     */
+    suspend fun reconcileDownloads(book: Audiobook, source: AudioSource) {
+        val download = downloads.value.firstOrNull { it.book.id == book.id && FileChoices.key(book.id, it.book, it.source) == FileChoices.key(book.id, book, source) } ?: return
+        graph.offline.resume(download.book, reconcile(download.book, download.source))
+    }
+
+    /** The download's layout as chosen now; queued files no longer chosen are removed. */
+    private suspend fun reconcile(book: Audiobook, queued: AudioSource): AudioSource {
+        val chosen = graph.releaseFiles.apply(book, queued)
+        graph.offline.removeParts(queued.parts.filter { part -> chosen.parts.none { it.id == part.id } })
+        return chosen
+    }
     fun removeDownload(download: OfflineBook) {
         if (playback.value.source?.id == download.source.id && playback.value.playing) graph.playback.service?.toggle()
         graph.offline.remove(download.source)
@@ -973,19 +1058,24 @@ class NarrioViewModel @JvmOverloads constructor(
     /** Plays from a bookmark's listening place, stored or mapped from where it was read. */
     fun jumpBookmark(bookId: String, audio: AudioCursor) = viewModelScope.launch {
         val state = playback.value
-        if (state.source?.id == audio.sourceId) graph.playback.service?.part(resumeIndex(state.source.parts, audio.partId), audio.positionMs)
-        else {
+        val excluded = "This bookmark is in a file that isn't chosen for this recording. Include it again in Choose files to go there."
+        if (state.source?.id == audio.sourceId) {
+            val index = state.source.parts.indexOfFirst { it.id == audio.partId }
+            if (index < 0) messages.emit(excluded) else graph.playback.service?.part(index, audio.positionMs)
+        } else {
             val entry = graph.library.find(bookId)
             val history = graph.library.position(bookId, audio.sourceId)
             val source = history?.sourceJson?.let { NarrioJson.decodeFromString<AudioSource>(it) } ?: entry?.source()
-            if (entry != null && source?.id == audio.sourceId) {
-                // The bookmark's audio is the played recording's, or else an earlier one's, described as it is.
-                val recording = graph.recordingFor(entry)?.takeIf { entry.source()?.id == source.id } ?: playedAudio(entry.book(), source)
-                awaitService().load(recording, source, true, audio.partId, audio.positionMs)
-                if (recording.provider != "catalog") graph.listeningRecordings.played(recording, source.id)
-                playerOpen.value = true
-            }
-            else messages.emit("This bookmark belongs to a different audio source. Resume that source first.")
+            if (entry == null || source?.id != audio.sourceId) { messages.emit("This bookmark belongs to a different audio source. Resume that source first."); return@launch }
+            // The bookmark's audio is the played recording's, or else an earlier one's, described as it is.
+            val recording = graph.recordingFor(entry)?.takeIf { entry.source()?.id == source.id } ?: playedAudio(entry.book(), source)
+            // The layout as the listener chose its files now (reading the full release only for files it lacks).
+            val playable = try { graph.releaseFiles.apply(recording, source) }
+                catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { messages.emit(friendly(error)); return@launch }
+            if (playable.parts.none { it.id == audio.partId }) { messages.emit(excluded); return@launch }
+            awaitService().load(recording, playable, true, audio.partId, audio.positionMs)
+            if (recording.provider != "catalog") graph.listeningRecordings.played(recording, source.id)
+            playerOpen.value = true
         }
     }
 

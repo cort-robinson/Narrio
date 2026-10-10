@@ -43,6 +43,8 @@ class SourceActions(
     val searchAgain: () -> Unit,
     val connectTorBox: () -> Unit,
     val sourceSettings: () -> Unit,
+    /** Marks a release as not this book, keeping it out of the results; null offers no such action. */
+    val notThisBook: ((Audiobook) -> Unit)? = null,
 )
 
 @Composable
@@ -156,7 +158,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
         }
         val shown = if (showAll) group.recordings else group.recordings.take(SHOWN_RELEASES)
         shown.forEach { recording ->
-            ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers)) { actions.choose(recording) }
+            ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers), actions.notThisBook) { actions.choose(recording) }
         }
         if (group.recordings.size > SHOWN_RELEASES) TextButton({ showAll = !showAll }) {
             Text(if (showAll) "Show fewer" else "Show all ${group.recordings.size} from ${group.name}")
@@ -173,7 +175,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
                 Column {
                     Text("These might be this book. Check the release name and narrator before listening.", style = MaterialTheme.typography.bodySmall, color = muted)
                     group.possible.forEach { recording ->
-                        ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers)) { actions.choose(recording) }
+                        ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers), actions.notThisBook) { actions.choose(recording) }
                     }
                 }
             }
@@ -220,7 +222,7 @@ internal fun ReleaseSkeleton() {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReleaseRow(recording: Audiobook, book: Audiobook, best: Boolean, checking: Boolean, also: List<String>, open: () -> Unit) {
+private fun ReleaseRow(recording: Audiobook, book: Audiobook, best: Boolean, checking: Boolean, also: List<String>, notThisBook: ((Audiobook) -> Unit)?, open: () -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = "Choose this recording", role = Role.Button, onClick = open)
         .heightIn(min = 48.dp).padding(vertical = 10.dp).testTag("release:${recording.id}"), verticalAlignment = Alignment.CenterVertically,
@@ -242,6 +244,7 @@ private fun ReleaseRow(recording: Audiobook, book: Audiobook, best: Boolean, che
             }
             if (also.isNotEmpty()) Text("Also found by ${also.joinToString()}", style = MaterialTheme.typography.labelSmall, color = muted)
         }
+        notThisBook?.let { hide -> NotThisBookIcon(recording.releaseTitle.ifBlank { recording.title }) { hide(recording) } }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = muted)
     }
 }

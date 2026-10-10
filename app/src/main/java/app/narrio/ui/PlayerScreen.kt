@@ -361,7 +361,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
     val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
     var scrub by remember { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxWidth()) {
-        ChapterTitleRow(vm, state, dense, if (dense) null else "Part ${state.partIndex + 1} of ${state.source?.parts?.size ?: 1} · ${if (state.source?.delivery == "torbox") "TorBox" else "Internet Archive"}")
+        ChapterTitleRow(vm, state, dense, if (dense) null else "Part ${state.partIndex + 1} of ${state.source?.parts?.size ?: 1} · ${deliveryLabel(state.source)}")
         SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)

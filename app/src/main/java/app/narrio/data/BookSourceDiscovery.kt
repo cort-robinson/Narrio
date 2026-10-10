@@ -196,6 +196,16 @@ object SourceQuality {
         return if (narrowed) selected(book, recording, sources) else recording
     }
 
+    /**
+     * This book's files in [source], as automatic matching would keep them from a collection or series bundle; null
+     * when the files can't be told apart, so the listener chooses.
+     */
+    internal fun bookFileNames(book: Audiobook, recording: Audiobook, source: AudioSource): List<String>? {
+        val whole = recording.copy(sources = listOf(source), bookFilesSelected = false)
+        val chosen = oneBook(book, selectBookFiles(book, whole) ?: whole) ?: return null
+        return chosen.sources.singleOrNull()?.parts?.map { it.name }?.takeIf { it.isNotEmpty() }
+    }
+
     fun matches(book: Audiobook, recording: Audiobook): Boolean = confidence(book, recording) == MatchConfidence.STRONG
 
     /**

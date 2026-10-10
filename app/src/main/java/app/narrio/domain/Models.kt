@@ -104,7 +104,13 @@ fun formatTime(ms: Long): String {
 }
 fun durationLabel(ms: Long): String = if (ms > 0) "${ms / 3_600_000}h ${(ms / 60_000) % 60}m" else "Length on playback"
 fun sizeLabel(bytes: Long): String = when { bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0); bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0); else -> "%.0f KB".format(bytes / 1000.0) }
-fun providerLabel(book: Audiobook) = when (book.provider) { "catalog" -> book.metadataSource.ifBlank { "Book catalog" }; "torbox" -> "My TorBox"; "knaben" -> book.sourceAddonName.ifBlank { "Indexed release" }; else -> "LibriVox" }
+fun providerLabel(book: Audiobook) = when (book.provider) { "catalog" -> book.metadataSource.ifBlank { "Book catalog" }; "torbox" -> "My TorBox"; "knaben" -> book.sourceAddonName.ifBlank { "Indexed release" }; "local" -> "On this phone"; else -> "LibriVox" }
+/** Where a source's audio plays from. */
+fun deliveryLabel(source: AudioSource?) = when {
+    source?.delivery == "local" -> "On this phone"
+    source?.delivery?.startsWith("torbox") == true -> "TorBox"
+    else -> "Internet Archive"
+}
 fun narrationLabel(book: Audiobook) = when {
     book.narratorFromCatalog -> "Catalog narrator: ${book.narrator}"
     book.narrator.startsWith("Narrator not ") -> book.narrator

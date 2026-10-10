@@ -148,7 +148,8 @@ class ListeningService : MediaSessionService() {
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) { readChapters(); scope.launch { save() } }
             override fun onPlayerError(playbackError: PlaybackException) {
-                error = "Audio couldn't continue. Check your connection, then retry. TorBox sources also need a connected account."
+                error = if (currentSource?.delivery == LocalAudio.DELIVERY) "This audio file on your phone can't be opened. It may have been moved or deleted, or Narrio's access was removed. Add the files again in Advanced."
+                    else "Audio couldn't continue. Check your connection, then retry. TorBox sources also need a connected account."
                 publish(); scope.launch { save() }
             }
             override fun onMetadata(metadata: Metadata) { id3Chapters(listOf(metadata)).takeIf { it.isNotEmpty() }?.let { storeChapters(player.currentMediaItemIndex, it) } }
@@ -171,8 +172,18 @@ class ListeningService : MediaSessionService() {
         }
     }
 
-    suspend fun load(book: Audiobook, source: AudioSource, autoplay: Boolean = true, partId: String? = null, positionMs: Long? = null) {
-        if (source.parts.isEmpty()) return
+    /**
+     * [partId]/[positionMs] start at an exact place. [near] is an approximate place (another recording's place carried
+     * over): an exact place mapped from the book's synced ebook wins over it, and it wins over this layout's own history.
+     */
+    suspend fun load(book: Audiobook, requested: AudioSource, autoplay: Boolean = true, partId: String? = null, positionMs: Long? = null,
+                     near: AudioCursor? = null) {
+        if (requested.parts.isEmpty()) return
+        // The listener's file choice for this release; source and part IDs, and so positions, are unchanged. A choice
+        // whose files can't be found doesn't play other files: playback stays as it was and says why.
+        val source = try { graph.releaseFiles.apply(book, requested) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { error = failure.message ?: "This recording's chosen files can't be found right now."; publish(); return }
         save()
         invalidateNavigation()
         graph.library.save(book)
@@ -182,12 +193,21 @@ class ListeningService : MediaSessionService() {
         val history = graph.library.position(book.id, source.id)
         val previousCursor = AudioCursor(source.id, history?.partId ?: if (sameLayout) previous?.partId.orEmpty() else source.parts.first().id,
             history?.positionMs ?: if (sameLayout) previous?.positionMs ?: 0 else 0)
-        val jump = if (partId == null && positionMs == null) graph.readingSync.listeningStart(book.id, source, previousCursor) else null
-        val index = resumeIndex(source.parts, partId ?: jump?.destination?.partId ?: history?.partId ?: if (sameLayout) previous?.partId.orEmpty() else "")
-        val position = positionMs ?: jump?.destination?.positionMs ?: history?.positionMs ?: if (sameLayout) previous?.positionMs ?: 0 else 0
+        val mapped = if (partId == null && positionMs == null) graph.readingSync.listeningStart(book.id, source, previousCursor) else null
+        val carried = near?.takeIf { cursor -> mapped?.confidence != MappingConfidence.EXACT && source.parts.any { it.id == cursor.partId } }
+        // An approximate carried place replaces an estimated ebook jump, so no Undo offer describes a move that didn't happen.
+        val jump = mapped?.takeIf { carried == null }
+        if (carried != null && mapped?.destination != null) graph.readingSync.clearJump()
+        val wanted = partId ?: jump?.destination?.partId ?: carried?.partId ?: history?.partId ?: if (sameLayout) previous?.partId.orEmpty() else ""
+        val index = resumeIndex(source.parts, wanted)
+        // A place in a file that's no longer chosen starts the first chosen file from its beginning.
+        val position = if (wanted.isNotBlank() && source.parts.none { it.id == wanted }) 0
+            else positionMs ?: jump?.destination?.positionMs ?: carried?.positionMs ?: history?.positionMs ?: if (sameLayout) previous?.positionMs ?: 0 else 0
         // A chapter or part timer belongs to the recording it was set in; the same recording reloaded keeps it.
         val sameRecording = currentBook?.id == book.id && currentSource?.id == source.id
         if (!sameRecording) { partChapters.clear(); if (sleep.stop != null) setSleep(SleepTimer()) }
+        // Choosing or reordering this recording's files keeps a chapter or part timer on its file, by part ID.
+        else if (sleep.stop != null) remapSleep(sleep, currentSource?.parts.orEmpty().map { it.id }, source.parts.map { it.id }).let { if (it != sleep) setSleep(it) }
         currentBook = book; currentSource = source; error = null
         parts.clear(); links.clear()
         val items = source.parts.map { part ->
@@ -326,7 +346,7 @@ class ListeningService : MediaSessionService() {
             .setSessionCommand(EXTEND_SLEEP).setSlots(CommandButton.SLOT_OVERFLOW).build()) else emptyList())
     }
     fun disconnect() {
-        if (currentSource?.let { it.delivery == "torbox" && !graph.offline.complete(it) } == true) { player.pause(); player.stop(); error = "TorBox is disconnected. Reconnect in Settings to resume this source." }
+        if (currentSource?.let { it.delivery.startsWith("torbox") && !graph.offline.complete(it) } == true) { player.pause(); player.stop(); error = "TorBox is disconnected. Reconnect in Settings to resume this source." }
         links.clear(); publish()
     }
     suspend fun forget() {
@@ -499,6 +519,7 @@ class ListeningService : MediaSessionService() {
             val parsed = withContext(Dispatchers.IO) {
                 runCatching {
                     if (graph.offline.complete(part)) return@runCatching graph.offline.cachedEdges(part).flatMap(ChapterReader::parseChpl).distinctBy { it.startMs }.sortedBy { it.startMs }
+                    if (currentSource?.delivery == LocalAudio.DELIVERY) return@runCatching graph.localAudio.edges(part).flatMap(ChapterReader::parseChpl).distinctBy { it.startMs }.sortedBy { it.startMs }
                     val url = graph.torbox.resolve(part)
                     graph.http.newCall(Request.Builder().url(url).header("Range", "bytes=0-262143").build()).execute().use { r ->
                         if (r.code != 206) return@use emptyList<Chapter>()

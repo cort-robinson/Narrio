@@ -29,12 +29,7 @@ class TorrentFileDiscovery(http: OkHttpClient, private val baseUrl: String = "ht
         if (response.code == 404 || response.redirect) return@withContext null
         if (response.code !in 200..299) throw IOException("Audio file metadata is unavailable.")
         val files = TorrentFiles.parse(response.bytes ?: return@withContext null, hash) ?: return@withContext null
-        val sources = files.files.filter { it.size > 0 && isBookAudioFile(it.name) }
-            .groupBy { when (val ext = it.name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" } }
-            .map { (format, group) -> AudioSource("manifest:$hash:$format", if (format == "M4B") "Whole-book audio" else "Ordered audio parts",
-                format, group.sortedWith { a, b -> AudioOrdering.compare(a.name, b.name) }.map { file ->
-                    AudioPart("manifest:$hash:${file.name}", file.name, file.name.substringAfterLast('/').substringBeforeLast('.').replace('_', ' '), sizeBytes = file.size)
-                }, delivery = "torbox") }
+        val sources = sources(hash, files)
         val magnet = book.magnetUri.takeIf { Regex("[?&]xt=urn:btih:$hash(?:&|$)", RegexOption.IGNORE_CASE).containsMatchIn(it) }
             ?: "magnet:?xt=urn:btih:$hash"
         if (sources.isEmpty()) null else book.copy(title = files.name, releaseTitle = files.name, sources = sources, filesVerified = true, magnetUri = magnet)
@@ -54,6 +49,14 @@ class TorrentFileDiscovery(http: OkHttpClient, private val baseUrl: String = "ht
     companion object {
         private const val MAX_REDIRECTS = 3
 
+        /** Audio layouts read from torrent metadata; TorBox supplies the playable files once the release is prepared. */
+        internal fun sources(hash: String, files: TorrentFiles): List<AudioSource> = files.files.filter { it.size > 0 && isBookAudioFile(it.name) }
+            .groupBy { when (val ext = it.name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" } }
+            .map { (format, group) -> AudioSource("manifest:$hash:$format", if (format == "M4B") "Whole-book audio" else "Ordered audio parts",
+                format, group.sortedWith { a, b -> AudioOrdering.compare(a.name, b.name) }.map { file ->
+                    AudioPart("manifest:$hash:${file.name}", file.name, file.name.substringAfterLast('/').substringBeforeLast('.').replace('_', ' '), sizeBytes = file.size)
+                }, delivery = "torbox") }
+
         /** Follows only to the same torrent file, keeping HTTPS when the mirror redirects through cleartext. */
         internal fun redirect(from: HttpUrl, location: String?, hash: String): HttpUrl? {
             val target = location?.let(from::resolve) ?: return null
@@ -69,7 +72,10 @@ internal data class TorrentFiles(val name: String, val files: List<TorrentFile>)
         const val MAX_BYTES = 4_000_000
 
         /** Verify the original info bytes against the indexed hash before trusting names or lengths. */
-        fun parse(bytes: ByteArray, expectedHash: String): TorrentFiles? = runCatching {
+        fun parse(bytes: ByteArray, expectedHash: String): TorrentFiles? = read(bytes)?.takeIf { it.first.equals(expectedHash, true) }?.second
+
+        /** The info hash (lowercase hex) and files of a .torrent file, or null when it isn't a valid one. */
+        fun read(bytes: ByteArray): Pair<String, TorrentFiles>? = runCatching {
             require(bytes.size <= MAX_BYTES)
             val parser = Bencode(bytes)
             val root = parser.value() as Map<*, *>
@@ -77,7 +83,6 @@ internal data class TorrentFiles(val name: String, val files: List<TorrentFile>)
             val range = requireNotNull(parser.infoRange)
             val hash = MessageDigest.getInstance("SHA-1").digest(bytes.copyOfRange(range.first, range.second))
                 .joinToString("") { "%02x".format(it) }
-            require(hash.equals(expectedHash, true))
             val info = root["info"] as Map<*, *>
             fun text(value: Any?) = (value as ByteArray).toString(Charsets.UTF_8)
             fun safe(segment: String) = segment.isNotBlank() && segment !in setOf(".", "..") &&
@@ -94,7 +99,7 @@ internal data class TorrentFiles(val name: String, val files: List<TorrentFile>)
                 TorrentFile(segments.joinToString("/"), file["length"] as Long)
             }
             require(files.isNotEmpty() && files.all { it.size >= 0 } && files.map { it.name }.distinct().size == files.size)
-            TorrentFiles(name, files)
+            hash to TorrentFiles(name, files)
         }.getOrNull()
     }
 }

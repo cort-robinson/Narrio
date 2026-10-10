@@ -86,11 +86,13 @@ class OfflineStore(private val context: Context, http: OkHttpClient, private val
     fun pause(source: AudioSource) = source.parts.forEach { DownloadService.sendSetStopReason(context, OfflineDownloadService::class.java, stableAudioUri(it), 1, false) }
     fun resume(book: Audiobook, source: AudioSource) { queue(book, source); source.parts.forEach { DownloadService.sendSetStopReason(context, OfflineDownloadService::class.java, stableAudioUri(it), 0, true) } }
     fun remove(source: AudioSource) = source.parts.forEach { DownloadService.sendRemoveDownload(context, OfflineDownloadService::class.java, stableAudioUri(it), false) }
+    /** Removes single files, such as ones left out of a recording's chosen files. */
+    fun removeParts(parts: List<AudioPart>) = parts.forEach { DownloadService.sendRemoveDownload(context, OfflineDownloadService::class.java, stableAudioUri(it), false) }
     fun setWifiOnly(value: Boolean) {
         DownloadService.sendSetRequirements(context, OfflineDownloadService::class.java, Requirements(if (value) Requirements.NETWORK_UNMETERED else Requirements.NETWORK), false)
     }
     fun disconnect() {
-        books.value.filter { it.source.delivery == "torbox" && !it.complete }.forEach { pause(it.source) }
+        books.value.filter { it.source.delivery.startsWith("torbox") && !it.complete }.forEach { pause(it.source) }
         links.clear()
     }
     fun complete(source: AudioSource): Boolean = source.parts.isNotEmpty() && source.parts.all { complete(it) }

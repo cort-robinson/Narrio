@@ -141,7 +141,7 @@ fun BookRow(book: Audiobook, open: () -> Unit, modifier: Modifier = Modifier, re
                 else Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (recording && book.durationMs > 0) Text(durationLabel(book.durationMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (recording && book.provider != "catalog" && (book.provider != "archive" || book.cacheState != "unchecked")) Text(if (book.cacheState == "cached") "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}" else "${providerLabel(book)} · ${if (book.cacheState == "uncached") "Not cached" else "Cache not checked"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (recording && book.provider != "catalog" && (book.provider != "archive" || book.cacheState != "unchecked")) Text(if (book.provider == "local") "On this phone · Plays offline" else if (book.cacheState == "cached") "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}" else "${providerLabel(book)} · ${if (book.cacheState == "uncached") "Not cached" else "Cache not checked"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             extra?.invoke(this)
         }
         trailing?.invoke()

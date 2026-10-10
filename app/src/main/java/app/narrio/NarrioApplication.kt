@@ -9,7 +9,9 @@ import app.narrio.playback.PlaybackHub
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 
 class NarrioApplication : Application() {
     lateinit var graph: AppGraph
@@ -52,6 +54,15 @@ class AppGraph(application: Application) {
     val playback = PlaybackHub()
     val offline = OfflineStore(application, http, torbox)
     val listeningRecordings = ListeningRecordings(preferences)
+    // Advanced sourcing: the listener's own search words, hidden releases, file choices, links, and phone audio.
+    private val advancedValues = PreferenceValues(application.getSharedPreferences("advanced-sources", Application.MODE_PRIVATE))
+    val hiddenReleases = HiddenReleaseStore(advancedValues)
+    val sourceWords = SourceWordsStore(advancedValues)
+    val torboxLibrary = TorBoxLibrary(torbox)
+    val localManifests = LocalManifests(advancedValues)
+    val releaseFiles = ReleaseFiles(FileSelectionStore(advancedValues), torbox, torboxLibrary, catalog, torrentFiles, localManifests)
+    val linkedReleases = LinkedReleases(http, torbox, torboxLibrary, torrentFiles).also { torbox.linkedTorrent = it::torrentFor }
+    val localAudio = LocalAudioImporter(application, LocalAudioGrants(advancedValues))
     val streamingSourceSearch: app.narrio.domain.StreamingSourceSearch = ProviderSourceSearch(sourceProviderSettings, { provider ->
         when (provider.id) {
             DeviceSourceProviderSettings.ARCHIVE -> RecordingSourceLookup(catalog)
@@ -60,9 +71,9 @@ class AppGraph(application: Application) {
         }
     }, torbox::checkCached, torrentFiles::recording, sourceProviderSettings::recordStatus,
         phoneRecordings = { offline.books.value.filter { it.complete }.map { it.book.copy(id = it.book.recordingId.ifBlank { it.book.id }, sources = listOf(it.source)) } },
-        rankingChanges = offline.books.map { Unit },
+        rankingChanges = merge(offline.books.map { Unit }, hiddenReleases.hidden.drop(1).map { Unit }),
         preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() },
-        listening = { listeningRecordings.keys(it.id) })
+        listening = { listeningRecordings.keys(it.id) }, hidden = hiddenReleases::keys)
     val annasArchive = AnnasArchive(http, WebViewPages(application))
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks, webEbooks::accountText)
     val streamingEbookSearch: app.narrio.domain.StreamingEbookSearch = ProviderEbookSearch(ebookProviderSettings, { provider ->
