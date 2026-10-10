@@ -117,9 +117,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             showSources = { scope.launch { listState.animateScrollToItem(sourcesIndex) } },
         )
     }
-    // Live progress while watching; background checks carry on after leaving. A failed one waits for the listener.
-    LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, preparation?.failed, connected) {
-        if (preparation != null && preparation?.ready != true && preparation?.failed != true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
+    // Live progress while watching; background checks carry on after leaving. Failed or paused ones wait for the listener.
+    LaunchedEffect(book.id, preparation?.torrentId, preparation?.ready, preparation?.problem, connected) {
+        if (preparation?.let { !it.ready && it.problem.isEmpty() } == true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
     }
     val scroll = TopAppBarDefaults.pinnedScrollBehavior()
     Column(modifier.fillMaxSize()) {
@@ -219,12 +219,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         preparation?.let { prep -> item(key = "preparation") {
             Column(Modifier.animateItem().fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)).padding(20.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (prep.ready) Icons.Rounded.CheckCircle else if (prep.failed) Icons.Rounded.ErrorOutline else Icons.Rounded.CloudDownload, null,
+                    Icon(if (prep.ready) Icons.Rounded.CheckCircle else if (prep.failed) Icons.Rounded.ErrorOutline else if (prep.paused) Icons.Rounded.PauseCircle else Icons.Rounded.CloudDownload, null,
                         tint = if (prep.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     Text(prep.state, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.titleMedium)
                 }
                 Spacer(Modifier.height(12.dp))
-                if (!prep.ready && !prep.failed) {
+                if (!prep.ready && prep.problem.isEmpty()) {
                     val progress by animateFloatAsState(prep.progress, tween(Motion.LONG, easing = Motion.Emphasized), label = "preparation")
                     LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(12.dp))
@@ -234,7 +234,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                 }
                 Text(preparationNote(prep, book.cacheState), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (prep.failed) OutlinedButton({ vm.findAnotherRecording(book) }, Modifier.padding(top = 12.dp)) { Text("Try another recording") }
-                TextButton({ vm.refreshPreparation(book) }, enabled = !busy && connected) { Text(if (prep.failed) "Check again" else "Check availability") }
+                TextButton({ vm.refreshPreparation(book) }, enabled = !busy && connected) { Text(if (prep.problem.isNotEmpty()) "Check again" else "Check availability") }
             }
         } }
         if (streamed != null && tally != null) listeningSources(streamed, tally, providersById, book, pinned.shown?.recording?.id, connected, wideSources,

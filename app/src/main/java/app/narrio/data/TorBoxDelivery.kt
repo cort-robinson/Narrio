@@ -120,9 +120,20 @@ class TorBoxDelivery(
         }
     }
 
-    suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = withContext(Dispatchers.IO) {
-        val item = list().firstOrNull { if (torrentId > 0) it.number("id") == torrentId else it.text("hash").equals(book.torrentHash, true) }
-        item?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
+    suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = account().preparation(book, torrentId)
+
+    /** The account's items, listed once, so several preparations can be checked with one request. */
+    suspend fun account(): PreparationAccount = withContext(Dispatchers.IO) { Account(list()) }
+
+    private inner class Account(private val items: List<JsonObject>) : PreparationAccount {
+        private fun item(book: Audiobook, torrentId: Long) =
+            items.firstOrNull { if (torrentId > 0) it.number("id") == torrentId else book.torrentHash.isNotBlank() && it.text("hash").equals(book.torrentHash, true) }
+        override fun preparation(book: Audiobook, torrentId: Long) =
+            item(book, torrentId)?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
+        override fun sources(book: Audiobook, torrentId: Long): List<AudioSource> {
+            val item = item(book, torrentId)?.takeIf { preparation(it).ready } ?: throw ProviderException("This recording is still getting ready in TorBox.")
+            return mapSources(item, book)
+        }
     }
 
     override suspend fun status(torrentId: Long): Preparation = withContext(Dispatchers.IO) {
@@ -135,17 +146,17 @@ class TorBoxDelivery(
         item.number("id"), item.flag("download_finished") && item.flag("download_present"),
         (item.text("progress").toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f).coerceIn(0f, 1f),
         when (val state = item.text("download_state")) {
-            "cached", "completed", "uploading" -> if (item.flag("download_finished") && item.flag("download_present")) "Ready to listen" else "Preparing files"
+            "cached", "completed", "uploading" -> if (item.flag("download_finished") && item.flag("download_present")) "Ready to listen" else "Getting ready in TorBox"
             "stalled (no seeds)" -> "Waiting for available peers"
             "metaDL" -> "Finding audio files"
-            "downloading" -> "Preparing in TorBox"
+            "downloading" -> "Getting ready in TorBox"
             "paused" -> "Paused in TorBox"
-            else -> if (failedState(state)) "Couldn't get it ready" else state.ifBlank { "Preparing in TorBox" }
+            else -> if (failedState(state)) "Couldn't get it ready" else "Getting ready in TorBox"
         },
         downloadBytesPerSecond = item.number("download_speed"), etaSeconds = item.number("eta"),
         seeds = item["seeds"]?.let { item.number("seeds") }, checkedAtMs = System.currentTimeMillis(),
         stalled = item.text("download_state") == "stalled (no seeds)",
-        problem = if (failedState(item.text("download_state"))) "TorBox couldn't fetch this release." else "",
+        problem = if (failedState(item.text("download_state"))) PreparationPolicy.UNKNOWN_PROBLEM else "",
     )
 
     override suspend fun sources(book: Audiobook, torrentId: Long): List<AudioSource> = withContext(Dispatchers.IO) {

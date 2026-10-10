@@ -37,6 +37,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- Preparation notifications' tap and Listen; not exported, so other apps can't send these actions. -->
+        <activity android:name=".preparation.PreparationActionActivity" android:exported="false"
+            android:theme="@android:style/Theme.NoDisplay" android:taskAffinity="" android:excludeFromRecents="true" android:noHistory="true" />
         <service android:name=".playback.ListeningService" android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter><action android:name="androidx.media3.session.MediaSessionService" /></intent-filter>
