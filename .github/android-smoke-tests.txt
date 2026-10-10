@@ -23,3 +23,5 @@ app.narrio.PreparationNotificationTest
 app.narrio.ShelfOrganizingExperienceTest
 app.narrio.ShelfFinishedMigrationTest
 app.narrio.ListeningCompletionPlayerTest
+app.narrio.SleepTimerExperienceTest
+app.narrio.SleepTimerDialogTest
