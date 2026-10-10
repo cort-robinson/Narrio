@@ -50,10 +50,14 @@ class SourceExperienceTest {
         compose.onNodeWithTag("format:MP3").assertTextContains("MP3 · 1 file · Not cached in TorBox").performClick()
         compose.onNodeWithTag("advanced-sources").performScrollToNode(hasText("Chapter_01.mp3"))
         capture("uncached-source-$suffix")
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        // On the CI API 35 emulator sheet windows never take input focus, so an injected Back can't reach them; Advanced's own back
+        // leaves it, and leaving and reopening the book closes the chooser.
+        compose.onNodeWithTag("advanced-sources").performScrollToIndex(0)
+        compose.onNodeWithTag("advanced-back").performClick()
         compose.onNodeWithTag("recording-chooser").assertExists()
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.runOnIdle { vm.back() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle { vm.selection.value = SelectionState(book()) }
         compose.runOnIdle { vm.chooseFormat(book(), "M4B"); vm.preparation.value = Preparation(7, false, .35f, "Preparing in TorBox", 1_000_000, 3600, 2); vm.selection.value = SelectionState(book().copy(cacheState = "uncached", cachedFormats = emptyList())) }
         compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("preparation"))
         compose.onNodeWithText("35%", substring = true).performScrollTo().assertIsDisplayed()

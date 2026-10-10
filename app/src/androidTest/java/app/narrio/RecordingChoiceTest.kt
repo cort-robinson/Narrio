@@ -113,7 +113,9 @@ class RecordingChoiceTest {
         compose.onNodeWithTag("recording-summary").assertTextEquals("Kim Doe · Free public recording")
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:${ray.id}").performClick()
-        compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("switch-notice") and hasText("picks up where you left it", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        // Ray has a place of its own, so the start choice shows, resuming there unless the listener picks otherwise.
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near"))
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Resume where you stopped in this one", substring = true) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
         compose.onNodeWithTag("chooser-listen").performClick()
         compose.waitUntil(15_000) { playing(ray.sources.single()) }
@@ -187,15 +189,11 @@ class RecordingChoiceTest {
 
         // The same recording with nothing ready offers Get it ready on the page.
         val uncached = release.copy(cacheState = "uncached", cachedFormats = emptyList())
-        compose.runOnIdle { vm.selection.value = SelectionState(uncached) }
         runBlocking { graph.library.save(uncached) }
-        InstrumentationRegistryBack.press()
+        // On the CI API 35 emulator sheet windows never take input focus, so an injected Back can't reach them; leaving and reopening the book closes the chooser.
+        compose.runOnIdle { vm.back() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isEmpty() }
+        compose.runOnIdle { vm.selection.value = SelectionState(uncached) }
         compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("listen-action") and hasText("Get it ready")).fetchSemanticsNodes().isNotEmpty() }
     }
-}
-
-/** A real Back key press, which reaches a sheet's own window. */
-private object InstrumentationRegistryBack {
-    fun press() = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
 }

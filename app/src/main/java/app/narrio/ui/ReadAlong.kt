@@ -622,7 +622,10 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
     var sheet by remember { mutableStateOf(false) }
     val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     val ebook = formats?.ebook == true
-    val find = { sheet = true; vm.openEbookSearch(book) }
+    // The ebook search judges editions against the recording and audio playing now.
+    val playing by vm.playback.collectAsStateWithLifecycle()
+    val narration = playing.source?.takeIf { playing.book?.id == book.id }?.let { NarrationContext(playing.book ?: book, it) }
+    val find = { sheet = true; vm.openEbookSearch(book, narration) }
     if (dense) IconButton(if (ebook) vm::readAlong else find, modifier.testTag("read-along")) {
         Icon(if (ebook) Icons.AutoMirrored.Rounded.MenuBook else Icons.Rounded.Search, if (ebook) "Read along" else "Find the ebook to read along", tint = MaterialTheme.colorScheme.primary)
     } else Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -646,7 +649,7 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
         sourceSettings = { sheet = false; vm.openSourceSettings() }, connectTorBox = vm::requestTorBoxConnect,
         searchWith = { vm.searchEbooksWith(book, it) }, linksFor = { vm.graph.addons.ebookSearchLinks(book, it) },
-    ), dismiss = { sheet = false }, searchLinks = searchLinks)
+    ), dismiss = { sheet = false }, searchLinks = searchLinks, narration = narration)
 }
 
 @OptIn(ExperimentalLayoutApi::class)

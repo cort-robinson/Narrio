@@ -310,7 +310,7 @@ fun LazyListScope.advancedSourcingSections(vm: NarrioViewModel, context: Advance
 
 /**
  * The recording chooser's `startPositionChoice`: switching away from a recording with a saved place offers "Start near
- * X (≈)" or "Start from the beginning". Without a place to carry over, the chooser's own notice shows.
+ * X (≈)", this recording's own place, or "Start from the beginning". With only the beginning, the chooser's own notice shows.
  */
 @Composable
 fun AdvancedStartChoice(vm: NarrioViewModel, book: Audiobook, switch: RecordingSwitch) {
@@ -319,7 +319,8 @@ fun AdvancedStartChoice(vm: NarrioViewModel, book: Audiobook, switch: RecordingS
     val source = target.sources.firstOrNull { it.format == defaultFormat(target, vm.savedFormat(book.id)) } ?: target.sources.firstOrNull()
     var start by remember(target.id, target.recordingId) { mutableStateOf<SwitchStart?>(null) }
     LaunchedEffect(target.id, target.recordingId, source?.id) {
-        val found = source?.let { runCatching { advanced.switchStart(target, it) }.getOrNull() }
+        // With neither a near place nor one of its own, the beginning is the only start: the notice says so.
+        val found = source?.let { runCatching { advanced.switchStart(target, it) }.getOrNull() }?.takeIf { it.near != null || it.resume != null }
         start = found
         // Each switch starts from its own default; until the options are known, playback's usual rule applies.
         advanced.startChoice.value = found?.default

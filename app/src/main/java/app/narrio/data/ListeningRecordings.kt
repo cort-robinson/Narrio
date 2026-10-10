@@ -16,7 +16,11 @@ import kotlinx.serialization.encodeToString
 
 /** The recording a book's played audio belongs to, and every audio source each of its recordings has played. */
 @Serializable
-data class PlayedRecordings(val current: Audiobook, val sources: Map<String, List<String>> = emptyMap())
+data class PlayedRecordings(
+    val current: Audiobook, val sources: Map<String, List<String>> = emptyMap(),
+    /** Recordings listened to before [current], by the key their [sources] are kept under, so their audio keeps its identity. */
+    val earlier: Map<String, Audiobook> = emptyMap(),
+)
 
 /** The ids that identify one recording, whichever id it carries: its provider id and its release hash. */
 fun recordingKeys(recording: Audiobook): Set<String> =
@@ -65,7 +69,17 @@ class ListeningRecordings(preferences: SharedPreferences) {
         val previous = values[recording.id]
         val key = recordingKeys(recording).first()
         val sources = previous?.sources.orEmpty().let { it + (key to (listOf(sourceId) + it[key].orEmpty()).distinct().take(8)) }
-        values.put(recording.id, PlayedRecordings(compact(recording), sources))
+        // The recording this one replaces is kept by name; audio described only as played has none to keep.
+        val replaced = previous?.current?.takeIf { key !in recordingKeys(it) && !it.recordingId.startsWith("played:") }
+        val earlier = (previous?.earlier.orEmpty() + listOfNotNull(replaced).associateBy { recordingKeys(it).first() }).minus(key)
+        values.put(recording.id, PlayedRecordings(compact(recording), sources, earlier.entries.toList().takeLast(8).associate { it.toPair() }))
+    }
+
+    /** The recording that played [sourceId] for [bookId]: the current one or an earlier one, when it's remembered. */
+    fun recordingOf(bookId: String, sourceId: String): Audiobook? {
+        val played = values[bookId] ?: return null
+        val key = played.sources.entries.firstOrNull { sourceId in it.value }?.key ?: return null
+        return played.current.takeIf { key in recordingKeys(it) } ?: played.earlier[key]
     }
 
     /** Remembers [recording] as the book's without new audio, for shelves saved before this was kept. */
@@ -83,7 +97,7 @@ class ListeningRecordings(preferences: SharedPreferences) {
         values.remove(fromId)
         val target = values[bookId]
         values.put(bookId, PlayedRecordings(target?.current ?: old.current.copy(id = bookId, recordingId = old.current.recordingId.ifBlank { fromId }),
-            old.sources + target?.sources.orEmpty()))
+            old.sources + target?.sources.orEmpty(), old.earlier + target?.earlier.orEmpty()))
     }
 
     fun remove(bookId: String) = values.remove(bookId)

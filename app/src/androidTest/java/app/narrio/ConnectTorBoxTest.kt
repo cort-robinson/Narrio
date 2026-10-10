@@ -1,13 +1,11 @@
 package app.narrio
 
-import android.view.KeyEvent
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.data.*
 import app.narrio.domain.*
 import app.narrio.ui.*
@@ -106,8 +104,9 @@ class ConnectTorBoxTest {
         compose.onNodeWithTag("torbox-key").performTextInput("2")
         compose.onNodeWithTag("torbox-error", useUnmergedTree = true).assertDoesNotExist()
 
-        // Back closes the sheet (after the keyboard, when one is open) and leaves the book as it was.
-        repeat(2) { if (fixture.torBox.value.prompt) { InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); compose.waitForIdle() } }
+        // Closing the sheet leaves the book as it was. On the CI API 35 emulator sheet windows never take input focus, so an injected Back can't reach them; 
+        // the sheet's dismissal (what Back and a scrim tap call) closes it here.
+        compose.runOnIdle { fixture.dismissTorBoxConnect() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("connect-torbox-sheet").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertFalse(fixture.torBox.value.prompt); assertEquals(book.id, fixture.selection.value.book?.id) }
         compose.onNodeWithTag("listen-slot").assertIsDisplayed()

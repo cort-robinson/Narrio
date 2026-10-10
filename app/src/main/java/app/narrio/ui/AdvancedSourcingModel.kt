@@ -284,10 +284,10 @@ class AdvancedSourcing(private val vm: NarrioViewModel) {
      * Where another recording should start when the listener switches to it, following [startChoice]: near their place
      * in the recording they were listening to (approximate, mapped onto the layout that actually plays once TorBox has
      * prepared it, and giving way to an exact place from a synced ebook), or its beginning. Null keeps playback's usual
-     * rule, which resumes the recording's own place.
+     * rule, which resumes the recording's own place. [choice] is read when Listen is tapped, before the chooser closes.
      */
-    suspend fun switchPlace(book: Audiobook): ((AudioSource) -> StartAt?)? {
-        val choice = startChoice.value ?: return null
+    suspend fun switchPlace(book: Audiobook, choice: StartChoice? = startChoice.value): ((AudioSource) -> StartAt?)? {
+        if (choice == null) return null
         if (choice == StartChoice.RESUME) return null
         val entry = graph.library.find(book.id) ?: return null
         val old = entry.source() ?: return null

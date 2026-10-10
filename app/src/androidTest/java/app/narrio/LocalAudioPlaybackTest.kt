@@ -93,7 +93,8 @@ class LocalAudioPlaybackTest {
             compose.waitUntil(5_000) { state.book?.id == book.id }
             assertEquals(listOf(last.id, first.id), state.source?.parts?.map { it.id })
             assertEquals(first.id, state.part?.id)
-            assertEquals(7_000L, state.positionMs)
+            // The player can settle a few frames past the saved place.
+            assertTrue("restored near 0:07, was ${state.positionMs}", state.positionMs in 7_000L..7_500L)
 
             // A file that's gone stops Listen with a way forward instead of a playback error later.
             main { service.forget() }

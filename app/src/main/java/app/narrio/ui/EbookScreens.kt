@@ -116,46 +116,6 @@ fun SharedPlaceCaption(formats: BookFormats, modifier: Modifier = Modifier) {
     }
 }
 
-/** The active edition, its match with the narration when there's a recording, and the way to change it. */
-@Composable
-fun EditionSummary(book: Audiobook, formats: BookFormats, chooseEdition: () -> Unit, modifier: Modifier = Modifier) {
-    val edition = formats.activeEdition ?: return
-    val pairing = pairingCopy(formats)
-    Column(modifier.fillMaxWidth().testTag("edition-summary")) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-            Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.padding(top = 2.dp).size(20.dp), tint = MaterialTheme.colorScheme.secondary)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(listOf("Ebook", edition.format, edition.attribution).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
-                // An edition named differently from the book (a translation, a collected volume) says so.
-                if (edition.title.isNotBlank() && !edition.title.equals(book.title, ignoreCase = true))
-                    Text(edition.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        pairing?.let { copy ->
-            Spacer(Modifier.height(12.dp))
-            PairingLine(formats.pairing, copy)
-        }
-        TextButton(chooseEdition, Modifier.padding(start = 20.dp)) { Text(if (formats.editions.size > 1) "Choose another edition (${formats.editions.size} on this phone)" else "Choose another edition") }
-    }
-}
-
-@Composable
-fun PairingLine(status: PairingStatus, copy: PairingCopy, modifier: Modifier = Modifier) {
-    val (icon, tint) = when (status) {
-        PairingStatus.MATCHES -> Icons.Rounded.CheckCircle to MaterialTheme.colorScheme.secondary
-        PairingStatus.PARTIAL -> Icons.Rounded.Rule to MaterialTheme.colorScheme.primary
-        PairingStatus.MISMATCH -> Icons.Rounded.ErrorOutline to MaterialTheme.colorScheme.error
-        PairingStatus.UNCHECKED -> Icons.Rounded.Schedule to MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    Row(modifier.semantics(mergeDescendants = true) { }, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Icon(icon, null, Modifier.padding(top = 1.dp).size(20.dp), tint = tint)
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(copy.title, style = MaterialTheme.typography.labelLarge)
-            Text(copy.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
 /** What the ebook sheet can do; book details and the Listening room bind these to the view model. */
 class EbookActions(
     /** Adds a found ebook; the sheet closes, revealing Read. */

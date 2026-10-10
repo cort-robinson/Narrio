@@ -29,7 +29,8 @@ fun playedAudio(book: Audiobook, source: AudioSource): Audiobook =
 /**
  * The recording [entry]'s played audio belongs to, or null when nothing has played. [listening] is the remembered
  * one. Older shelves remember only the row's book, which counts unless it's a recording being got ready (that
- * replaces the row's book, but not the audio that played); then the played audio is described as it is.
+ * replaces the row's book, but not the audio that played) without the played audio among its own sources; then the
+ * played audio is described as it is.
  */
 fun playedRecording(entry: ShelfEntry, listening: Audiobook?, pending: PreparationRecord?): Audiobook? {
     val played = entry.source() ?: return null
@@ -39,7 +40,9 @@ fun playedRecording(entry: ShelfEntry, listening: Audiobook?, pending: Preparati
     val rowIsPending = pending?.let { sameRecording(saved, it.recording) } ?: (entry.state in PREPARING_STATES)
     // A row whose prepared torrent is the one that played belongs to that recording after all.
     val playedPrepared = entry.preparationId > 0 && played.parts.any { it.torrentId == entry.preparationId }
-    if (saved.provider != "catalog" && (!rowIsPending || playedPrepared)) return saved
+    // So does a row whose own recording lists the played audio, as older shelves without a record keep it.
+    val playedOwn = saved.sources.any { it.id == played.id }
+    if (saved.provider != "catalog" && (!rowIsPending || playedPrepared || playedOwn)) return saved
     return playedAudio(saved, played)
 }
 

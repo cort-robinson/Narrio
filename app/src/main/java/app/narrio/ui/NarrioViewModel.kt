@@ -469,15 +469,16 @@ class NarrioViewModel @JvmOverloads constructor(
      * Listens to [recording] for the open book. Its own last-played audio resumes, from its phone copy when that's
      * downloaded; otherwise a phone copy plays, then a ready stream in the remembered, M4B, or first ready format.
      * An explicit [format] plays only in that format, never another, and is remembered only once it plays. Every
-     * recording keeps its own place, so switching never loses one.
+     * recording keeps its own place, so switching never loses one. [start] is the chooser's start choice, captured as
+     * Listen is tapped: closing the chooser clears it before this work gets to it.
      */
-    fun listenTo(recording: Audiobook, format: String? = null, delivery: String? = null) = viewModelScope.launch {
+    fun listenTo(recording: Audiobook, format: String? = null, delivery: String? = null, start: StartChoice? = advanced.startChoice.value) = viewModelScope.launch {
         val book = parentBook() ?: return@launch
         val entry = graph.library.find(book.id)
         val mine = currentFor(book, entry)?.takeIf { sameRecording(it.recording, recording) }
         val described = adopt(recording, book)
         // Another recording than the listener's own starts where they chose: near their place, its own, or the beginning.
-        val place = if (mine == null) advanced.switchPlace(book) else null
+        val place = if (mine == null) advanced.switchPlace(book, start) else null
         fun play(target: Audiobook, source: AudioSource, how: String) { if (format != null) chooseFormat(described, format); start(target, source, how, place) }
         mine?.offline?.takeIf { format == null || it.source.format == format }?.let { play(described, it.source, it.source.delivery); return@launch }
         val earlier = mine?.source ?: earlierPlay(book.id, recording)?.let { runCatching { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }.getOrNull() }
@@ -855,12 +856,13 @@ class NarrioViewModel @JvmOverloads constructor(
             return source
         }
         // Usenet and web downloads from the TorBox library are listed only once they're ready.
+        // Without TorBox, its sheet opens over the current screen; nothing plays or downloads until it's connected.
         if (source.delivery != "torbox" && source.delivery.startsWith("torbox")) {
-            if (!connected.value) throw ProviderException("Connect TorBox in Settings to stream this source.")
+            if (!connected.value) { requestTorBoxConnect(); return null }
             return source
         }
         if (delivery != "torbox") return source
-        if (!connected.value) throw ProviderException("Connect TorBox in Settings to stream this source.")
+        if (!connected.value) { requestTorBoxConnect(); return null }
         preferredFormat.value = source.format
         if (source.torrentId != null && source.torrentId > 0) {
             val prep = graph.torbox.status(source.torrentId)
@@ -879,7 +881,12 @@ class NarrioViewModel @JvmOverloads constructor(
         // A recording that streams right away leaves another recording's preparation as it was.
         val replaces = pendingHere || !prep.ready || saved?.state !in PreparationStates.TRACKED
         if (selection.value.book?.id == book.id && replaces) preparation.value = prep
-        if (replaces) graph.preparations.begin(book, prep, source.format) else graph.library.save(book)
+        when {
+            // This recording's own preparation finished: it settles as ready, never starts over as getting ready.
+            pendingHere && prep.ready -> if (saved!!.state != PreparationStates.READY) updatePreparation(book)
+            replaces -> graph.preparations.begin(book, prep, source.format)
+            else -> graph.library.save(book)
+        }
         if (!prep.ready) { notificationsWanted.tryEmit(Unit); messages.emit("Getting ready in TorBox. Choose a recording that's ready to listen now; your shelf shows its progress."); return null }
         return graph.torbox.sources(book, prep.torrentId).firstOrNull { it.format == source.format }
             ?: throw ProviderException("The selected format is missing from this TorBox source. Choose another format.")
@@ -955,7 +962,10 @@ class NarrioViewModel @JvmOverloads constructor(
 
     /** Checks TorBox through the same path the background checks use, so both keep one shelf state. Null when nothing is being prepared. */
     private suspend fun updatePreparation(book: Audiobook): PreparationUpdate? {
-        val update = graph.preparations.check(book.id, book) ?: return null
+        // The recording being got ready, never the page's catalog book; a row without a record names it itself.
+        val entry = graph.library.find(book.id)
+        val shown = entry?.let { preparingRecording(it, graph.preparations.current(book.id)) } ?: book.takeIf { it.provider != "catalog" }
+        val update = graph.preparations.check(book.id, shown) ?: return null
         if (update.book != null && selection.value.book?.id == book.id) selection.value = SelectionState(update.book)
         if (selection.value.book?.id == book.id) preparation.value = update.preparation
         return update
@@ -976,11 +986,6 @@ class NarrioViewModel @JvmOverloads constructor(
         val source = ready.sources.firstOrNull { it.format == wanted } ?: ready.sources.firstOrNull { it.format == "M4B" } ?: ready.sources.first()
         start(ready, source, source.delivery)
     }
-
-    /** After a preparation fails, looks for the book's other recordings, as opening it from search does. */
-    fun findAnotherRecording(book: Audiobook) = open(Audiobook(book.id, book.title, book.author, "Narrator depends on source", "Language depends on source",
-        book.description, coverUrl = book.coverUrl, provider = "catalog", detailsLoaded = true, metadataSource = book.metadataSource,
-        metadataUrl = book.metadataUrl, metadataUpdatedAtMs = book.metadataUpdatedAtMs))
 
     /** Opens the Connect TorBox sheet over the current screen; the open book stays selected. */
     fun requestTorBoxConnect() = torBoxConnector.request()
@@ -1067,8 +1072,13 @@ class NarrioViewModel @JvmOverloads constructor(
             val history = graph.library.position(bookId, audio.sourceId)
             val source = history?.sourceJson?.let { NarrioJson.decodeFromString<AudioSource>(it) } ?: entry?.source()
             if (entry == null || source?.id != audio.sourceId) { messages.emit("This bookmark belongs to a different audio source. Resume that source first."); return@launch }
-            // The bookmark's audio is the played recording's, or else an earlier one's, described as it is.
-            val recording = graph.recordingFor(entry)?.takeIf { entry.source()?.id == source.id } ?: playedAudio(entry.book(), source)
+            // The bookmark's audio is the played recording's, or else an earlier one's: by name when it's remembered
+            // (or its phone copy says), otherwise described as it is.
+            val saved = entry.book()
+            val recording = graph.recordingFor(entry)?.takeIf { entry.source()?.id == source.id }
+                ?: (graph.listeningRecordings.recordingOf(bookId, source.id) ?: downloads.value.firstOrNull { it.book.id == bookId && it.source.id == source.id }?.book)
+                    ?.copy(id = bookId, title = saved.title, author = saved.author, coverUrl = saved.coverUrl, description = saved.description, sources = listOf(source))
+                ?: playedAudio(saved, source)
             // The layout as the listener chose its files now (reading the full release only for files it lacks).
             val playable = try { graph.releaseFiles.apply(recording, source) }
                 catch (cancelled: CancellationException) { throw cancelled } catch (error: Exception) { messages.emit(friendly(error)); return@launch }

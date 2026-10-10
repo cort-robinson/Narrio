@@ -360,9 +360,12 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { assertEquals("lookup-fixture", fixture.sourceSearch.value.streamed!!.best!!.recording.id) }
         compose.onNodeWithTag("recording:${mine.id}").assertIsSelected().assertTextContains("Listening now · 25%")
         compose.onNodeWithTag("chooser-listen").assertTextContains("Resume · 7 h 30 m left")
-        // Picking another says its place starts over and the old one stays saved.
+        // Picking another offers to start near the listener's place (2:30:00 of 10 h, approximate) or from the beginning.
         compose.onNodeWithTag("recording:lookup-fixture").performClick()
-        compose.onNodeWithTag("switch-notice").assertTextEquals("This one starts from the beginning. Your place in Ray Porter's recording stays saved.")
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near"))
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Start near 2:30:00 (≈)") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Start from the beginning").assertExists()
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
         compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording").assertIsEnabled()
         capture("chooser-switch-night")
         compose.runOnIdle { fixture.updateAppearance(appearance.copy(mode = ThemeMode.DAY)) }
@@ -405,6 +408,8 @@ class BookDiscoveryExperienceTest {
             compose.onNodeWithTag("listen-action").performScrollTo().performClick()
             compose.waitUntil(15_000) { fixture.graph.playback.state.value.let { it.source?.id == source.id && it.playing } }
             assertTrue(fixture.graph.offline.complete(source))
+            // The recording is remembered just after playback starts.
+            compose.waitUntil(5_000) { fixture.graph.listeningRecordings[parent.id] != null }
             assertTrue(sameRecording(fixture.graph.listeningRecordings[parent.id]!!, mine))
         } finally {
             runBlocking { withContext(Dispatchers.Main) { fixture.graph.playback.service?.forget() } }
