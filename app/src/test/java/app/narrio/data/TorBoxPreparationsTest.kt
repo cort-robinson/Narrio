@@ -97,7 +97,7 @@ class TorBoxPreparationsTest {
         val failed = at(missing, 15)
         assertTrue(failed.failed)
         assertEquals(PreparationPolicy.FAILED_STATE, failed.state)
-        assertEquals("This release is no longer in your TorBox account.", failed.problem)
+        assertEquals("This recording is no longer in your TorBox account.", failed.problem)
     }
 
     @Test fun aQueuedRequestAndAReleaseWithoutPeersGetADay() {

@@ -212,7 +212,7 @@ class NarrioViewModel @JvmOverloads constructor(
         viewModelScope.launch {
             // Background checks notify only while Narrio is away; on screen, say it here.
             graph.preparations.changes.collect { change ->
-                if (graph.playback.visible) messages.emit(if (change.ready) "${change.book.title} is ready to listen." else "${change.book.title} couldn't be prepared. Try another recording.")
+                if (graph.playback.visible) messages.emit(if (change.ready) "${change.book.title} is ready to listen." else "${change.book.title} couldn't get ready. Try another recording.")
             }
         }
         viewModelScope.launch {
@@ -653,7 +653,7 @@ class NarrioViewModel @JvmOverloads constructor(
         }
         if (selection.value.book?.id == book.id) preparation.value = prep
         graph.preparations.begin(book, prep, source.format)
-        if (!prep.ready) { notificationsWanted.tryEmit(Unit); messages.emit("This source isn't ready yet. Choose a cached release to listen now; its status is saved on your shelf."); return null }
+        if (!prep.ready) { notificationsWanted.tryEmit(Unit); messages.emit("Getting ready in TorBox. Choose a recording that's ready to listen now; your shelf shows its progress."); return null }
         return graph.torbox.sources(book, prep.torrentId).firstOrNull { it.format == source.format }
             ?: throw ProviderException("The selected format is missing from this TorBox source. Choose another format.")
     }
@@ -668,7 +668,7 @@ class NarrioViewModel @JvmOverloads constructor(
             if (!prep.ready) notificationsWanted.tryEmit(Unit)
             // A preparation that's already finished is announced by the check itself.
             if (updatePreparation(book)?.change == null)
-                messages.emit(if (prep.ready) "Ready in TorBox. Choose your audio format to listen." else "Preparation stays in TorBox. It doesn't download audio to your phone. Narrio tells you when it's ready.")
+                messages.emit(if (prep.ready) "Ready in TorBox. Choose your audio format to listen." else "Getting ready in TorBox. Nothing downloads to your phone; Narrio tells you when it's ready.")
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { messages.emit(friendly(error)) }
         finally { busy.value = false }
@@ -720,7 +720,7 @@ class NarrioViewModel @JvmOverloads constructor(
         if (!request.listen || ready == null) {
             open(record?.ready ?: entry.book())
             // An older notification's Listen: a newer preparation, or listening, has replaced the one it announced.
-            if (request.listen) messages.emit("This book's TorBox preparation has changed since that notification. Check its page before listening.")
+            if (request.listen) messages.emit("This book has changed since that notification. Check its page before listening.")
             return@launch
         }
         val wanted = record.format.ifBlank { savedFormat(request.bookId) }
