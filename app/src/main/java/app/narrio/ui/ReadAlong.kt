@@ -644,7 +644,7 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
         searchAgain = { vm.findEbooks(book, force = true) },
         chooseFile = { vm.beginEbookImport(book); file.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
-        sourceSettings = { sheet = false; vm.navigate(2) }, connectTorBox = { sheet = false; vm.navigate(2) },
+        sourceSettings = { sheet = false; vm.openSourceSettings() }, connectTorBox = vm::requestTorBoxConnect,
     ), dismiss = { sheet = false }, searchLinks = searchLinks)
 }
 

@@ -108,7 +108,7 @@ fun ListeningOptionsSheet(vm: NarrioViewModel, book: Audiobook, search: SourceSe
                 item {
                     Column(Modifier.fillMaxWidth().padding(top = 8.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         when {
-                            needsTorBox && !connected -> Button({ close { vm.navigate(2) } }, Modifier.fillMaxWidth()) { Text("Connect TorBox to listen") }
+                            needsTorBox && !connected -> Button({ close { vm.requestTorBoxConnect() } }, Modifier.fillMaxWidth()) { Text("Connect TorBox to listen") }
                             else -> Button({ close { vm.listenToChoice(format) } }, Modifier.fillMaxWidth().testTag("listen-choice"), enabled = ready && !busy) {
                                 Icon(Icons.Rounded.PlayArrow, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Listen")
                             }

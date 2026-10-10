@@ -30,6 +30,7 @@ class AppearanceExperienceTest {
 
     @Before fun openAppearance() {
         compose.runOnIdle { original = vm.appearance.value; vm.updateAppearance(AppearanceSettings()); vm.navigate(2) }
+        compose.onNodeWithTag("settings-options").performScrollToNode(hasText("Appearance"))
         compose.onNodeWithText("Appearance").performScrollTo().performClick()
     }
 

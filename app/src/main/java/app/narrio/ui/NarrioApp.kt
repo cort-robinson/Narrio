@@ -178,6 +178,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         }
         }
         ebookWebsite.request?.let { request -> EbookWebsiteBrowser(request, ebookWebsite, vm::closeEbookWebsite) { vm.downloadWebsiteEbook(request, it) } }
+        ConnectTorBoxSheet(vm)
     }
 }
 
