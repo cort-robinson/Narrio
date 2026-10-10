@@ -189,9 +189,9 @@ class RecordingChoiceTest {
 
         // The same recording with nothing ready offers Get it ready on the page.
         val uncached = release.copy(cacheState = "uncached", cachedFormats = emptyList())
-        compose.runOnIdle { vm.selection.value = SelectionState(uncached) }
         runBlocking { graph.library.save(uncached) }
-        compose.pressBackInSheet("recording-chooser")
+        // On the CI API 35 emulator sheet windows never take input focus, so an injected Back can't reach them; leaving and reopening the book closes the chooser.
+        compose.runOnIdle { vm.back(); vm.selection.value = SelectionState(uncached) }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isEmpty() }
         compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("listen-action") and hasText("Get it ready")).fetchSemanticsNodes().isNotEmpty() }
     }

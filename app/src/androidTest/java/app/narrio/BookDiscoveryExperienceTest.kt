@@ -408,6 +408,8 @@ class BookDiscoveryExperienceTest {
             compose.onNodeWithTag("listen-action").performScrollTo().performClick()
             compose.waitUntil(15_000) { fixture.graph.playback.state.value.let { it.source?.id == source.id && it.playing } }
             assertTrue(fixture.graph.offline.complete(source))
+            // The recording is remembered just after playback starts.
+            compose.waitUntil(5_000) { fixture.graph.listeningRecordings[parent.id] != null }
             assertTrue(sameRecording(fixture.graph.listeningRecordings[parent.id]!!, mine))
         } finally {
             runBlocking { withContext(Dispatchers.Main) { fixture.graph.playback.service?.forget() } }
