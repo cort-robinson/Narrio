@@ -28,7 +28,7 @@ class AppGraph(application: Application) {
         }
     }, object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE shelf ADD COLUMN pendingFormat TEXT NOT NULL DEFAULT ''") }
-    }, LibraryMigration3To4, LibraryMigration4To5).build()
+    }, LibraryMigration3To4, LibraryMigration4To5, LibraryMigration5To6).build()
     val library = database.library()
     val credentials = CredentialStore(application)
     val catalog = ArchiveDiscovery(http)

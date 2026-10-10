@@ -47,7 +47,8 @@ class ReaderSession(
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
     private val audioFor: suspend (ContentCursor) -> app.narrio.domain.MappedAudio? = { null },
-    private val onCommitted: (ContentCursor) -> Unit = {},
+    /** A committed place, with the page it was read on when known: the page that qualified, not whatever shows now. */
+    private val onCommitted: (ContentCursor, VisibleRange?) -> Unit = { _, _ -> },
 ) {
     val book: ReaderBook get() = controller.book
     private val activity = ReadingActivity<ContentCursor>()
@@ -55,6 +56,7 @@ class ReaderSession(
     private var observedSequence = 0L
     private var tickJob: Job? = null
     private var lastMove: Pair<ContentCursor, Long>? = null
+    private var movedPage: VisibleRange? = null
     var navigationVersion: Long = 0
         private set
 
@@ -80,6 +82,7 @@ class ReaderSession(
         tickJob?.cancel()
         observedSequence = positions.current(book.bookId)?.sequence ?: 0L
         lastMove = null
+        movedPage = null
         cursor?.let(activity::restored)
         controller.restore(cursor)
     }
@@ -93,6 +96,7 @@ class ReaderSession(
         val now = clock()
         val previous = lastMove
         lastMove = event.cursor to now
+        movedPage = event.page
         val layout = book.layout.value
         if (!event.jump && previous != null && layout != null) {
             val distance = layout.distance(previous.first.resource, previous.first.offset, event.cursor.resource, event.cursor.offset)
@@ -120,6 +124,8 @@ class ReaderSession(
 
     private fun commit(cursor: ContentCursor): Job = run {
         val expected = observedSequence
+        // Taken now: by the time the write lands the reader may have turned on, and that page hasn't qualified yet.
+        val page = listOfNotNull(movedPage, controller.visible.value).firstOrNull { it.first == cursor }
         scope.launch {
             val withLocator = cursor.copy(
                 progression = book.layout.value?.progression(cursor.resource, cursor.offset) ?: cursor.progression,
@@ -128,7 +134,7 @@ class ReaderSession(
             val mapped = audioFor(withLocator)
             val committed = positions.commit(PositionUpdate(book.bookId, PositionOrigin.READING, text = withLocator, audio = mapped?.audio,
                 textConfidence = MappingConfidence.EXACT, audioConfidence = mapped?.confidence ?: MappingConfidence.UNMAPPED, basedOnSequence = expected))
-            if (committed != null) onCommitted(withLocator)
+            if (committed != null) onCommitted(withLocator, page)
             // A stale write means listening moved the position meanwhile; the next reading activity builds on that.
             observedSequence = committed?.sequence ?: positions.current(book.bookId)?.sequence ?: observedSequence
         }

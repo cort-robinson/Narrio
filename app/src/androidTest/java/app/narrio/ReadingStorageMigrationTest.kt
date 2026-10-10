@@ -79,7 +79,7 @@ class ReadingStorageMigrationTest {
             old.execSQL("INSERT INTO text_bindings VALUES (?, ?, ?, ?)", arrayOf(book.id, source.id, "part", NarrioJson.encodeToString(binding)))
             old.version = 4
         }
-        val db = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration4To5).build()
+        val db = Room.databaseBuilder(context, LibraryDatabase::class.java, name).addMigrations(LibraryMigration4To5, LibraryMigration5To6).build()
         try {
             val dao = db.library()
             val saved = dao.find(book.id)!!

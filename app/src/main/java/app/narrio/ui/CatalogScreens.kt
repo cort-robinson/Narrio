@@ -15,9 +15,11 @@ import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -42,6 +44,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val playing by vm.playback.collectAsStateWithLifecycle()
     val connected by vm.connected.collectAsStateWithLifecycle()
     val torBoxNudge = rememberTorBoxNudge(vm.graph.preferences)
+    val recent by vm.recentSearches.collectAsStateWithLifecycle()
+    var searchFocused by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val browse = query.isBlank() && category == "All"
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -52,7 +56,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
         }
         item(key = "search") {
-            OutlinedTextField(query, onValueChange = { vm.search(it) }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+            OutlinedTextField(query, onValueChange = { vm.search(it) }, modifier = Modifier.fillMaxWidth().onFocusChanged { searchFocused = it.isFocused }.testTag("discover-search"), singleLine = true,
                 placeholder = { Text("Search books or authors") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
                 // While a typed query loads, the field itself says so; the last results stay readable below it.
                 trailingIcon = { AnimatedVisibility(query.isNotEmpty(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
@@ -62,8 +66,11 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                         }
                     }
                 } },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { vm.rememberSearch(); focus.clearFocus() }),
                 shape = RoundedCornerShape(14.dp))
+            AnimatedVisibility(searchFocused && query.isEmpty() && recent.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                RecentSearchList(recent, { vm.search(it); vm.rememberSearch(it); focus.clearFocus() }, vm::forgetSearch, vm::clearRecentSearches, Modifier.padding(top = 8.dp))
+            }
             AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 LazyRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(AppleBooks.genres.keys.toList()) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
@@ -75,9 +82,9 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {
-            // The current book already lives in the mini-player; offer the thread only when it isn't playing.
-            continueItem(shelf, formats)?.takeIf { (entry, place) -> place.mode == PositionOrigin.READING || entry.bookId != playing.book?.id }?.let { (current, place) -> item(key = "resume") {
-                ResumeCard(current, place, { vm.continueBook(current) }, { vm.open(current.book()) }, Modifier.animateItem(fadeInSpec = androidx.compose.animation.core.tween(240, delayMillis = 160)))
+            // A book already in the mini-player stays off the row unless reading it is its own thread.
+            continueItems(shelf, formats, playing.book?.id).takeIf { it.isNotEmpty() }?.let { going -> item(key = "resume") {
+                ContinueRow(going, vm::continueBook, { vm.open(it.book()) }, Modifier.animateItem(fadeInSpec = androidx.compose.animation.core.tween(240, delayMillis = 160)))
             } }
         }
         if (catalog.loading && catalog.books.isEmpty()) {
@@ -92,7 +99,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading)) }
+            items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading)) }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
@@ -141,41 +148,6 @@ fun BookRow(book: Audiobook, open: () -> Unit, modifier: Modifier = Modifier, re
     }
 }
 
-/** The most recently moved shared place on the shelf, in whichever mode moved it. */
-private fun continueItem(shelf: List<ShelfEntry>, formats: Map<String, BookFormats>): Pair<ShelfEntry, PlaceSummary>? = shelf
-    .mapNotNull { entry -> formats[entry.bookId]?.let { book -> placeSummary(book)?.takeIf { book.available(it.mode) }?.let { place -> Triple(entry, place, book.position!!.updatedAtMs) } } }
-    .maxByOrNull { it.third }?.let { it.first to it.second }
-
-/** A warm return to the last story: where you were, how far along, and one tap to keep reading or listening. */
-@Composable
-private fun ResumeCard(entry: ShelfEntry, place: PlaceSummary, resume: () -> Unit, details: () -> Unit, modifier: Modifier = Modifier) {
-    val book = remember(entry.bookJson) { entry.book() }
-    val reading = place.mode == PositionOrigin.READING
-    val interaction = remember { MutableInteractionSource() }
-    Column(modifier) {
-        Text(if (reading) "Continue reading" else "Continue listening", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(14.dp))
-        Surface(modifier = Modifier.fillMaxWidth().pressScale(interaction, .98f), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, onClick = details, interactionSource = interaction) {
-            Column {
-                Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BookCover(book, Modifier.width(64.dp).height(94.dp), sharedKey = "cover-${book.id}")
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(place.label, Modifier.semantics { contentDescription = spokenPlace(place.label) }, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
-                    }
-                    FilledIconButton(resume, Modifier.size(52.dp)) {
-                        Icon(if (reading) Icons.AutoMirrored.Rounded.MenuBook else Icons.Rounded.PlayArrow, "${if (reading) "Continue reading" else "Resume"} ${book.title}", Modifier.size(if (reading) 24.dp else 28.dp))
-                    }
-                }
-                place.fraction?.let { progress ->
-                    LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth().height(3.dp), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val shelf by vm.shelf.collectAsStateWithLifecycle()
@@ -184,12 +156,23 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val importing by vm.ebookImport.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val playing by vm.playback.collectAsStateWithLifecycle()
+    val sort by vm.shelfSort.collectAsStateWithLifecycle()
+    val typed by vm.shelfQuery.collectAsStateWithLifecycle()
     var remove by remember { mutableStateOf<Audiobook?>(null) }
+    var showFinished by rememberSaveable { mutableStateOf(false) }
+    var searchOpen by rememberSaveable { mutableStateOf(false) }
     val chooser = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     val addEbook: () -> Unit = { vm.beginEbookImport(null); chooser.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) }
-    // Until formats arrive, a saved recording still counts as an audiobook.
-    val formatsFor: (ShelfEntry) -> BookFormats = { entry -> formats[entry.bookId] ?: BookFormats(entry.bookId, audio = entry.sourceJson.isNotBlank()) }
-    val visible = shelf.filter { filter.matches(formatsFor(it)) }
+    val items = rememberShelfItems(shelf, formats)
+    // A large shelf always shows its search; a smaller one opens it from the search button. A leftover query stays visible.
+    val alwaysSearchable = shelf.size > SHELF_SEARCH_AT
+    val searchable = alwaysSearchable || typed.isNotEmpty() || searchOpen
+    val query = if (searchable) typed.trim() else ""
+    val visible = remember(items, filter, query, sort) { sortShelf(items.filter { filter.matches(it.formats) && matchesShelfQuery(it.book, query) }, sort) }
+    val (finished, going) = remember(visible) { visible.partition { it.finished } }
+    // Finished books fold away under their own heading, unless they're all that's left to show.
+    val finishedCollapsible = going.isNotEmpty() && query.isEmpty()
+    val finishedOpen = showFinished || !finishedCollapsible
     LazyColumn(modifier.fillMaxSize().testTag("shelf"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item(key = "heading") {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.Center, itemVerticalAlignment = Alignment.CenterVertically) {
@@ -197,6 +180,10 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 TextButton(addEbook, enabled = !importing.working) { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add ebook") }
             }
             if (shelf.isNotEmpty()) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
+            if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),
+                close = if (alwaysSearchable) null else ({ vm.setShelfQuery(""); searchOpen = false }), focus = searchOpen)
+            if (shelf.isNotEmpty()) ShelfSortBar(visible.size, shelf.size, sort, vm::setShelfSort, Modifier.padding(top = 8.dp),
+                search = if (searchable) null else ({ searchOpen = true }))
         }
         if (importing.working || importing.error != null) item(key = "import") { EbookImportStatus(importing, addEbook, vm::dismissEbookImport, Modifier.animateItem()) }
         if (shelf.isEmpty()) item(key = "empty") {
@@ -206,6 +193,10 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             Button({ vm.navigate(0) }, Modifier.fillMaxWidth()) { Text("Discover books") }
             Spacer(Modifier.height(10.dp))
             OutlinedButton(addEbook, Modifier.fillMaxWidth(), enabled = !importing.working) { Text("Add an EPUB or text file") }
+        } else if (visible.isEmpty() && query.isNotEmpty()) item(key = "empty-search") {
+            EmptyState("No books match", "Nothing on your shelf has “$query” in its title or author${if (filter == ShelfFilter.ALL) "" else " under ${filter.label}"}.", Icons.Rounded.SearchOff)
+            Spacer(Modifier.height(12.dp))
+            TextButton({ vm.setShelfQuery(""); vm.setShelfFilter(ShelfFilter.ALL) }, Modifier.fillMaxWidth()) { Text("Show all ${shelf.size} ${if (shelf.size == 1) "book" else "books"}") }
         } else if (visible.isEmpty()) item(key = "empty-filter") {
             val (title, message) = emptyFilterCopy(filter)
             EmptyState(title, message, if (filter == ShelfFilter.EBOOKS) Icons.AutoMirrored.Rounded.MenuBook else Icons.Rounded.AutoStories)
@@ -213,14 +204,19 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             if (filter == ShelfFilter.EBOOKS) OutlinedButton(addEbook, Modifier.fillMaxWidth(), enabled = !importing.working) { Text("Add an EPUB or text file") }
             TextButton({ vm.setShelfFilter(ShelfFilter.ALL) }, Modifier.fillMaxWidth()) { Text("Show all ${shelf.size} ${if (shelf.size == 1) "book" else "books"}") }
         }
-        items(visible, key = { it.bookId }) { entry ->
-            val book = remember(entry.bookJson) { entry.book() }
+        val row: @Composable LazyItemScope.(ShelfItem) -> Unit = { (entry, book, bookFormats) ->
             Column(Modifier.animateItem()) {
-                ShelfRow(entry, book, formatsFor(entry), playing.book?.id == entry.bookId && playing.playing, { vm.continueBook(entry) }, { vm.open(book) }) { remove = book }
+                ShelfRow(entry, book, bookFormats, playing.book?.id == entry.bookId && playing.playing, { vm.continueBook(entry) }, { vm.open(book) },
+                    { vm.setFinished(entry.bookId, it) }) { remove = book }
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Spacer(Modifier.height(20.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
+        }
+        items(going, key = { it.entry.bookId }, itemContent = row)
+        if (finished.isNotEmpty()) {
+            item(key = "finished-header") { FinishedHeader(finished.size, finishedOpen, finishedCollapsible, { showFinished = !showFinished }, Modifier.animateItem()) }
+            if (finishedOpen) items(finished, key = { it.entry.bookId }, itemContent = row)
         }
     }
     remove?.let { book -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove from your shelf?") },
@@ -229,7 +225,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, resume: () -> Unit, details: () -> Unit, removeBook: () -> Unit) {
+private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
+    val finished = entry.finishedAt > 0
     val mode = formats.leadingMode
     var menu by remember { mutableStateOf(false) }
     BookRow(book, details, recording = formats.audio, extra = { FormatMarks(formats, Modifier.padding(top = 2.dp)) }) {
@@ -249,12 +246,17 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "More for ${book.title}") }
                 DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem(text = { Text(if (finished) "Mark as not finished" else "Mark as finished") },
+                        leadingIcon = { Icon(if (finished) Icons.Rounded.RemoveDone else Icons.Rounded.TaskAlt, null) }, onClick = { menu = false; setFinished(!finished) })
                     DropdownMenuItem(text = { Text("Remove from shelf") }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) }, onClick = { menu = false; removeBook() })
                 }
             }
         }
     }
-    placeSummary(formats)?.let { place ->
+    if (finished) {
+        Spacer(Modifier.height(12.dp))
+        FinishedMark()
+    } else placeSummary(formats)?.let { place ->
         Spacer(Modifier.height(12.dp))
         ShelfProgress(place)
     }
