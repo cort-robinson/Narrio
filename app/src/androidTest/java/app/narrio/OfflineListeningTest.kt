@@ -38,16 +38,14 @@ class OfflineListeningTest {
         val source = book.sources.first { it.format == "M4B" }
         val vm = ViewModelProvider(compose.activity)[NarrioViewModel::class.java]
         compose.runOnIdle { vm.open(book) }
-        compose.onNodeWithText("Listen").performScrollTo().performClick()
-        compose.onNodeWithText("Whole-book audio").performClick()
-        compose.onNodeWithText("Download to phone").performScrollTo().performClick()
+        compose.onNodeWithTag("download-offline").performScrollTo().performClick()
         compose.waitUntil(180_000) { graph.offline.books.value.any { it.book.id == book.id && it.complete } }
         val downloaded = graph.offline.books.value.first { it.book.id == book.id }
         assertTrue(downloaded.bytesDownloaded >= source.parts.sumOf { it.sizeBytes })
         assertEquals(1, downloaded.completedFiles)
         shell("svc wifi disable"); shell("svc data disable")
         try {
-            compose.onNodeWithText("Play offline").performScrollTo().performClick()
+            compose.onNodeWithTag("listen-action").performScrollTo().assertTextContains("Play offline").performClick()
             compose.waitUntil(30_000) { graph.playback.state.value.playing && graph.playback.state.value.durationMs > 120_000 }
             compose.runOnIdle { graph.playback.service!!.seek(300_000) }
             compose.waitUntil(15_000) { graph.playback.state.value.playing && graph.playback.state.value.positionMs >= 300_000 }

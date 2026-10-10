@@ -50,7 +50,7 @@ class BookDiscoveryExperienceTest {
     private val fixtureBooks = mutableSetOf<String>()
     @After fun cleanLookupFixtures() = runBlocking {
         compose.runOnIdle { fixtureStore.clear() }
-        fixtureBooks.forEach { vm.graph.followAlong.remove(it); vm.graph.library.remove(it) }
+        fixtureBooks.forEach { vm.graph.followAlong.remove(it); vm.graph.library.remove(it); vm.graph.listeningRecordings.remove(it) }
     }
 
     /** Runs the real matcher against one public fixture recording; no live audio provider or delivery call. */
@@ -135,12 +135,12 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { fixture.open(migrated) }
         compose.waitUntil(5_000) { fixture.sourceSearch.value.choice != null }
         assertEquals("Returning to the parent book reuses its lookup", 1, calls.get())
-        compose.runOnIdle { fixture.chooseRecording(fixture.sourceSearch.value.choice!!) }
-        compose.waitUntil(5_000) { fixture.selection.value.book?.recordingId == "lookup-fixture" }
-        assertEquals(migrated.id, fixture.selection.value.book?.id)
-        compose.runOnIdle { fixture.back() }
-        compose.waitUntil(5_000) { fixture.selection.value.book?.provider == "catalog" }
+        // The chooser on the same page offers those results without looking again.
+        compose.onNodeWithTag("change-recording").performScrollTo().performClick()
+        compose.onNodeWithTag("recording:lookup-fixture").assertIsDisplayed()
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording")
         assertEquals(1, calls.get())
+        assertEquals(migrated.id, fixture.selection.value.book?.id)
     }
 
     @Test fun catalogLookupStartsWithoutWaitingForReadingLibrary() {
@@ -230,71 +230,67 @@ class BookDiscoveryExperienceTest {
         }
     }
 
-    @Test fun verifiedUncachedSourceIsLabelledAndRequiresExplicitPreparation() {
+    @Test fun verifiedUncachedSourceIsLabelledAndGetsReadyInOneTap() {
         val eragon = book.copy(title = "Eragon", author = "Christopher Paolini")
         val recording = Audiobook("uncached-fixture", "Christopher Paolini - Eragon", "Author not verified", provider = "knaben", detailsLoaded = true,
             torrentHash = "a".repeat(40), magnetUri = "magnet:?xt=urn:btih:${"a".repeat(40)}", cacheState = "uncached", seeders = 10, filesVerified = true,
             sources = listOf(AudioSource("manifest-fixture", "Ordered audio parts", "MP3", listOf(AudioPart("part", "Eragon.mp3", "Eragon")), delivery = "torbox")))
         compose.runOnIdle { vm.connected.value = true; vm.selection.value = SelectionState(eragon)
             vm.sourceSearch.value = snapshot(eragon, listOf(recording), reasons = listOf(BestMatchReason.NEEDS_PREPARING, BestMatchReason.WELL_SEEDED), provider = "torbox-search") }
-        compose.onNodeWithText("Needs preparing in TorBox", substring = true).performScrollTo().assertIsDisplayed()
-        reveal(hasText("Needs TorBox preparation", substring = true)); compose.onNodeWithText("Needs TorBox preparation", substring = true).assertIsDisplayed()
-        // Prepare opens Listening options with this release chosen, where TorBox preparation stays explicit.
-        compose.onNodeWithTag("book-details").performScrollToIndex(0)
-        compose.onNodeWithTag("listen-action").performScrollTo().assertTextContains("Prepare in TorBox").performClick()
-        compose.onNodeWithTag("listening-options").assertIsDisplayed()
-        compose.runOnIdle { assertEquals(recording.id, vm.sourceSearch.value.choice?.id) }
-        // Inject the selected recording state to keep native CI free of live cache/metadata requests.
-        compose.runOnIdle { vm.selection.value = SelectionState(SourceQuality.describe(recording, eragon)) }
-        compose.onNodeWithText("Listen").performScrollTo().performClick()
-        compose.onNodeWithText("Stream now").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Prepare in TorBox").performScrollTo().assertIsEnabled()
+        // The page says it needs time in plain words, and getting it ready is one tap.
+        compose.onNodeWithTag("recording-summary").performScrollTo().assertTextEquals("Narrator not confirmed · Needs time to get ready")
+        compose.onNodeWithTag("listen-action").assertTextContains("Get it ready").assertIsEnabled()
+        compose.onNodeWithText("Getting a recording ready can take", substring = true).assertExists()
+        // The chooser offers the same one tap; Advanced keeps the release's technical details.
+        compose.onNodeWithTag("change-recording").performClick()
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Get it ready").assertIsEnabled()
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
+        compose.onNodeWithTag("advanced-entry").performClick()
+        compose.onNodeWithTag("advanced-sources").performScrollToNode(hasTestTag("release:${recording.id}"))
+        compose.onAllNodesWithText("Needs TorBox preparation", substring = true).onFirst().assertExists()
+        compose.onAllNodesWithText("10 seeders", substring = true).onFirst().assertExists()
     }
 
-    @Test fun bookDetailsChooseOneRecordingAndOfferVersionsOnlyWhenNarrationDiffers() {
+    @Test fun bookDetailsLeadWithOneRecordingAndTheChooserOffersVersions() {
         show(SourceSearchState(book, loading = true, searched = true))
-        compose.onNodeWithText("The book").assertIsDisplayed()
+        // One page: no "The book" or "The recording" title, whichever way it opened.
+        compose.onNodeWithText("The book").assertDoesNotExist()
         // Fallback cover art also draws the author; the final node is the details text below it.
         compose.onAllNodesWithText("Andy Weir").onLast().assertIsDisplayed()
         compose.onNodeWithText("Finding audio…").assertIsNotEnabled()
-        compose.onNodeWithText("Find sources").assertDoesNotExist()
 
         val chosen = recording("fixture-recording", "Project Hail Mary (version 2)", "Fixture Reader")
         compose.runOnIdle { vm.sourceSearch.value = snapshot(book, listOf(chosen)) }
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
-        compose.onNodeWithText("Read by Fixture Reader", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Other choices · 1 found").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Fixture Reader · Free public recording")
+        // About this book comes before the sources, which the page sums up in one row.
         reveal(hasText(book.description)); compose.onNodeWithText(book.description).assertIsDisplayed()
+        reveal(hasTestTag("recordings-row")); compose.onNodeWithTag("recordings-row").assertTextContains("1 found")
+        compose.onNodeWithTag("listening-sources").assertDoesNotExist()
 
-        // Listening options is one sheet: the recording, its format, and the recording's own page for its files.
-        compose.onNodeWithTag("listening-options-action").performScrollTo().performClick()
-        compose.onNodeWithTag("listening-options").assertIsDisplayed()
-        compose.onNodeWithText("Whole-book audio").assertIsDisplayed()
-        compose.onNodeWithTag("listen-choice").assertIsEnabled()
-        compose.onNodeWithText("About this recording").performClick()
-        compose.waitUntil(10_000) { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == chosen.id && !vm.selection.value.loading }
-        compose.onNodeWithText("The recording").assertIsDisplayed()
-        compose.onNodeWithText("Read by Fixture Reader").assertIsDisplayed()
-        compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
-        compose.runOnIdle {
-            assertEquals(chosen.sources, vm.selection.value.book!!.sources)
-            assertEquals(chosen.narrator, vm.selection.value.book!!.narrator)
-            assertEquals(book.title, vm.selection.value.book!!.title)
-            vm.back()
-        }
-        compose.onNodeWithText("The book").assertIsDisplayed()
-        compose.runOnIdle { assertFalse(vm.sourceSearch.value.loading); assertEquals(chosen.id, vm.sourceSearch.value.choice?.id) }
+        // One chooser: distinct versions, the best match tagged, and Listen in one tap.
+        compose.onNodeWithTag("book-details").performScrollToIndex(0)
+        compose.onNodeWithTag("change-recording").performScrollTo().performClick()
+        compose.onNodeWithTag("recording:${chosen.id}").assertIsDisplayed().assertIsSelected()
+        compose.onNodeWithText("Best match").assertIsDisplayed()
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording").assertIsEnabled()
+        // Advanced keeps the per-source sections, the release, its files, and how it plays.
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
+        compose.onNodeWithTag("advanced-entry").performClick()
+        compose.onNodeWithTag("listening-sources").assertExists()
+        compose.onNodeWithTag("advanced-sources").performScrollToNode(hasTestTag("about-recording"))
+        compose.onNodeWithText("book.m4b").assertExists()
+        compose.onNodeWithTag("advanced-sources").performScrollToIndex(0)
+        compose.onNodeWithTag("advanced-back").performClick()
+        compose.onNodeWithTag("recording-chooser").assertIsDisplayed()
 
         val other = recording("fixture-other", "Project Hail Mary (version 3)", "Second Reader")
         compose.runOnIdle { vm.sourceSearch.value = vm.sourceSearch.value.withSnapshot(snapshot(book, listOf(chosen, other)).streamed!!) }
-        compose.onNodeWithTag("book-details").performScrollToIndex(0)
-        compose.onNodeWithTag("listening-options-action").performScrollTo().performClick()
-        compose.onNodeWithTag("listening-options").performScrollToNode(hasText(other.title))
-        compose.onNodeWithText(other.title).performClick()
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("recording:${other.id}"))
+        compose.onNodeWithTag("recording:${other.id}").performClick()
         compose.runOnIdle { assertEquals(other.id, vm.sourceSearch.value.choice?.id) }
-        // The page behind the sheet follows the pick: the card now leads with the listener's choice.
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Your choice").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("best-match-reasons").assertTextContains("Read by Second Reader", substring = true)
+        // The page behind the sheet follows the pick.
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Second Reader · Free public recording").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun uncertainMatchesWaitForTheListenerToChooseFromSearchResults() {
@@ -302,14 +298,16 @@ class BookDiscoveryExperienceTest {
         show(snapshot(book, emptyList(), possible = listOf(possible)))
         compose.onNodeWithText("Listen").assertDoesNotExist()
         compose.onNodeWithText("No sure match").performScrollTo().assertIsDisplayed()
+        // Reviewing opens the chooser with every match, each marked as one that might be this book.
         compose.onNodeWithText("Review possible matches").performScrollTo().performClick()
-        compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("possible:archive"))
-        compose.onNodeWithTag("possible:archive").performClick()
-        compose.onNodeWithTag("release:${possible.id}").performScrollTo().performClick()
-        compose.waitUntil(10_000) { vm.selection.value.book?.id == book.id && vm.selection.value.book?.recordingId == possible.id && !vm.selection.value.loading }
-        compose.onNodeWithText("The recording").assertIsDisplayed()
+        compose.onNodeWithTag("recording:${possible.id}").assertIsDisplayed()
+        compose.onNodeWithText("Might be this book").assertIsDisplayed()
+        compose.onNodeWithTag("recording:${possible.id}").performClick()
+        compose.runOnIdle { assertEquals(possible.id, vm.sourceSearch.value.choice?.id) }
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording")
 
-        // Disconnected and nothing found: the card says so and offers TorBox for the sources that need it.
+        // Disconnected and nothing found: the slot says so and offers TorBox for the sources that need it.
         compose.runOnIdle { vm.back() }
         show(SourceSearchState(book = book).withSnapshot(StreamedSourceSearch(book, listOf(
             SourceGroup("archive", "Internet Archive / LibriVox", SourceGroupStatus.DONE),
@@ -317,5 +315,101 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithText("No free public recording found").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Search again").performScrollTo().assertIsEnabled()
+    }
+
+    /** A book on the shelf with its own recording and a place a quarter of the way in, as listening leaves it. */
+    private fun shelved(fixture: NarrioViewModel): Audiobook = runBlocking {
+        val parent = book.copy(id = "catalog:shelf-fixture")
+        fixtureBooks += parent.id
+        val source = AudioSource("shelf-own-layout", "Whole-book audio", "M4B", listOf(AudioPart("shelf-own-part", "book.m4b", "Whole book", durationMs = 36_000_000,
+            archiveUrl = "https://example.com/own.m4b")))
+        val mine = recording("shelf-own", book.title, "Ray Porter").copy(sources = listOf(source)).forBook(parent)
+        fixture.graph.library.save(mine)
+        fixture.graph.library.progress(parent.id, NarrioJson.encodeToString(source), source.parts.single().id, 9_000_000, System.currentTimeMillis())
+        fixture.graph.listeningRecordings.played(mine, source.id)
+        mine
+    }
+
+    /** A QA screenshot in the app's private files, like the other experience tests. */
+    private fun capture(name: String) {
+        compose.waitForIdle(); Thread.sleep(600)
+        val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+        val folder = File(compose.activity.filesDir, "qa-captures").apply { mkdirs() }
+        File(folder, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+    }
+
+    @Test fun aShelfBookResumesItsOwnRecordingAndCanChangeIt() {
+        val calls = AtomicInteger()
+        val fixture = lookupFixture(calls)
+        val mine = shelved(fixture)
+        val appearance = fixture.appearance.value
+        compose.runOnIdle { fixture.updateAppearance(appearance.copy(mode = ThemeMode.NIGHT)); fixture.open(mine) }
+        try { shelfBookResumesAndChanges(fixture, mine, calls, appearance) } finally { compose.runOnIdle { fixture.updateAppearance(appearance) } }
+    }
+
+    private fun shelfBookResumesAndChanges(fixture: NarrioViewModel, mine: Audiobook, calls: AtomicInteger, appearance: AppearanceSettings) {
+        // Its own recording leads with the time left; nothing is searched until the listener asks.
+        compose.onNodeWithTag("listen-action").assertTextContains("Resume · 7 h 30 m left").assertIsEnabled()
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Free public recording")
+        assertEquals(0, calls.get())
+        capture("shelf-book-resume-night")
+        compose.onNodeWithTag("change-recording").performScrollTo().performClick()
+        compose.waitUntil(5_000) { fixture.sourceSearch.value.streamed?.complete == true }
+        assertEquals(1, calls.get())
+        // Another recording is the search's best match, yet the listener's own leads the chooser and the page.
+        compose.runOnIdle { assertEquals("lookup-fixture", fixture.sourceSearch.value.streamed!!.best!!.recording.id) }
+        compose.onNodeWithTag("recording:${mine.id}").assertIsSelected().assertTextContains("Listening now · 25%")
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Resume · 7 h 30 m left")
+        // Picking another says its place starts over and the old one stays saved.
+        compose.onNodeWithTag("recording:lookup-fixture").performClick()
+        compose.onNodeWithTag("switch-notice").assertTextEquals("This one starts from the beginning. Your place in Ray Porter's recording stays saved.")
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording").assertIsEnabled()
+        capture("chooser-switch-night")
+        compose.runOnIdle { fixture.updateAppearance(appearance.copy(mode = ThemeMode.DAY)) }
+        capture("chooser-switch-day")
+        compose.runOnIdle { assertEquals("lookup-fixture", fixture.sourceSearch.value.choice?.id) }
+        // Picking isn't listening: the page still resumes the listener's recording.
+        compose.onNodeWithTag("listen-action").assertTextContains("Resume · 7 h 30 m left")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Free public recording")
+    }
+
+    @Test fun aDownloadedRecordingPlaysOffline() {
+        val fixture = lookupFixture(AtomicInteger())
+        val wave = File(compose.activity.filesDir, "offline-details-fixture.wav")
+        val size = 8000 * 2 * 5
+        val header = java.nio.ByteBuffer.allocate(44).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + size); put("WAVEfmt ".toByteArray()); putInt(16)
+            putShort(1); putShort(1); putInt(8000); putInt(16000); putShort(2); putShort(16); put("data".toByteArray()); putInt(size)
+        }.array()
+        wave.outputStream().use { it.write(header); it.write(ByteArray(size)) }
+        val parent = book.copy(id = "catalog:offline-fixture")
+        fixtureBooks += parent.id
+        val source = AudioSource("offline-details-layout", "Native fixture audio", "WAV",
+            listOf(AudioPart("offline-details-part", wave.name, "Chapter 1", durationMs = 5_000, archiveUrl = android.net.Uri.fromFile(wave).toString())))
+        val mine = Audiobook("offline-details", book.title, book.author, "Fixture Reader", detailsLoaded = true, sources = listOf(source)).forBook(parent)
+        val wifiOnly = fixture.wifiOnly.value
+        try {
+            compose.runOnIdle { fixture.setWifiOnly(false) }
+            runBlocking { fixture.graph.library.save(mine) }
+            compose.runOnIdle { fixture.open(mine) }
+            compose.onNodeWithTag("listen-action").assertTextContains("Listen")
+            compose.onNodeWithTag("download-offline").performScrollTo().performClick()
+            compose.waitUntil(30_000) { fixture.graph.offline.books.value.any { it.book.id == parent.id && it.complete } }
+            // Listen now plays the phone copy, and the row says it's on this phone.
+            compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("listen-action") and hasText("Play offline")).fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("on-this-phone").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithTag("download-offline").assertDoesNotExist()
+            // Play offline plays that phone copy, as this book's recording.
+            compose.waitUntil(15_000) { fixture.graph.playback.service?.initialized == true }
+            compose.onNodeWithTag("book-details").performScrollToIndex(0)
+            compose.onNodeWithTag("listen-action").performScrollTo().performClick()
+            compose.waitUntil(15_000) { fixture.graph.playback.state.value.let { it.source?.id == source.id && it.playing } }
+            assertTrue(fixture.graph.offline.complete(source))
+            assertTrue(sameRecording(fixture.graph.listeningRecordings[parent.id]!!, mine))
+        } finally {
+            runBlocking { withContext(Dispatchers.Main) { fixture.graph.playback.service?.forget() } }
+            compose.runOnIdle { fixture.graph.offline.remove(source); fixture.setWifiOnly(wifiOnly) }
+            wave.delete()
+        }
     }
 }

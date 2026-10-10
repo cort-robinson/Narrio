@@ -51,6 +51,7 @@ class AppGraph(application: Application) {
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()
     val offline = OfflineStore(application, http, torbox)
+    val listeningRecordings = ListeningRecordings(preferences)
     val streamingSourceSearch: app.narrio.domain.StreamingSourceSearch = ProviderSourceSearch(sourceProviderSettings, { provider ->
         when (provider.id) {
             DeviceSourceProviderSettings.ARCHIVE -> RecordingSourceLookup(catalog)
@@ -60,7 +61,8 @@ class AppGraph(application: Application) {
     }, torbox::checkCached, torrentFiles::recording, sourceProviderSettings::recordStatus,
         phoneRecordings = { offline.books.value.filter { it.complete }.map { it.book.copy(id = it.book.recordingId.ifBlank { it.book.id }, sources = listOf(it.source)) } },
         rankingChanges = offline.books.map { Unit },
-        preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() })
+        preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() },
+        listening = { listeningRecordings.keys(it.id) })
     val annasArchive = AnnasArchive(http, WebViewPages(application))
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks, webEbooks::accountText)
     val streamingEbookSearch: app.narrio.domain.StreamingEbookSearch = ProviderEbookSearch(ebookProviderSettings, { provider ->
@@ -84,6 +86,9 @@ class AppGraph(application: Application) {
     val bookAlignment = app.narrio.playback.BookAlignmentScheduler(application)
     val updates = app.narrio.updates.AppUpdates(application, playback)
     /** Starts, checks, and settles TorBox preparations; see [TorBoxPreparations]. */
+    /** The one answer to which recording [entry]'s played audio belongs to; the row's book alone never says. */
+    suspend fun recordingFor(entry: ShelfEntry): app.narrio.domain.Audiobook? =
+        playedRecording(entry, listeningRecordings[entry.bookId], preparations.current(entry.bookId))
     val preparations = TorBoxPreparations(RoomPreparationShelf(database),
         PreferencePreparationRecords(application.getSharedPreferences("torbox-preparation-records", Application.MODE_PRIVATE)), torbox::account)
     val preparationChecks = app.narrio.preparation.PreparationChecks(application, library.observeShelf(), preparations) { credentials.read() != null }

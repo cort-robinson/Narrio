@@ -34,21 +34,30 @@ class SourceExperienceTest {
     @Test fun cachedChoicesPreparationAndOfflineSettingsRemainReadable() {
         val window = compose.activity.resources.configuration
         val suffix = if (window.screenWidthDp >= 600) "fold" else if (window.fontScale > 1.2f) "phone-large-text" else "phone"
-        compose.runOnIdle { vm.connected.value = true; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.NIGHT)); vm.selection.value = SelectionState(book()); vm.chooseFormat(book(), "M4B") }
-        compose.onNodeWithText("Listen").performScrollTo().performClick()
-        compose.onNodeWithText("Stream now").performScrollTo().assertIsEnabled()
-        compose.onNodeWithText("Phone storage: 500 MB for this format").assertExists()
+        // A recording's page with its other recordings already looked for, so the chooser makes no provider calls.
+        compose.runOnIdle { vm.connected.value = true; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.NIGHT)); vm.selection.value = SelectionState(book())
+            vm.sourceSearch.value = SourceSearchState(book().catalogIdentity(), searched = true); vm.chooseFormat(book(), "M4B") }
+        compose.onNodeWithTag("listen-action").assertTextContains("Listen").assertIsEnabled()
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Narrator not confirmed · Unabridged · Ready now")
+        compose.onNodeWithTag("download-offline").performScrollTo().assertTextContains("Download for offline · 500 MB")
         capture("cached-source-$suffix")
-        compose.onNode(hasText("Ordered audio parts") and hasClickAction()).performScrollTo().performClick()
-        compose.onNodeWithText("Stream now").performScrollTo().assertIsNotEnabled()
-        compose.onNodeWithText("Prepare in TorBox").performScrollTo().assertIsEnabled()
+        // Advanced lets the listener override the automatic format and see the files.
+        compose.onNodeWithTag("book-details").performScrollToIndex(0)
+        compose.onNodeWithTag("change-recording").performScrollTo().performClick()
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
+        compose.onNodeWithTag("advanced-entry").performClick()
+        compose.onNodeWithTag("advanced-sources").performScrollToNode(hasTestTag("format:MP3"))
+        compose.onNodeWithTag("format:MP3").assertTextContains("MP3 · 1 file · Not cached in TorBox").performClick()
+        compose.onNodeWithTag("advanced-sources").performScrollToNode(hasText("Chapter_01.mp3"))
         capture("uncached-source-$suffix")
-        compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        compose.waitForIdle()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("recording-chooser").assertExists()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { vm.chooseFormat(book(), "M4B"); vm.preparation.value = Preparation(7, false, .35f, "Preparing in TorBox", 1_000_000, 3600, 2); vm.selection.value = SelectionState(book().copy(cacheState = "uncached", cachedFormats = emptyList())) }
-        compose.onNodeWithTag("book-details").performScrollToNode(hasText("35%", substring = true))
+        compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("preparation"))
         compose.onNodeWithText("35%", substring = true).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Check availability").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Check again").performScrollTo().assertIsDisplayed()
         capture("preparation-$suffix")
         compose.runOnIdle { vm.connected.value = false; vm.preparation.value = null; vm.navigate(2); vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.DAY)) }
         compose.onNodeWithTag("settings-options").performScrollToNode(hasText("Download only on Wi-Fi"))

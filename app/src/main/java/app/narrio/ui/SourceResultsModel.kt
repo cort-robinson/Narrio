@@ -41,7 +41,7 @@ fun bestFormat(recording: Audiobook, preferred: String = "M4B"): String? =
     recording.sources.firstOrNull { it.format.equals(preferred, true) }?.format ?: recording.sources.firstOrNull()?.format
 
 /**
- * The headline names how it plays, the format, and the narrator ("Ready to stream · M4B · Read by Ray Porter");
+ * The headline names how it plays, the format, and the narrator ("Ready now · M4B · Read by Ray Porter");
  * [BestMatchCopy.detail] adds the quieter reasons.
  */
 data class BestMatchCopy(val headline: String, val detail: String)
@@ -54,8 +54,8 @@ fun bestMatchCopy(best: BestMatch, book: Audiobook): BestMatchCopy {
         BestMatchReason.ON_PHONE in reasons -> "On this phone"
         // A public recording is also ready to stream; "free" is the more useful thing to say.
         BestMatchReason.FREE_PUBLIC_RECORDING in reasons -> "Free public recording"
-        BestMatchReason.READY_TO_STREAM in reasons -> "Ready to stream"
-        BestMatchReason.NEEDS_PREPARING in reasons -> "Needs preparing in TorBox"
+        BestMatchReason.READY_TO_STREAM in reasons -> "Ready now"
+        BestMatchReason.NEEDS_PREPARING in reasons -> "Needs time to get ready"
         else -> availabilityLabel(recording)
     }
     val headline = listOfNotNull(availability, bestFormat(recording),

@@ -110,6 +110,17 @@ class SourceSearchExperienceTest {
     private fun reveal(matcher: SemanticsMatcher) = compose.onNodeWithTag("book-details").performScrollToNode(matcher)
     private fun top() = compose.onNodeWithTag("book-details").performScrollToIndex(0)
 
+    private fun advanced() = compose.onNodeWithTag("advanced-sources")
+    private fun revealAdvanced(matcher: SemanticsMatcher) = advanced().performScrollToNode(matcher)
+    /** Opens the recording chooser from the page's summary row, then its Advanced view. */
+    private fun openAdvanced() {
+        reveal(hasTestTag("recordings-row")); compose.onNodeWithTag("recordings-row").performClick()
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
+        compose.onNodeWithTag("advanced-entry").performClick()
+        advanced().assertExists()
+    }
+    private fun backToList() { advanced().performScrollToIndex(0); compose.onNodeWithTag("advanced-back").performClick(); compose.onNodeWithTag("recording-chooser").assertExists() }
+
     @Test fun sectionsFillAsEachSourceAnswersAndTheBestMatchNeverMovesUnderTheListener() {
         val archive = Controlled(answers = arrayOf({ listOf(public) }))
         val library = Controlled(variants = false, answers = arrayOf({ emptyList() }))
@@ -118,62 +129,68 @@ class SourceSearchExperienceTest {
         val waiting = Controlled(waiting = true, answers = arrayOf({ emptyList() }))
         val fixture = fixture(mapOf("archive" to archive, "torbox-library" to library, "torbox-search" to search, "addon:audiobookbay" to addon, "addon:knaben" to waiting))
 
-        // Every source has a section at once, each with its own state; nothing is found yet.
+        // The page waits with one quiet line; Advanced has every source's own section at once, each with its own state.
         compose.onNodeWithText("Finding audio…").assertIsNotEnabled()
-        reveal(hasTestTag("source-section:addon:knaben"))
+        compose.onNodeWithTag("listening-sources").assertDoesNotExist()
+        openAdvanced()
+        revealAdvanced(hasTestTag("source-section:addon:knaben"))
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Waiting its turn").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(compose.onAllNodesWithText("Searching").fetchSemanticsNodes().size >= 3)
-        top()
 
         // The public source answers first and becomes the best match; the failing add-on reports alone.
         compose.runOnIdle { archive.answer(); library.answer(); addon.answer() }
-        compose.waitUntil(5_000) { compose.onAllNodesWithTag("best-match-reasons").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("best-match-reasons").assertTextContains("Free public recording", substring = true)
-        compose.onNodeWithTag("listen-action").assertIsEnabled()
         compose.waitUntil(5_000) { fixture.sourceSearch.value.streamed?.groups?.first { it.providerId == "addon:audiobookbay" }?.status == SourceGroupStatus.FAILED }
-        reveal(hasTestTag("retry:addon:audiobookbay"))
+        revealAdvanced(hasTestTag("retry:addon:audiobookbay"))
         compose.onNodeWithText("Nothing for this book").assertExists()
         assertFalse(fixture.sourceSearch.value.streamed!!.complete)
-        top(); capture("sources-in-progress-night")
+        capture("sources-advanced-in-progress-night")
+        backToList()
+        compose.onNodeWithTag("recording:${public.id}").assertIsSelected()
+        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        compose.onNodeWithTag("listen-action").assertIsEnabled()
+        capture("chooser-in-progress-night")
 
-        // The listener is on the page now; the slow source's better release must not replace the card.
-        compose.onNodeWithTag("book-details").performTouchInput { down(Offset(4f, 4f)); up() }
+        // The listener is choosing now; the slow source's better release waits in the chooser instead of moving Listen.
         compose.runOnIdle { search.answer() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("better-match").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("best-match-reasons").assertTextContains("Free public recording", substring = true)
-        capture("sources-better-match-night")
+        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        capture("chooser-better-match-night")
         compose.onNodeWithTag("better-match").performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("better-match").fetchSemanticsNodes().isEmpty() }
-        compose.onNodeWithTag("best-match-reasons").assertTextContains("Ready to stream · M4B", substring = true)
         compose.runOnIdle { assertEquals(cached.id, fixture.sourceSearch.value.choice?.id) }
+        compose.onNodeWithTag("recording:${cached.id}").assertIsSelected()
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Unabridged · Ready now")
 
-        // A failed source retries on its own; the rest keep their results.
-        reveal(hasTestTag("retry:addon:audiobookbay"))
+        // A failed source retries on its own in Advanced; the rest keep their results.
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
+        compose.onNodeWithTag("advanced-entry").performClick()
+        revealAdvanced(hasTestTag("retry:addon:audiobookbay"))
         compose.onNodeWithTag("retry:addon:audiobookbay").performClick()
         compose.waitUntil(5_000) { fixture.sourceSearch.value.streamed?.groups?.first { it.providerId == "addon:audiobookbay" }?.status == SourceGroupStatus.SEARCHING }
         compose.runOnIdle { addon.answer(); waiting.answer() }
         compose.waitUntil(10_000) { fixture.sourceSearch.value.streamed?.complete == true }
-        reveal(hasTestTag("sources-summary"))
+        revealAdvanced(hasTestTag("sources-summary"))
         compose.onNodeWithTag("sources-summary").assertTextEquals("All 5 sources answered · 4 found")
         // The release both sources found stays in the higher-priority section, credited to the other.
-        reveal(hasText("Also found by AudiobookBay"))
+        revealAdvanced(hasText("Also found by AudiobookBay"))
         compose.onNodeWithText("Also found by AudiobookBay").assertIsDisplayed()
 
         // Possible matches stay folded until asked for.
-        reveal(hasTestTag("possible:torbox-search"))
+        revealAdvanced(hasTestTag("possible:torbox-search"))
         compose.onNodeWithTag("release:${maybe.id}").assertDoesNotExist()
         compose.onNodeWithTag("possible:torbox-search").performClick()
         compose.onNodeWithTag("release:${maybe.id}").assertExists()
 
         compose.runOnIdle { fixture.updateAppearance(fixture.appearance.value.copy(mode = ThemeMode.DAY)) }
-        top(); capture("sources-finished-day")
-        reveal(hasTestTag("source-section:torbox-search")); capture("sources-sections-day")
+        revealAdvanced(hasTestTag("source-section:torbox-search")); capture("sources-advanced-day")
 
-        // A release row opens its own page, as before.
-        reveal(hasTestTag("release:${other.id}"))
+        // Choosing a release in Advanced makes it the chooser's pick, back on the list.
+        revealAdvanced(hasTestTag("release:${other.id}"))
         compose.onNodeWithTag("release:${other.id}").performClick()
-        compose.waitUntil(10_000) { fixture.selection.value.book?.recordingId == other.id && !fixture.selection.value.loading }
-        compose.onNodeWithText("The recording").assertIsDisplayed()
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("recording:${other.id}"))
+        compose.onNodeWithTag("recording:${other.id}").assertIsSelected()
+        compose.runOnIdle { assertEquals(other.id, fixture.sourceSearch.value.choice?.id) }
+        capture("chooser-finished-day")
     }
 
     @Test fun failedAndDisconnectedSearchesSayWhatToDoNext() {
@@ -183,17 +200,19 @@ class SourceSearchExperienceTest {
         compose.onNodeWithText("Couldn't reach any source").assertIsDisplayed()
         compose.onNodeWithText("None of your 5 sources answered. Check your connection, then try again.").assertIsDisplayed()
         compose.onNodeWithText("Try again").assertIsEnabled()
-        reveal(hasTestTag("retry:torbox-search")); compose.onNodeWithTag("retry:torbox-search").assertIsDisplayed()
         top(); capture("sources-all-failed-day")
+        openAdvanced()
+        revealAdvanced(hasTestTag("retry:torbox-search")); compose.onNodeWithTag("retry:torbox-search").assertIsDisplayed()
 
         val empty = Controlled(answers = arrayOf({ emptyList() })).also { it.answer() }
         val offline = fixture(mapOf("archive" to empty), connected = false)
         compose.waitUntil(10_000) { offline.sourceSearch.value.streamed?.complete == true }
         compose.onNodeWithText("No free public recording found").assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").assertIsDisplayed()
-        reveal(hasTestTag("source-section:addon:knaben"))
-        assertEquals(4, compose.onAllNodesWithText("Needs TorBox").fetchSemanticsNodes().size)
         top(); capture("sources-disconnected-night")
+        openAdvanced()
+        revealAdvanced(hasTestTag("source-section:addon:knaben"))
+        assertEquals(4, compose.onAllNodesWithText("Needs TorBox").fetchSemanticsNodes().size)
     }
 
     @Test fun sourceSettingsToggleAndReorderWithTouchAndTalkBack() {

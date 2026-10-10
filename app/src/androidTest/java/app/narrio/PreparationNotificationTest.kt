@@ -95,8 +95,8 @@ class PreparationNotificationTest {
 
             posted.contentIntent.send()
             compose.waitUntil(10_000) { vm.selection.value.book?.id == book.id }
-            compose.onNodeWithTag("book-details").performScrollToNode(hasText("Your source is ready. Choose Listen to begin."))
-            compose.onNodeWithText("Your source is ready. Choose Listen to begin.").assertIsDisplayed()
+            compose.onNodeWithTag("book-details").performScrollToNode(hasText("Ready in TorBox. Choose Listen to start."))
+            compose.onNodeWithText("Ready in TorBox. Choose Listen to start.").assertIsDisplayed()
             capture("preparation-ready-day")
 
             posted.actions.single { it.title.toString() == "Listen" }.actionIntent.send()

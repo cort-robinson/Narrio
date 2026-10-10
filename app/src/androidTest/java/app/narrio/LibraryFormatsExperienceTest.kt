@@ -7,6 +7,7 @@ import android.view.inspector.WindowInspector
 import android.webkit.*
 import java.io.ByteArrayInputStream
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
@@ -128,9 +129,10 @@ class LibraryFormatsExperienceTest {
     @Test fun detailsOfferReadListenAndFindForEachFormatCombination() {
         seed()
         theme(ThemeMode.NIGHT)
-        // Audio only: Listen leads; Find ebook replaces Read.
+        // Audio only: Resume on the book's own recording leads; Find ebook replaces Read.
         compose.runOnIdle { vm.selection.value = SelectionState(audioOnly) }
-        compose.onNodeWithTag("listen-action").assertIsEnabled()
+        compose.onNodeWithTag("listen-action").assertIsEnabled().assertTextContains("Resume · 1 h 35 m left")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Ruth Golding · Free public recording")
         compose.onNodeWithTag("find-ebook-action").assertIsDisplayed()
         compose.onNodeWithText("Listening · Part 3 of 12 · 20%").assertIsDisplayed()
         compose.onNodeWithText("Save").assertDoesNotExist()
@@ -173,7 +175,8 @@ class LibraryFormatsExperienceTest {
         compose.runOnIdle { vm.closeReader(); fake.formats.value = formats }
         // A source that couldn't be checked makes Find ebook search again; nothing found says so and offers the next step.
         compose.runOnIdle { fake.findDelayMs = 0; fake.found = { listOf(EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE)) } }
-        compose.onNodeWithTag("find-ebook-action").performClick()
+        // The "Ebook added" snackbar can still cover the button on short screens, so this tap doesn't depend on hit-testing.
+        compose.onNodeWithTag("find-ebook-action").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         compose.waitUntil(10_000) { shown("No ebook found") }
         compose.onNodeWithText("Searched Project Gutenberg. Nothing matched this title and author.").assertExists()
         theme(ThemeMode.DAY)
@@ -197,7 +200,7 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Reading · Ch 12 · 43%").assertIsDisplayed()
         compose.onNodeWithContentDescription("Listening starts at about Part 5 of 12, 35%, estimated").assertIsDisplayed()
         compose.onNodeWithTag("book-details").performScrollToNode(hasText("Partly matches the narration"))
-        compose.onNodeWithText("Choose another edition").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("change-ebook").performScrollTo().assertIsDisplayed()
         capture("details-both-day")
         theme(ThemeMode.NIGHT)
         capture("details-both-night")
@@ -206,7 +209,7 @@ class LibraryFormatsExperienceTest {
         // Sync stays off for a pair that doesn't match, so no mapped place is offered.
         compose.onNodeWithContentDescription("Listening starts at about Part 5 of 12, 35%, estimated").assertDoesNotExist()
 
-        compose.onNodeWithText("Choose another edition").performScrollTo().performClick()
+        compose.onNodeWithTag("change-ebook").performScrollTo().performClick()
         compose.onNodeWithText("Choose an edition").assertIsDisplayed()
         compose.onNodeWithText("On this phone").assertExists()
         compose.waitUntil(10_000) { !vm.ebookSearch.value.searching }
@@ -415,7 +418,7 @@ class LibraryFormatsExperienceTest {
         compose.waitUntil(10_000) { vm.selection.value.book?.id == fake.importable.id }
         compose.onNodeWithTag("read-action").assertIsEnabled()
         // Since #56 a book with an ebook looks for its recording right away; the listening slot shows that search.
-        compose.onNodeWithTag("best-match").assertIsDisplayed()
+        compose.onNodeWithTag("listen-slot").assertIsDisplayed()
         capture("import-opened-night")
     }
 
