@@ -26,6 +26,19 @@ fun sleepStop(mode: SleepMode, partIndex: Int, positionMs: Long, chapters: List<
     else -> null
 }
 
+/**
+ * A chapter or part timer after the same recording reloads with its files chosen or reordered: its places follow their
+ * files by part ID ([oldParts] and [newParts] are the layouts' part IDs, in order). If its file is no longer chosen, the
+ * chapter or part timer ends; minute timers are unchanged.
+ */
+fun remapSleep(timer: SleepTimer, oldParts: List<String>, newParts: List<String>): SleepTimer {
+    if (timer.stop == null || oldParts == newParts) return timer
+    fun moved(place: PartPlace?): PartPlace? = place?.let { oldParts.getOrNull(it.partIndex) }?.let { newParts.indexOf(it) }?.takeIf { it >= 0 }
+        ?.let { place!!.copy(partIndex = it) }
+    val stop = moved(timer.stop) ?: return SleepTimer()
+    return timer.copy(stop = stop, from = timer.from?.let { moved(it) ?: return SleepTimer() })
+}
+
 /** A chapter or part timer aimed from [from], in that part's [chapters]. */
 fun boundaryTimer(mode: SleepMode, from: PartPlace, chapters: List<Chapter>): SleepTimer =
     SleepTimer(mode, stop = sleepStop(mode, from.partIndex, from.positionMs, chapters), from = from)

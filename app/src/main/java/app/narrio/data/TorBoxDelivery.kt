@@ -14,6 +14,9 @@ class TorBoxDelivery(
     private val credential: () -> String?,
     private val baseUrl: String = "https://api.torbox.app/v1/api/",
 ) : DeliveryProvider {
+    /** The verified .torrent file of a release added from a link; see [LinkedReleases.torrentFor]. */
+    var linkedTorrent: (suspend (Audiobook) -> ByteArray?)? = null
+
     private fun token() = credential()?.takeIf { it.isNotBlank() } ?: throw ProviderException("Connect TorBox in Settings to use this source.")
 
     /** Checks a key before it's saved, cancelled with its caller; every failure is a [ProviderException] worded for the person entering it. */
@@ -36,8 +39,9 @@ class TorBoxDelivery(
         if (book.magnetUri.startsWith("magnet:?")) form.addFormDataPart("magnet", book.magnetUri)
         else {
         if (book.torrentUrl.isBlank()) throw ProviderException("This recording has no torrent source. Choose another recording.")
-        // Upload a real .torrent file. Archive URLs are not assumed to be magnets.
-        val torrent = http.newCall(Request.Builder().url(book.torrentUrl).build()).execute().use { r ->
+        // Upload a real .torrent file. Archive URLs are not assumed to be magnets. A release added from a link uploads
+        // the verified bytes the listener inspected, fetched through the link checks.
+        val torrent = linkedTorrent?.invoke(book) ?: http.newCall(Request.Builder().url(book.torrentUrl).build()).execute().use { r ->
             if (!r.isSuccessful) throw ProviderException("The recording's torrent is unavailable. Try direct streaming.")
             val body = r.body ?: throw ProviderException("The torrent source is empty.")
             if (body.contentLength() > 4_000_000) throw ProviderException("This torrent file is too large.")
@@ -179,7 +183,13 @@ class TorBoxDelivery(
 
     override fun resolve(part: AudioPart): String {
         if (part.torrentId == null || part.fileId == null) return part.archiveUrl
-        val result = request("torrents/requestdl", params = mapOf("token" to token(), "torrent_id" to part.torrentId.toString(), "file_id" to part.fileId.toString(), "redirect" to "false"))
+        // Usenet and web downloads chosen from the TorBox library have their own link endpoints.
+        val (path, key) = when (TorBoxKind.of(part.id)) {
+            TorBoxKind.USENET -> "usenet/requestdl" to "usenet_id"
+            TorBoxKind.WEB -> "webdl/requestdl" to "web_id"
+            TorBoxKind.TORRENT -> "torrents/requestdl" to "torrent_id"
+        }
+        val result = request(path, params = mapOf("token" to token(), key to part.torrentId.toString(), "file_id" to part.fileId.toString(), "redirect" to "false"))
         val url = result["data"].stringValue()
         if (!url.startsWith("https://")) throw ProviderException("TorBox did not return a secure audio link. Try again.")
         return url

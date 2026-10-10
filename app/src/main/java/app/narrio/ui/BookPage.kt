@@ -216,7 +216,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             refreshDetails = current?.recording?.takeIf { it.provider != "archive" && !it.recordingId.startsWith("played:") }?.let { recording -> { vm.refreshMetadata(recording) } },
             metadataLoading = selected.metadataLoading, initialView = view,
             acceptBetter = { pinned = pinned.accept(); pinned.shown?.let { vm.chooseVersion(it.recording) } },
-            dismiss = { chooser = null })
+            dismiss = { chooser = null },
+            startPositionChoice = { switch -> AdvancedStartChoice(vm, book, switch) },
+            advancedSections = { context -> advancedSourcingSections(vm, context) })
     }
     if (ebookSheet) EbookSheet(book, formats, ebookSearch, ebookProviders, connected, "Add and read", EbookActions(
         add = { vm.addEbook(book, it) }, addAndOpen = { vm.addEbook(book, it) { vm.read(book) } }, retry = vm::retryEbookSource,
@@ -421,6 +423,15 @@ private fun OfflineRow(vm: NarrioViewModel, book: Audiobook, target: Audiobook?,
                 text = { Text("The audio files are removed. Your book, bookmarks, and place stay on your shelf, and it can still stream.") },
                 confirmButton = { TextButton({ vm.removeDownload(copy); remove = false }) { Text("Remove audio") } },
                 dismissButton = { TextButton({ remove = false }) { Text("Keep it") } })
+        }
+        // Files added from this phone are already here; there is nothing to download.
+        onThisPhone(target) -> Row(modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("on-this-phone").semantics(mergeDescendants = true) { },
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Rounded.OfflinePin, null, tint = MaterialTheme.colorScheme.secondary)
+            Column(Modifier.weight(1f)) {
+                Text("On this phone", style = MaterialTheme.typography.titleSmall)
+                Text("Plays offline · never uploaded", style = MaterialTheme.typography.bodySmall, color = muted)
+            }
         }
         !connected && needsTorBox(target) -> Unit
         // Only audio that plays now can be saved; a recording still getting ready waits.

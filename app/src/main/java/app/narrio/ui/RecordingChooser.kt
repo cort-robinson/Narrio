@@ -82,7 +82,8 @@ fun RecordingChooser(
     // A release chosen in Advanced becomes the pick, shown among every match when it isn't a distinct version.
     val actions = SourceActions(choose = { recording -> pick(recording); if (search?.versions?.contains(recording) != true) showAll = true; advanced = false },
         retry = vm::retrySource, searchAgain = { vm.findSources(book.catalogIdentity(), force = true) },
-        connectTorBox = { close { vm.requestTorBoxConnect() } }, sourceSettings = { close { vm.openSourceSettings() } })
+        connectTorBox = { close { vm.requestTorBoxConnect() } }, sourceSettings = { close { vm.openSourceSettings() } },
+        notThisBook = { recording -> vm.advanced.hide(book, recording, providerLabel(recording)) })
     ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer, sheetState = sheetState) {
         // Inside the sheet's own window, Back leaves Advanced before it closes the sheet.
         BackHandler(advanced) { advanced = false }
@@ -110,7 +111,7 @@ fun RecordingChooser(
                 }
                 items(shown, key = { "recording:${it.id}" }) { recording ->
                     val mine = current != null && sameRecording(recording, current.recording)
-                    val phone = mine && current.offline != null || downloads.any { it.complete && sameRecording(it.book, recording) }
+                    val phone = mine && current.offline != null || downloads.any { it.complete && sameRecording(it.book, recording) } || onThisPhone(recording)
                     RecordingRow(recording, book, selected = picked?.let { sameRecording(it, recording) } == true,
                         tag = when {
                             mine -> listOfNotNull("Listening now", current.fraction?.takeIf { current.started }?.let { "${(it * 100).toInt().coerceIn(1, 99)}%" }).joinToString(" · ")
@@ -205,7 +206,7 @@ private fun ChooserActions(
     val mine = current != null && sameRecording(picked, current.recording)
     val copies = downloads.filter { sameRecording(it.book, picked) }
     val phoneFormats = copies.filter { it.complete }.map { it.source.format }
-    val onPhone = phoneFormats.isNotEmpty() || mine && current.offline != null
+    val onPhone = phoneFormats.isNotEmpty() || mine && current.offline != null || onThisPhone(picked)
     val pendingThis = preparingRecording?.takeIf { sameRecording(it, picked) }
     val preparingThis = pendingThis != null && entry?.state == "preparing" && preparation?.ready != true
     val preparedThis = pendingThis != null && (entry?.state == "ready" || preparation?.ready == true && entry?.state == "preparing")

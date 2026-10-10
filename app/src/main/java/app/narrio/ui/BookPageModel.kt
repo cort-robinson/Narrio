@@ -106,7 +106,7 @@ fun playableNow(recording: Audiobook, onPhone: Boolean): Boolean = onPhone || So
 
 /** How a recording plays, in the listener's words. */
 fun readiness(recording: Audiobook, connected: Boolean, onPhone: Boolean = false): String = when {
-    onPhone -> "On this phone"
+    onPhone || onThisPhone(recording) -> "On this phone"
     recording.provider == "archive" -> "Free public recording"
     !connected -> "Needs TorBox"
     SourceQuality.ready(recording) -> "Ready now"
@@ -131,7 +131,10 @@ fun recordingLine(recording: Audiobook, book: Audiobook, connected: Boolean, onP
     (listOf(recordingNarrator(recording).ifBlank { "Narrator not confirmed" }) + recordingKind(recording, book) + readiness(recording, connected, onPhone)).joinToString(" · ")
 
 /** True when this recording plays through TorBox, so it needs a connected account. */
-fun needsTorBox(recording: Audiobook): Boolean = recording.provider != "archive"
+fun needsTorBox(recording: Audiobook): Boolean = recording.provider != "archive" && !onThisPhone(recording)
+
+/** Audio files added from this phone: they play offline and never need TorBox or a download. */
+fun onThisPhone(recording: Audiobook): Boolean = recording.provider == app.narrio.data.LocalAudio.PROVIDER
 
 /**
  * The chooser's rows: the listener's recording first, then the distinct versions found (or every match when
