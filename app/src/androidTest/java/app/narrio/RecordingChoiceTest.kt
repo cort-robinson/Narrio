@@ -191,13 +191,8 @@ class RecordingChoiceTest {
         val uncached = release.copy(cacheState = "uncached", cachedFormats = emptyList())
         compose.runOnIdle { vm.selection.value = SelectionState(uncached) }
         runBlocking { graph.library.save(uncached) }
-        InstrumentationRegistryBack.press()
+        compose.pressBackInSheet("recording-chooser")
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isEmpty() }
         compose.waitUntil(5_000) { compose.onAllNodes(hasTestTag("listen-action") and hasText("Get it ready")).fetchSemanticsNodes().isNotEmpty() }
     }
-}
-
-/** A real Back key press, which reaches a sheet's own window. */
-private object InstrumentationRegistryBack {
-    fun press() = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
 }

@@ -1,13 +1,11 @@
 package app.narrio
 
-import android.view.KeyEvent
 import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.data.*
 import app.narrio.domain.*
 import app.narrio.ui.*
@@ -110,7 +108,7 @@ class ConnectTorBoxTest {
         // press first (how many varies by API level), so Back is pressed only while the sheet is still asking.
         for (press in 1..4) {
             if (!fixture.torBox.value.prompt) break
-            InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_BACK); compose.waitForIdle()
+            compose.pressBackInSheet("connect-torbox-sheet")
             runCatching { compose.waitUntil(1_500) { !fixture.torBox.value.prompt } }
         }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("connect-torbox-sheet").fetchSemanticsNodes().isEmpty() }

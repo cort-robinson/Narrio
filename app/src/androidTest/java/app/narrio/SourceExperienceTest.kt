@@ -50,9 +50,10 @@ class SourceExperienceTest {
         compose.onNodeWithTag("format:MP3").assertTextContains("MP3 · 1 file · Not cached in TorBox").performClick()
         compose.onNodeWithTag("advanced-sources").performScrollToNode(hasText("Chapter_01.mp3"))
         capture("uncached-source-$suffix")
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
-        compose.onNodeWithTag("recording-chooser").assertExists()
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        // Back leaves Advanced first, then closes the chooser.
+        compose.pressBackInSheet("advanced-sources")
+        compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isNotEmpty() }
+        compose.pressBackInSheet("recording-chooser")
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("recording-chooser").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { vm.chooseFormat(book(), "M4B"); vm.preparation.value = Preparation(7, false, .35f, "Preparing in TorBox", 1_000_000, 3600, 2); vm.selection.value = SelectionState(book().copy(cacheState = "uncached", cachedFormats = emptyList())) }
         compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("preparation"))
