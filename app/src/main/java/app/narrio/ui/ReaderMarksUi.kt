@@ -293,7 +293,7 @@ fun BoxWithConstraintsScope.ReaderMarksLayer(ui: ReaderMarksUi, session: ReaderS
             SearchPill(search, { index -> hideControls(); ui.showMatch(index) }, { ui.searchOpen = true }, ui::endSearch)
         }
     }
-    SnackbarHost(ui.snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = ui.stackHeight + if (controls) controlsBottom + 168.dp else bottom + 48.dp))
+    SnackbarHost(ui.snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = ui.stackHeight + if (controls) controlsBottom + 168.dp else bottom + 48.dp)) { NarrioSnackbar(it) }
 
     val wide = maxWidth >= 600.dp
     AnimatedVisibility(ui.searchOpen, Modifier.align(if (wide) Alignment.TopEnd else Alignment.TopCenter),

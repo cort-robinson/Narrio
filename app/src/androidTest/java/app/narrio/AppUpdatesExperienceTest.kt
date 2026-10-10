@@ -107,11 +107,13 @@ class AppUpdatesExperienceTest {
     @Test fun localAppDisablesNetworkUpdaterAndSettingsSurvivesRecreation() {
         val vm = ViewModelProvider(compose.activity)[NarrioViewModel::class.java]
         compose.runOnIdle { vm.navigate(2) }
+        compose.onNodeWithTag("settings-options").performScrollToNode(hasText("App updates"))
         compose.onNodeWithText("App updates").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Local and debug builds update through your development tools.").assertIsDisplayed()
         compose.onNodeWithText("Check for updates").assertDoesNotExist()
         compose.activityRule.scenario.recreate()
         compose.runOnIdle { ViewModelProvider(compose.activity)[NarrioViewModel::class.java].navigate(2) }
+        compose.onNodeWithTag("settings-options").performScrollToNode(hasText("App updates"))
         compose.onNodeWithText("App updates").performScrollTo().assertIsDisplayed()
         val graph = (compose.activity.application as NarrioApplication).graph
         assertNull(graph.updates.state.value.channel)

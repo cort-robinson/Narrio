@@ -142,5 +142,6 @@ dependencies {
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.window:window-testing:1.4.0")
+    androidTestImplementation("androidx.work:work-testing:2.11.2")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

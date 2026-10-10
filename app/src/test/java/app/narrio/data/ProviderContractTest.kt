@@ -13,6 +13,25 @@ class ProviderContractTest {
         val meta = NarrioJson.parseToJsonElement("""{"identifier":"raven","title":"The Raven","creator":"Edgar Allan Poe","description":"LibriVox recording. Read by Chris Goringe For further information, including reader information, visit the catalog."}""").jsonObject
         assertEquals("Chris Goringe", ArchiveDiscovery.parseBook(meta, false).narrator)
     }
+    @Test fun connectingExplainsARejectedKeyAPlanWithoutApiAndNoConnection() = runTest {
+        val server = MockWebServer(); server.start()
+        try {
+            val client = TorBoxDelivery(OkHttpClient(), { null }, server.url("/").toString())
+            server.enqueue(MockResponse().setResponseCode(401))
+            val rejected = runCatching { client.connect("wrong-key") }.exceptionOrNull()
+            assertTrue(rejected is ProviderException)
+            assertTrue(rejected!!.message!!.startsWith("TorBox didn't accept this API key."))
+            assertEquals("Bearer wrong-key", server.takeRequest().getHeader("Authorization"))
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":{"plan":0}}"""))
+            assertTrue(runCatching { client.connect("free-key") }.exceptionOrNull()!!.message!!.contains("needs a plan with API access"))
+            server.enqueue(MockResponse().setBody("""{"success":true,"data":{"plan":1}}"""))
+            assertEquals("TorBox connected", client.connect("good-key"))
+        } finally { server.shutdown() }
+        val offline = TorBoxDelivery(OkHttpClient(), { null }, server.url("/").toString())
+        val unreachable = runCatching { offline.connect("any-key") }.exceptionOrNull()
+        assertTrue(unreachable is ProviderException)
+        assertEquals("Couldn't reach TorBox. Check your internet connection and try again.", unreachable!!.message)
+    }
     @Test fun uncachedDefaultPlaybackNeverCreatesATorrent() = runTest {
         val server = MockWebServer(); server.start()
         try {

@@ -379,12 +379,14 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
             hsv = FloatArray(3).also { AndroidColor.colorToHSV(0xFF000000.toInt() or colour, it) }
         }
     }
+    // A swatch or slider replaces whatever is typed, even when the colour itself doesn't change.
+    fun pick(value: Int) { hex = ThemeContrast.hex(value); valid(true); change(value) }
     val swatches = listOf(0xE8AF79, 0xE3C28A, 0xB5D49C, 0x7CC5AE, 0x8ACED8, 0x94B1E5, 0xCCBAE0, 0xE9B1BE, 0xF4EDDE, 0xFFFFFF, 0x263832, 0x191C20)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         swatches.forEach { swatch ->
             Box(Modifier.size(48.dp).background(Color(0xFF000000.toInt() or swatch), CircleShape)
                 .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
-                .clickable(role = Role.Button) { change(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}"; selected = colour == swatch }, contentAlignment = Alignment.Center) {
+                .clickable(role = Role.Button) { pick(swatch) }.semantics { contentDescription = "Choose ${ThemeContrast.hex(swatch)}"; selected = colour == swatch }, contentAlignment = Alignment.Center) {
                 if (colour == swatch) Icon(Icons.Rounded.Check, null, tint = Color(0xFF000000.toInt() or ThemeContrast.foreground(swatch)))
             }
         }
@@ -398,7 +400,7 @@ private fun ColourControls(colour: Int, label: String, change: (Int) -> Unit, va
         Slider(hsv[index], { value ->
             val updated = hsv.copyOf().apply { this[index] = value }
             hsv = updated
-            change(AndroidColor.HSVToColor(updated) and 0xFFFFFF)
+            pick(AndroidColor.HSVToColor(updated) and 0xFFFFFF)
         }, valueRange = if (index == 0) 0f..360f else 0f..1f, modifier = Modifier.semantics { contentDescription = "$label $title" })
     }
     val invalid = ThemeContrast.parseHex(hex) == null

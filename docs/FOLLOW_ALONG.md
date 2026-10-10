@@ -2,7 +2,7 @@
 
 ## Reading along
 
-Open **Listening room → Read along**, or turn on **Read along with the narration** (the headphones in the reader's top bar) when the book has a recording. The full reader becomes the listening surface: the narrated sentence carries a soft copper wash, pages turn or scroll to keep narration on screen, and a compact player stays in reach (a tray with speed, 30-second skips, play/pause, and the sleep timer on phones; a side panel with the player and chapters when unfolded; the lower half in tabletop posture). The decision record is [EREADER.md](EREADER.md#reading-and-listening-together).
+Open **Listening room → Read along**, or turn on **Read along with the narration** (the headphones in the reader's top bar) when the book has a recording. The full reader becomes the listening surface: the narrated sentence carries a soft copper wash, pages turn or scroll to keep narration on screen, and a compact player stays in reach (a tray with speed, back 10 / ahead 30 second skips, play/pause, and the sleep timer on phones; a side panel with the player and chapters when unfolded; the lower half in tabletop posture). The decision record is [EREADER.md](EREADER.md#reading-and-listening-together).
 
 - **Following.** A page turn by hand pauses following; **Back to narration** returns, and turning back to the narrated page resumes it. Rotation and folding keep the narrated sentence on screen and never interrupt playback.
 - **Taps.** Tapping a sentence plays from its start and keeps the playing/paused state. Taps beside the text show the reader's controls; the outer edges still turn pages.
@@ -10,7 +10,7 @@ Open **Listening room → Read along**, or turn on **Read along with the narrati
 - **Who leads.** From the Listening room, or while the book plays, audio leads and the page moves to the narration. From a reader page with nothing playing, the page leads: it becomes the shared place and the recording is positioned there, paused. Moves of more than about a page or 30 seconds offer **Undo**. Back from read along returns to the Listening room; if reading moved the shared place while paused, the audio starts there, again with Undo.
 - **Timing fixes.** Read along options offer **Fix the timing** (tap the sentence you hear, then **Match at [audio time]**), **Choose this part's chapter** for multipart layouts that can't be placed automatically, and **Reset timing for this part**.
 
-Ebooks are found or added from the book's **Find ebook** sheet (also reachable as **Find the ebook** in the Listening room). It lists editions on this phone (each can be removed; audio, bookmarks, and listening progress stay), matching ebooks from the existing providers, and a file choice:
+Ebooks are found or added from the book's **Find ebook** sheet (also reachable as **Find the ebook** in the Listening room). It lists editions on this phone (each can be removed; audio, bookmarks, and listening progress stay), the best match and other choices from the existing providers, marked when they likely match the narration, and a file choice; each source's own section and searching with different words are under **Advanced** ([details](EREADER.md#finding-an-ebook)). The sources are:
 
 1. An EPUB or text file shipped with the playing recording (Internet Archive or TorBox).
 2. With TorBox connected, an ebook already in your TorBox account whose release or file name has the book's exact title and every author name.

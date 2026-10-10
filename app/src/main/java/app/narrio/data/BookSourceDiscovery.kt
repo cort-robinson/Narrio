@@ -122,9 +122,88 @@ object SourceQuality {
         val authorVerified = !BookMetadata.unknown(recording.author) || explicitAuthor(release) ||
             sources.any { it.parts.any { part -> explicitAuthor(part.name) } }
         if (!authorVerified) return null
-        // Different books in one torrent must keep separate shelf and listening histories.
+        return selected(book, recording, sources)
+    }
+
+    /** Different books in one torrent must keep separate shelf and listening histories. */
+    private fun selected(book: Audiobook, recording: Audiobook, sources: List<AudioSource>): Audiobook {
         val suffix = ":book:${BookIdentity.key(book.title, book.author)}"
         return recording.copy(id = if (recording.id.endsWith(suffix)) recording.id else recording.id + suffix, sources = sources, bookFilesSelected = true)
+    }
+
+    private val bookNumber = Regex("\\b(?:book|bk|volume|vol)\\s*0*(\\d{1,2})\\b")
+    private val partWords = Regex("\\b(?:cd|disc|disk|part|pt|side|track|chapter|ch)\\s*\\d*\\b|\\d+")
+    private val seriesWords = Regex("\\b(?:book|bk|volume|vol|series|saga|cycle)\\b")
+
+    /** Files that belong together as one book in a source: a folder each, numbered books, or one whole-book file each. */
+    private class BookGroup(val labels: List<String>, val parts: List<AudioPart>, val number: Int?)
+
+    private fun bookGroups(source: AudioSource): List<BookGroup>? {
+        if (source.parts.size < 2) return null
+        val paths = source.parts.map { it.name.split('/', '\\') }
+        // Folders every file shares, such as the release folder, say nothing about which book a file is.
+        var shared = 0
+        while (paths.all { it.size - 1 > shared } && paths.map { it[shared] }.distinct().size == 1) shared++
+        val stems = paths.map { it.last().substringBeforeLast('.') }
+        fun number(text: String) = bookNumber.find(BookIdentity.normalize(text))?.groupValues?.get(1)?.toInt()
+        val groups = when {
+            paths.all { it.size - 1 > shared } -> source.parts.indices.groupBy { paths[it][shared] }
+                .map { (folder, indices) -> BookGroup(listOf(folder), indices.map(source.parts::get), number(folder)) }
+            stems.mapNotNull(::number).distinct().size > 1 -> source.parts.indices.groupBy { number(stems[it]) }
+                .map { (n, indices) -> BookGroup(indices.map(stems::get), indices.map(source.parts::get), n) }
+            // Whole-book files: several M4Bs with different names are several books, not one book's chapters.
+            source.format == "M4B" -> source.parts.indices.map { BookGroup(listOf(stems[it]), listOf(source.parts[it]), number(stems[it])) }
+            else -> return null
+        }
+        if (groups.size < 2) return null
+        val numbered = groups.mapNotNull { it.number }.distinct().size > 1
+        val names = groups.map { group -> BookIdentity.normalize(group.labels.first()).replace(partWords, " ").replace(releaseNoise, " ").split(' ').filter(String::isNotBlank).joinToString(" ") }
+        // CD 1 / CD 2 and "Eldest Part 1" / "Eldest Part 2" are one book in pieces.
+        return if (numbered || names.distinct().size > 1) groups else null
+    }
+
+    /**
+     * Series releases often hold several books, and a series can share its first book's name ("Dungeon Crawler Carl"),
+     * so a matching release name doesn't mean every file is this book. When a source's files divide into books, keep
+     * only this book's. Null when the files are numbered books and none of them can be told apart as this one.
+     */
+    internal fun oneBook(book: Audiobook, recording: Audiobook): Audiobook? {
+        val titles = searchTitles(book).map(BookIdentity::normalize).filter(String::isNotBlank)
+        val authorWords = BookIdentity.normalize(book.author).split(' ').toSet()
+        // What a label says besides this book's title, its author, and numbering; null when it doesn't name the title.
+        fun residual(label: String): Int? {
+            var text = " ${BookIdentity.normalize(label)} "
+            if (titles.none { " $it " in text }) return null
+            titles.forEach { title -> while (" $title " in text) text = text.replace(" $title ", " ") }
+            return text.replace(seriesWords, " ").replace(partWords, " ").replace(releaseNoise, " ")
+                .split(' ').filter { it.isNotBlank() && it !in authorWords }.joinToString(" ").length
+        }
+        var narrowed = false
+        val sources = recording.sources.map { source ->
+            val groups = bookGroups(source) ?: return@map source
+            val scored = groups.mapNotNull { group -> group.labels.mapNotNull(::residual).minOrNull()?.let { group to it } }
+            if (scored.isEmpty()) {
+                // Unnamed folders such as "CD 1 - The Tutorial" are a single book; numbered books are a bundle.
+                if (groups.mapNotNull { it.number }.distinct().size > 1) return null
+                return@map source
+            }
+            val best = scored.minOf { it.second }
+            val chosen = scored.filter { it.second == best }
+            if (chosen.size > 1) return null
+            narrowed = true
+            source.copy(parts = chosen.single().first.parts)
+        }
+        return if (narrowed) selected(book, recording, sources) else recording
+    }
+
+    /**
+     * This book's files in [source], as automatic matching would keep them from a collection or series bundle; null
+     * when the files can't be told apart, so the listener chooses.
+     */
+    internal fun bookFileNames(book: Audiobook, recording: Audiobook, source: AudioSource): List<String>? {
+        val whole = recording.copy(sources = listOf(source), bookFilesSelected = false)
+        val chosen = oneBook(book, selectBookFiles(book, whole) ?: whole) ?: return null
+        return chosen.sources.singleOrNull()?.parts?.map { it.name }?.takeIf { it.isNotEmpty() }
     }
 
     fun matches(book: Audiobook, recording: Audiobook): Boolean = confidence(book, recording) == MatchConfidence.STRONG
@@ -255,6 +334,7 @@ object SourceQuality {
 
     fun filter(book: Audiobook, recordings: List<Audiobook>, onPhoneSources: Set<String> = emptySet()): List<Audiobook> = recordings
         .mapNotNull { selectBookFiles(book, it) }
+        .mapNotNull { oneBook(book, it) }
         .mapNotNull { recording ->
             val sources = recording.sources.filter { source ->
                 source.parts.isNotEmpty() && source.parts.all { part ->

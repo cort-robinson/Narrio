@@ -1,7 +1,11 @@
 package app.narrio.ui
 
 import app.narrio.data.BookMetadata
+import app.narrio.data.BookIdentity
 import app.narrio.data.DeviceSourceProviderSettings
+import app.narrio.data.NarrationFit
+import app.narrio.data.NarrationMatch
+import app.narrio.data.NarrationSignal
 import app.narrio.domain.*
 
 /*
@@ -14,8 +18,11 @@ typealias PinnedEbook = Pinned<BestEbook>
 fun PinnedEbook.next(latest: BestEbook?, interacted: Boolean, stillListed: (String) -> Boolean): PinnedEbook =
     next(latest, interacted, { it.edition.id }, stillListed)
 
-/** "Free public-domain ebook · EPUB", then the quieter reasons. */
-fun bestEbookCopy(best: BestEbook, book: Audiobook): BestMatchCopy {
+/**
+ * "Free public-domain ebook · EPUB", then the quieter reasons. With a [recording], an ebook whose name points away from
+ * the narration says so first.
+ */
+fun bestEbookCopy(best: BestEbook, book: Audiobook, recording: Boolean = false): BestMatchCopy {
     val reasons = best.reasons.toSet()
     val availability = when {
         EbookMatchReason.WITH_RECORDING in reasons -> "Comes with this recording"
@@ -24,8 +31,11 @@ fun bestEbookCopy(best: BestEbook, book: Audiobook): BestMatchCopy {
         EbookMatchReason.PUBLIC_DOMAIN in reasons -> "Free public-domain ebook"
         else -> null
     }
+    val caution = if (recording) cautionLabel(NarrationMatch.judge(book, best.edition, best.providerId, confirmed = true)) else null
     val detail = buildList {
         if (EbookMatchReason.WITH_RECORDING in reasons) add("Most likely the narrated edition")
+        if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Likely matches the narration")
+        caution?.let { add("May not follow the narration: ${it.replaceFirstChar(Char::lowercase)}") }
         if (EbookMatchReason.STRONG_MATCH in reasons) add("Matches this title and author")
         if (EbookMatchReason.LANGUAGE_MATCH in reasons && !BookMetadata.unknown(book.language)) add(book.language)
     }
@@ -84,7 +94,7 @@ fun ebookNoMatchCopy(search: StreamedEbookSearch, tally: SearchTally): NoMatchCo
             if (tally.active == 1) "$searched didn't answer. Check your connection, then try again."
             else "None of your ${tally.active} ebook sources answered. Check your connection, then try again.")
         tally.failed > 0 -> NoMatchCopy(NoMatchKind.PARTLY_FAILED, "No ebook found yet",
-            "${tally.failed} of ${tally.active} sources couldn't be checked. Retry ${if (tally.failed == 1) "it" else "them"} below.")
+            "${tally.failed} of ${tally.active} sources couldn't be checked. Search again, or retry ${if (tally.failed == 1) "it" else "them"} under Advanced.")
         tally.needTorBox > 0 -> NoMatchCopy(NoMatchKind.NEEDS_TORBOX, "No free ebook found",
             "$searched ${if (tally.active == 1) "has" else "have"} no ebook of this book. Connect TorBox to also check ${tally.needTorBox} more ${plural(tally.needTorBox, "source")}.")
         else -> NoMatchCopy(NoMatchKind.NOTHING_FOUND, "No ebook found", "Searched $searched. Nothing matched this title and author.")
@@ -102,3 +112,88 @@ fun ebookAnnouncement(search: StreamedEbookSearch, shown: BestEbook?, tally: Sea
 /** Provider names for an ebook's other finders. */
 internal fun ebookAlsoFoundBy(search: StreamedEbookSearch, editionId: String): List<String> =
     search.groups.firstNotNullOfOrNull { it.alsoFoundBy[editionId] }.orEmpty().distinct()
+
+/** One ebook in the flat Other choices list; [confirmed] ebooks named the exact title and author. */
+data class EbookChoice(val edition: BookTextSource, val providerId: String, val source: String, val confirmed: Boolean, val fit: NarrationFit)
+
+/**
+ * Every found ebook once, without [shownId] (the best match card's own): the recording's own files first, as in the
+ * best match, then confirmed before possible, then the likeliest to follow the narration, keeping source order for ties.
+ */
+fun ebookChoices(search: StreamedEbookSearch, book: Audiobook, shownId: String?): List<EbookChoice> = search.groups.flatMap { group ->
+    val source = if (group.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "In this recording's files" else group.name
+    group.editions.map { EbookChoice(it, group.providerId, source, true, NarrationMatch.judge(book, it, group.providerId, confirmed = true)) } +
+        group.possible.map { EbookChoice(it, group.providerId, source, false, NarrationMatch.judge(book, it, group.providerId, confirmed = false)) }
+}.distinctBy { it.edition.id }.filter { it.edition.id != shownId }
+    .sortedWith(compareByDescending<EbookChoice> { it.providerId == DeviceSourceProviderSettings.RECORDING_FILES }.thenByDescending { it.confirmed }
+        .thenByDescending { it.fit.score })
+
+/** "Jane Austen · French · EPUB": the language only when it differs from the book's. */
+fun ebookChoiceDetail(choice: EbookChoice, book: Audiobook): String {
+    val theirs = NarrationMatch.language(choice.edition.language)
+    val ours = NarrationMatch.language(book.language)
+    val language = theirs?.takeIf { it != ours }?.let(::languageName)
+    return listOfNotNull(choice.edition.author.ifBlank { null }, language, choice.edition.format.ifBlank { null }).joinToString(" · ")
+}
+
+private fun languageName(code: String) = if (code.length == 2) java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH).ifBlank { code } else code.replaceFirstChar(Char::uppercase)
+
+enum class ChoiceNoteKind { LIKELY, CAUTION, CHECK }
+data class ChoiceNote(val kind: ChoiceNoteKind, val text: String)
+
+/**
+ * What a choice says about itself, in order: a possible match asks for a check of its title and author; then, with a
+ * [recording], a likely fit, or the reason it may not follow the narration (shown even beside the check, since a known
+ * difference matters either way). Never a verified claim: the pairing status decides after adding.
+ */
+fun ebookChoiceNotes(choice: EbookChoice, recording: Boolean): List<ChoiceNote> {
+    val caution = cautionLabel(choice.fit)
+    val shipped = NarrationSignal.WITH_RECORDING in choice.fit.signals
+    return listOfNotNull(
+        ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author").takeIf { !choice.confirmed },
+        when {
+            recording && choice.fit.likely && shipped -> ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")
+            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Likely matches the narration")
+            caution != null -> ChoiceNote(ChoiceNoteKind.CAUTION, if (recording) "May not follow the narration: ${caution.replaceFirstChar(Char::lowercase)}" else caution)
+            else -> null
+        },
+    )
+}
+
+private fun cautionLabel(fit: NarrationFit): String? = when {
+    NarrationSignal.OTHER_LANGUAGE in fit.signals -> "In another language"
+    NarrationSignal.OTHER_TRANSLATOR in fit.signals -> "A different translation"
+    NarrationSignal.RECORDING_ABRIDGED in fit.signals -> "The recording is abridged"
+    NarrationSignal.SHORTENED in fit.signals -> "Abridged or a sample"
+    NarrationSignal.TOO_SHORT in fit.signals -> "Much shorter than the recording"
+    NarrationSignal.ADAPTED in fit.signals -> "A retelling or adaptation"
+    NarrationSignal.ONE_PART in fit.signals -> "A different volume or part"
+    else -> null
+}
+
+/** A quick alternative to the book's own search words. */
+data class EbookWordChoice(val label: String, val words: String)
+/** The search words a book's details make, and quick alternatives for UK/US titles, subtitles, and original titles. */
+data class EbookWordSuggestions(val bookDetails: String, val choices: List<EbookWordChoice>)
+
+private val originalTitle = Regex("(?i)\\b(?:original(?:ly)? (?:titled|title|published as)|first published (?:in [\\p{L} ]+? )?as|published in the (?:UK|US|United Kingdom|United States) as)\\s*:?\\s*[\"“]?([^\"”.;,()\\n]{2,80})")
+
+fun ebookWordSuggestions(book: Audiobook): EbookWordSuggestions {
+    val title = BookIdentity.title(book.title)
+    val author = book.author.takeUnless(BookMetadata::unknown).orEmpty()
+    fun with(words: String) = "$words $author".trim()
+    val details = with(title)
+    val short = title.substringBefore(':').replace(Regex("\\s*\\([^)]*\\)\\s*$"), "").trim()
+    val original = originalTitle.find(book.description)?.groupValues?.get(1)?.trim()?.trimEnd('\'', '’')
+        ?.takeIf { it.isNotBlank() && BookIdentity.normalize(it) != BookIdentity.normalize(title) }
+    val choices = listOfNotNull(
+        EbookWordChoice("Title only", title).takeIf { title.isNotBlank() && it.words != details },
+        EbookWordChoice("Without subtitle", with(short)).takeIf { short.isNotBlank() && short != title },
+        original?.let { EbookWordChoice("Original title", with(it)) },
+    )
+    return EbookWordSuggestions(details, choices)
+}
+
+/** The words to keep for a search: blank when they're just the book's own details, so the default search runs. */
+fun customEbookWords(typed: String, book: Audiobook): String =
+    typed.trim().takeUnless { BookIdentity.normalize(it) == BookIdentity.normalize(ebookWordSuggestions(book).bookDetails) }.orEmpty()

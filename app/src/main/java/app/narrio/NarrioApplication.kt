@@ -9,12 +9,14 @@ import app.narrio.playback.PlaybackHub
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 
 class NarrioApplication : Application() {
     lateinit var graph: AppGraph
         private set
-    override fun onCreate() { super.onCreate(); graph = AppGraph(this); graph.bookAlignment.start() }
+    override fun onCreate() { super.onCreate(); graph = AppGraph(this); graph.bookAlignment.start(); graph.preparationChecks.start() }
 }
 
 class AppGraph(application: Application) {
@@ -28,7 +30,7 @@ class AppGraph(application: Application) {
         }
     }, object : Migration(2, 3) {
         override fun migrate(db: SupportSQLiteDatabase) { db.execSQL("ALTER TABLE shelf ADD COLUMN pendingFormat TEXT NOT NULL DEFAULT ''") }
-    }, LibraryMigration3To4, LibraryMigration4To5).build()
+    }, LibraryMigration3To4, LibraryMigration4To5, LibraryMigration5To6).build()
     val library = database.library()
     val credentials = CredentialStore(application)
     val catalog = ArchiveDiscovery(http)
@@ -51,6 +53,16 @@ class AppGraph(application: Application) {
     val preferences = application.getSharedPreferences("preferences", Application.MODE_PRIVATE)
     val playback = PlaybackHub()
     val offline = OfflineStore(application, http, torbox)
+    val listeningRecordings = ListeningRecordings(preferences)
+    // Advanced sourcing: the listener's own search words, hidden releases, file choices, links, and phone audio.
+    private val advancedValues = PreferenceValues(application.getSharedPreferences("advanced-sources", Application.MODE_PRIVATE))
+    val hiddenReleases = HiddenReleaseStore(advancedValues)
+    val sourceWords = SourceWordsStore(advancedValues)
+    val torboxLibrary = TorBoxLibrary(torbox)
+    val localManifests = LocalManifests(advancedValues)
+    val releaseFiles = ReleaseFiles(FileSelectionStore(advancedValues), torbox, torboxLibrary, catalog, torrentFiles, localManifests)
+    val linkedReleases = LinkedReleases(http, torbox, torboxLibrary, torrentFiles).also { torbox.linkedTorrent = it::torrentFor }
+    val localAudio = LocalAudioImporter(application, LocalAudioGrants(advancedValues))
     val streamingSourceSearch: app.narrio.domain.StreamingSourceSearch = ProviderSourceSearch(sourceProviderSettings, { provider ->
         when (provider.id) {
             DeviceSourceProviderSettings.ARCHIVE -> RecordingSourceLookup(catalog)
@@ -59,8 +71,9 @@ class AppGraph(application: Application) {
         }
     }, torbox::checkCached, torrentFiles::recording, sourceProviderSettings::recordStatus,
         phoneRecordings = { offline.books.value.filter { it.complete }.map { it.book.copy(id = it.book.recordingId.ifBlank { it.book.id }, sources = listOf(it.source)) } },
-        rankingChanges = offline.books.map { Unit },
-        preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() })
+        rankingChanges = merge(offline.books.map { Unit }, hiddenReleases.hidden.drop(1).map { Unit }),
+        preferredFormat = { preferences.getString("format:${it.id}", "M4B").orEmpty() },
+        listening = { listeningRecordings.keys(it.id) }, hidden = hiddenReleases::keys)
     val annasArchive = AnnasArchive(http, WebViewPages(application))
     val textFinder = BookTextFinder(textDiscovery, indexedCatalog, torbox, addons::ebooks, webEbooks::accountText)
     val streamingEbookSearch: app.narrio.domain.StreamingEbookSearch = ProviderEbookSearch(ebookProviderSettings, { provider ->
@@ -83,4 +96,14 @@ class AppGraph(application: Application) {
     val readingSync = app.narrio.playback.ReadingSync(sharedPositions, positionMapper, mappingRepository, alignmentJobs)
     val bookAlignment = app.narrio.playback.BookAlignmentScheduler(application)
     val updates = app.narrio.updates.AppUpdates(application, playback)
+    /** Starts, checks, and settles TorBox preparations; see [TorBoxPreparations]. */
+    /** The one answer to which recording [entry]'s played audio belongs to; the row's book alone never says. */
+    suspend fun recordingFor(entry: ShelfEntry): app.narrio.domain.Audiobook? =
+        playedRecording(entry, listeningRecordings[entry.bookId], preparations.current(entry.bookId))
+    val preparations = TorBoxPreparations(RoomPreparationShelf(database),
+        PreferencePreparationRecords(application.getSharedPreferences("torbox-preparation-records", Application.MODE_PRIVATE)), torbox::account)
+    val preparationChecks = app.narrio.preparation.PreparationChecks(application, library.observeShelf(), preparations) { credentials.read() != null }
+    /** A preparation notification's tap or Listen, waiting for Narrio's screen to act on it. */
+    val preparationRequests = kotlinx.coroutines.flow.MutableStateFlow<app.narrio.preparation.PreparationRequest?>(null)
+    init { preparations.announce = { change -> if (!playback.visible) app.narrio.preparation.PreparationNotifications.show(application, change) } }
 }

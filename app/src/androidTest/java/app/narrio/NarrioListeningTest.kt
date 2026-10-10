@@ -30,12 +30,21 @@ class NarrioListeningTest {
         compose.onNodeWithText("Read by Ashleighjane").assertExists()
     }
 
+    /** Plays the open recording in [format], chosen in the recording chooser's Advanced view. */
+    private fun listenIn(format: String) {
+        compose.onNodeWithTag("change-recording").performScrollTo().performClick()
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
+        compose.onNodeWithTag("advanced-entry").performClick()
+        compose.onNodeWithTag("advanced-sources").performScrollToNode(hasTestTag("format:$format"))
+        compose.onNodeWithTag("format:$format").performClick()
+        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
+        compose.onNodeWithTag("chooser-listen").performClick()
+    }
+
     @Test fun realRecordingSupportsLaterPartControlsAndBackgroundResume() {
         openSecretGarden()
-        compose.onNodeWithText("Listen").performScrollTo().performClick()
-        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Chapter files") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNode(hasText("Chapter files") and hasClickAction()).performScrollTo().performClick()
-        compose.onNodeWithText("Start listening").performScrollTo().performClick()
+        listenIn("MP3")
         compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.source?.format == "MP3" && graph.playback.state.value.positionMs > 1000 }
         assertEquals(27, graph.playback.state.value.source?.parts?.size)
         compose.runOnIdle { graph.playback.service!!.speed(1f) }
@@ -47,11 +56,11 @@ class NarrioListeningTest {
         val secondPart = graph.playback.state.value.source!!.parts[1]
         assertTrue(secondPart.durationMs > 2000)
         compose.runOnIdle {
-            graph.playback.service!!.sleep(0, true)
+            graph.playback.service!!.sleep(app.narrio.playback.SleepMode.END_OF_PART)
             graph.playback.service!!.seek(secondPart.durationMs - 1500)
         }
         compose.waitUntil(30_000) { graph.playback.state.value.partIndex == 2 && !graph.playback.state.value.playing }
-        assertFalse(graph.playback.state.value.sleepAtEnd)
+        assertFalse(graph.playback.state.value.sleep.active)
         compose.runOnIdle { graph.playback.service!!.part(1, 120_000) }
         compose.waitUntil(30_000) { graph.playback.state.value.partIndex == 1 && graph.playback.state.value.positionMs >= 120_000 && graph.playback.state.value.playing }
         compose.onNodeWithContentDescription("Bookmark this moment").performClick()
@@ -65,7 +74,7 @@ class NarrioListeningTest {
         compose.onNodeWithText("Sleep").performScrollTo().performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithText("In 15 minutes").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("In 15 minutes").performScrollTo().performClick()
-        assertTrue(graph.playback.state.value.sleepUntil > System.currentTimeMillis())
+        assertTrue(graph.playback.state.value.sleep.untilMs > System.currentTimeMillis())
         val before = graph.playback.state.value.positionMs
         compose.runOnIdle { compose.activity.moveTaskToBack(true) }
         compose.waitUntil(20_000) { graph.playback.state.value.positionMs > before + 1500 }
@@ -88,10 +97,7 @@ class NarrioListeningTest {
 
     @Test fun wholeBookM4bSupportsLongDistanceSeeking() {
         openSecretGarden()
-        compose.onNodeWithText("Listen").performScrollTo().performClick()
-        compose.waitUntil(10_000) { compose.onAllNodes(hasText("Whole-book audio") and hasClickAction()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNode(hasText("Whole-book audio") and hasClickAction()).performScrollTo().performClick()
-        compose.onNodeWithText("Start listening").performScrollTo().performClick()
+        listenIn("M4B")
         compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.source?.format == "M4B" && graph.playback.state.value.durationMs > 3_600_000 }
         compose.runOnIdle { graph.playback.service!!.seek(5_400_000) }
         compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.positionMs >= 5_400_000 }
@@ -108,10 +114,10 @@ class NarrioListeningTest {
         compose.runOnIdle { vm.open(book) }
         compose.waitUntil(90_000) { !vm.sourceSearch.value.loading && vm.sourceSearch.value.recordings.any { it.provider == "archive" } }
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
+        // Choosing it in the chooser keeps the book's one page and leads Listen with it.
         val recording = vm.sourceSearch.value.recordings.first { it.provider == "archive" }
-        compose.runOnIdle { vm.chooseRecording(recording) }
-        compose.waitUntil(30_000) { vm.selection.value.book?.id == recording.id && !vm.selection.value.loading }
-        compose.onNodeWithText("The recording").assertIsDisplayed()
+        compose.runOnIdle { vm.chooseVersion(recording) }
+        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
     }
 }

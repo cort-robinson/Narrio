@@ -27,6 +27,7 @@ class ReadingSyncSmokeTest {
 
     @Test fun settingsToggleAndAtomicProgressSurviveRepositoryRecreation() = runBlocking {
         compose.runOnIdle { vm.setBackgroundAlignment(true); vm.navigate(2) }
+        compose.onNodeWithTag("settings-options").performScrollToNode(hasTestTag("background-alignment"))
         compose.onNodeWithTag("background-alignment").performScrollTo().assertIsOn().performClick().assertIsOff()
         assertFalse(graph.bookAlignment.enabled())
         compose.onNodeWithTag("background-alignment").performClick().assertIsOn()

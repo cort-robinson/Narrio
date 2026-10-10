@@ -27,8 +27,12 @@ interface ReadingLibrary {
         throw ProviderException("Website ebook downloads are unavailable.")
     /** Makes [editionId] the edition used for reading and sync. */
     suspend fun activate(bookId: String, editionId: String)
-    /** Every enabled ebook source looks for [book] at once; each one's section fills in as it answers. */
-    suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession
+    /**
+     * Every enabled ebook source looks for [book] at once; each one's section fills in as it answers. [words] are the
+     * reader's own search words; blank searches by the book's title and author. [narration], when given, is the
+     * recording the ebook should follow: only its files and metadata are used, instead of every saved recording.
+     */
+    suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope, words: String = "", narration: NarrationContext? = null): EbookSearchSession
 }
 
 /** Room editions and positions, with pairing evidence from the sync engine. */
@@ -112,9 +116,10 @@ class RoomReadingLibrary(private val graph: AppGraph) : ReadingLibrary {
         return graph.editionFiles.editions(book.id).first { it.id == document.id }
     }
     override suspend fun activate(bookId: String, editionId: String) = graph.followAlong.activateEdition(bookId, editionId)
-    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession {
-        val saved = library.find(book.id)?.book()
-        return graph.streamingEbookSearch.start(book, (book.sources + saved?.sources.orEmpty()).distinctBy { it.id }, connected, scope)
+    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope, words: String, narration: NarrationContext?): EbookSearchSession {
+        val saved = if (narration == null) library.find(book.id)?.book() else null
+        val narrated = NarrationMatch.recordingBook(book, saved, narration)
+        return graph.streamingEbookSearch.start(narrated, narrated.sources, connected, scope, words)
     }
 }
 

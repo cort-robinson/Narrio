@@ -255,10 +255,11 @@ fun leaveReadAlong(reader: ReaderViewModel, controller: ReaderController) {
 
 /**
  * Lays out the page and read along's controls. The page is always the first child, so turning read along on or
- * off never recreates the navigator. A reported separating hinge stays empty.
+ * off never recreates the navigator. A reported separating hinge stays empty. [docked] keeps a tray under the page
+ * without read along, for the mini-player while another book or this one plays.
  */
 @Composable
-fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Composable (ReadAlongArrangement?) -> Unit, controls: @Composable (ReadAlongArrangement) -> Unit) {
+fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, docked: Boolean = false, page: @Composable (ReadAlongArrangement?) -> Unit, controls: @Composable (ReadAlongArrangement) -> Unit) {
     val fold = LocalFold.current
     val density = LocalDensity.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -274,7 +275,7 @@ fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Com
         val vertical = fold != null && fold.isSeparating && fold.orientation == FoldingFeature.Orientation.VERTICAL &&
             hingeLeft != null && hingeLeft in (width / 4)..(width * 3 / 4)
         val arrangement = when {
-            !together -> null
+            !together -> if (docked) ReadAlongArrangement.TRAY else null
             tabletop -> ReadAlongArrangement.TABLETOP
             maxWidth >= 600.dp -> ReadAlongArrangement.PANEL
             else -> ReadAlongArrangement.TRAY
@@ -309,12 +310,26 @@ fun ReadAlongLayout(together: Boolean, modifier: Modifier = Modifier, page: @Com
     }
 }
 
-/** The phone's tray: speed · −30 · play · +30 · sleep, under a line of narration status. */
+/**
+ * The reader's docked mini-player while audio plays without read along. Opening it leaves the reader for the
+ * Listening room; snackbars rise above it as they do above read along's tray.
+ */
+@Composable
+fun ReaderMiniPlayer(vm: NarrioViewModel) {
+    val lift = LocalSnackbarLift.current
+    val density = LocalDensity.current
+    DisposableEffect(lift) { onDispose { lift.value = 0.dp } }
+    MiniPlayer(vm, Modifier.onSizeChanged { lift.value = with(density) { it.height.toDp() } }, aboveSystemBar = true) {
+        vm.closeReader(); vm.playerOpen.value = true
+    }
+}
+
+/** The phone's tray: speed · −10 · play · +30 · sleep, under a line of narration status. */
 @Composable
 fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: ListeningState, options: () -> Unit, modifier: Modifier = Modifier, above: Dp = 0.dp) {
     var speedOpen by remember { mutableStateOf(false) }
     var sleepOpen by remember { mutableStateOf(false) }
-    val progress = if (playback.durationMs > 0) (playback.positionMs.toFloat() / playback.durationMs).coerceIn(0f, 1f) else 0f
+    val progress = playback.progress
     val lift = LocalSnackbarLift.current
     val density = LocalDensity.current
     var height by remember { mutableStateOf(0.dp) }
@@ -324,7 +339,7 @@ fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: Listening
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = modifier.fillMaxWidth().testTag("read-along-tray")
         .onSizeChanged { height = with(density) { it.height.toDp() } }) {
         Column(Modifier.navigationBarsIgnoringVisibilityPadding()) {
-            if (readAlong.playingHere && playback.durationMs > 0) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp).clearAndSetSemantics { },
+            if (readAlong.playingHere && playback.hasLength) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp).clearAndSetSemantics { },
                 color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
             AnimatedContent(when { !readAlong.playingHere -> 0; readAlong.matching -> 1; else -> 2 }, label = "tray",
                 transitionSpec = { fadeIn(tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate)).togetherWith(fadeOut(tween(Motion.SHORT))) }) { mode ->
@@ -335,10 +350,10 @@ fun ReadAlongTray(vm: NarrioViewModel, readAlong: ReadAlong, playback: Listening
                         StatusRow(readAlong, playback, options, Modifier.padding(start = 20.dp, end = 12.dp, top = 6.dp))
                         Row(Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                             ToolSlot(Icons.Rounded.Speed, { speedOpen = true }) { FitLabel(speedLabel(playback.speed)) }
-                            SkipButton(false, 52.dp, 28.dp) { vm.graph.playback.service?.skip(-30_000) }
+                            SkipButton(false, 52.dp, 28.dp) { vm.graph.playback.service?.skip(it) }
                             PlayButton(playback, 56.dp, 30.dp) { vm.graph.playback.service?.toggle() }
-                            SkipButton(true, 52.dp, 28.dp) { vm.graph.playback.service?.skip(30_000) }
-                            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleepAtEnd || playback.sleepUntil > 0) { FitLabel(sleepLabel(playback)) }
+                            SkipButton(true, 52.dp, 28.dp) { vm.graph.playback.service?.skip(it) }
+                            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleep.active) { FitLabel(sleepLabel(playback)) }
                         }
                     }
                 }
@@ -391,9 +406,7 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
     var sleepOpen by remember { mutableStateOf(false) }
     if (!readAlong.playingHere) { ListenHere(vm, readAlong); return }
     if (readAlong.matching) { MatchRow(vm, readAlong, playback); return }
-    var dragging by remember { mutableStateOf(false) }
-    var slider by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(playback.positionMs, playback.partIndex) { if (!dragging) slider = playback.positionMs.toFloat() }
+    var scrub by remember { mutableStateOf<Long?>(null) }
     val confidence = readAlong.place?.confidence ?: MappingConfidence.UNMAPPED
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -401,23 +414,20 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
             if (chapters != null) ReadAlongOptionsButton(options)
         }
         StatusRow(readAlong, playback, options, showTime = false)
-        Slider(value = slider.coerceIn(0f, playback.durationMs.coerceAtLeast(1).toFloat()), onValueChange = { dragging = true; slider = it },
-            onValueChangeFinished = { vm.graph.playback.service?.seek(slider.toLong()); dragging = false },
-            valueRange = 0f..playback.durationMs.coerceAtLeast(1).toFloat(), enabled = playback.durationMs > 0,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Listening position" })
+        SeekSlider(playback.positionMs, playback.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            EstimatedPlace(formatTime(if (dragging) slider.toLong() else playback.positionMs), if (dragging) MappingConfidence.EXACT else confidence, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (playback.durationMs > 0) "−${formatTime((playback.durationMs - (if (dragging) slider.toLong() else playback.positionMs)).coerceAtLeast(0))}" else "Loading length",
+            EstimatedPlace(formatTime(scrub ?: playback.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (playback.durationMs > 0) "−${formatTime((playback.durationMs - (scrub ?: playback.positionMs)).coerceAtLeast(0))}" else "Loading length",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(-30_000) }
+            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
             PlayButton(playback, 72.dp, 38.dp) { vm.graph.playback.service?.toggle() }
-            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(30_000) }
+            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
         }
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             ToolSlot(Icons.Rounded.Speed, { speedOpen = true }) { FitLabel(speedLabel(playback.speed)) }
-            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleepAtEnd || playback.sleepUntil > 0) { FitLabel(sleepLabel(playback)) }
+            ToolSlot(Icons.Rounded.Bedtime, { sleepOpen = true }, active = playback.sleep.active) { FitLabel(sleepLabel(playback)) }
             if (chapters != null) ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, chapters) { FitLabel("Chapters") }
         }
         AnimatedVisibility(playback.error != null) { RecoveryState("Playback stopped", playback.error.orEmpty()) { vm.graph.playback.service?.retry() } }
@@ -612,7 +622,10 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
     var sheet by remember { mutableStateOf(false) }
     val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     val ebook = formats?.ebook == true
-    val find = { sheet = true; vm.openEbookSearch(book) }
+    // The ebook search judges editions against the recording and audio playing now.
+    val playing by vm.playback.collectAsStateWithLifecycle()
+    val narration = playing.source?.takeIf { playing.book?.id == book.id }?.let { NarrationContext(playing.book ?: book, it) }
+    val find = { sheet = true; vm.openEbookSearch(book, narration) }
     if (dense) IconButton(if (ebook) vm::readAlong else find, modifier.testTag("read-along")) {
         Icon(if (ebook) Icons.AutoMirrored.Rounded.MenuBook else Icons.Rounded.Search, if (ebook) "Read along" else "Find the ebook to read along", tint = MaterialTheme.colorScheme.primary)
     } else Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -634,13 +647,14 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
         searchAgain = { vm.findEbooks(book, force = true) },
         chooseFile = { vm.beginEbookImport(book); file.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
-        sourceSettings = { sheet = false; vm.navigate(2) }, connectTorBox = { sheet = false; vm.navigate(2) },
-    ), dismiss = { sheet = false }, searchLinks = searchLinks)
+        sourceSettings = { sheet = false; vm.openSourceSettings() }, connectTorBox = vm::requestTorBoxConnect,
+        searchWith = { vm.searchEbooksWith(book, it) }, linksFor = { vm.graph.addons.ebookSearchLinks(book, it) },
+    ), dismiss = { sheet = false }, searchLinks = searchLinks, narration = narration)
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Modifier.navigationBarsIgnoringVisibilityPadding() = windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
+internal fun Modifier.navigationBarsIgnoringVisibilityPadding() = windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Modifier.statusBarsIgnoringVisibilityPadding() = windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)

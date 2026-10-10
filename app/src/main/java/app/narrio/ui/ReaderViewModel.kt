@@ -77,6 +77,8 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
                 val controller = ReaderController(opened, scope)
                 val audioPlaying = graph.playback.state.map { it.playing && it.book?.id == bookId }
                 val historyKey = "readerHistory:$bookId:${edition.id}"
+                // Reading to the end finishes the book on the shelf; reading elsewhere in a finished book reopens it.
+                val completion = ReadingCompletion(opened.layout, scope) { done -> if (done) graph.library.finished(bookId) else graph.library.unfinished(bookId) }
                 val session = ReaderSession(controller, graph.sharedPositions, audioPlaying, paceStore, scope,
                     audioFor = { cursor ->
                         val sourceId = graph.sharedPositions.current(bookId)?.audio?.sourceId
@@ -84,7 +86,11 @@ class ReaderViewModel(application: Application, val bookId: String) : AndroidVie
                         val snapshot = sourceId?.let { graph.mappingRepository.snapshot(bookId, it) }
                         if (snapshot == null || graph.readingSync.pairing(bookId, snapshot) == PairingStatus.MISMATCH) null
                         else graph.positionMapper.audioFor(bookId, cursor, snapshot.source.id)
-                    }, onCommitted = { cursor -> graph.preferences.edit().putString(historyKey, NarrioJson.encodeToString(cursor)).apply() })
+                    }, onCommitted = { cursor, page ->
+                        graph.preferences.edit().putString(historyKey, NarrioJson.encodeToString(cursor)).apply()
+                        completion.committed(page)
+                    })
+                scope.launch { controller.visible.collect(completion::showing) }
                 val shared = graph.sharedPositions.current(bookId)
                 val history = if (shared == null) null else graph.preferences.getString(historyKey, null)?.let {
                     runCatching { NarrioJson.decodeFromString<ContentCursor>(it) }.getOrNull()

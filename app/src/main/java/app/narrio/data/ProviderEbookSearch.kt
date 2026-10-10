@@ -13,37 +13,46 @@ import kotlinx.coroutines.sync.withLock
 data class EbookLookupResult(val found: List<EbookCandidate>, val failure: String? = null, val checkUrl: String? = null)
 
 interface EbookLookup {
-    suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult
+    /** [words] are the reader's own search words; blank searches by the book's title and author. */
+    suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String = "",
+                       status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult
 }
 
-/** Companion files in the book's recordings; one shipped with the recording is at least a possible match. */
+/** The book as the reader's words describe it, for a source's own query: their words as the title, no author. */
+internal fun wordsBook(book: Audiobook, words: String) = book.copy(title = words.trim(), author = "")
+
+/** Companion files in the book's recordings; one shipped with the recording is at least a possible match. Words don't change them. */
 object RecordingEbookLookup : EbookLookup {
-    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit) =
+    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String, status: suspend (SourceGroupStatus) -> Unit) =
         EbookLookupResult(recordings.flatMap { BookTextFinder.companions(it) }.distinctBy { it.id }
             .map { EbookCandidate(it, maxOf(MatchConfidence.POSSIBLE, EbookMatch.confidence(book, it.title))) })
 }
 
 /** Ebooks already in the TorBox account: torrent files and web downloads, each reported separately. */
 class AccountEbookLookup(private val finder: BookTextFinder) : EbookLookup {
-    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult {
+    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult {
         var failure: String? = null
         suspend fun read(block: suspend () -> List<EbookCandidate>) = try { budget.run { block() } }
             catch (timedOut: TimeoutCancellationException) { failure = "Ebook lookup timed out. Retry."; emptyList() }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { failure = failure ?: "Some of your TorBox ebooks could not be checked. Retry."; emptyList() }
-        val found = read { finder.accountMatches(book) } + read { finder.webAccountMatches(book) }
+        val found = read { finder.accountMatches(book, words) } + read { finder.webAccountMatches(book, words) }
         return EbookLookupResult(found, failure)
     }
 }
 
-/** An ebook add-on's releases, kept only when TorBox already has their ebook files. Title variants stop early. */
+/**
+ * An ebook add-on's releases, kept only when TorBox already has their ebook files. Title variants stop early; the
+ * reader's own words are one query, sent as typed.
+ */
 class AddonEbookLookup(private val finder: BookTextFinder, private val addons: AddonManager, private val id: String) : EbookLookup {
-    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult {
+    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult {
         val found = mutableListOf<EbookCandidate>()
-        for (title in SourceQuality.searchTitles(book)) {
-            val releases = addons.searchEbookAddon(id, book, title, budget, status)
+        val queries = if (words.isBlank()) SourceQuality.searchTitles(book).map { book to it } else listOf(wordsBook(book, words) to words.trim())
+        for ((asked, title) in queries) {
+            val releases = addons.searchEbookAddon(id, asked, title, budget, status)
             status(SourceGroupStatus.CHECKING)
-            found += budget.run { finder.cachedFiles(book, releases) }
+            found += budget.run { finder.cachedFiles(book, releases, words) }
             if (found.any { it.confidence == MatchConfidence.STRONG }) break
             status(SourceGroupStatus.SEARCHING)
         }
@@ -52,8 +61,8 @@ class AddonEbookLookup(private val finder: BookTextFinder, private val addons: A
 }
 
 class GutenbergEbookLookup(private val finder: BookTextFinder) : EbookLookup {
-    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit) =
-        EbookLookupResult(budget.run { finder.publicMatches(book) })
+    override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String, status: suspend (SourceGroupStatus) -> Unit) =
+        EbookLookupResult(budget.run { finder.publicMatches(book, words) })
 }
 
 /** Independent ebook sources with shared matching: confirmed ebooks can lead, possible ones wait for the reader. */
@@ -64,10 +73,11 @@ class ProviderEbookSearch(
     private val timeoutMs: Long = 15_000,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
 ) : StreamingEbookSearch {
-    override fun start(book: Audiobook, recordings: List<AudioSource>, connected: Boolean, scope: CoroutineScope): EbookSearchSession =
-        Session(book, recordings, connected, scope)
+    override fun start(book: Audiobook, recordings: List<AudioSource>, connected: Boolean, scope: CoroutineScope, words: String): EbookSearchSession =
+        Session(book, recordings, connected, scope, words.trim())
 
-    private inner class Session(val book: Audiobook, val recordings: List<AudioSource>, connected: Boolean, val scope: CoroutineScope) : EbookSearchSession {
+    /** A retry searches with the same [words] as the rest of the session. */
+    private inner class Session(val book: Audiobook, val recordings: List<AudioSource>, connected: Boolean, val scope: CoroutineScope, val words: String) : EbookSearchSession {
         val providers = settings.providers.value.sortedBy { it.order }
         val groups = providers.associate { provider ->
             val reason = when {
@@ -114,7 +124,7 @@ class ProviderEbookSearch(
             }
             val result = try {
                 val source = lookup(provider) ?: error("Source no longer installed")
-                source.search(book, recordings, SourceSearchBudget(timeoutMs, now), ::status)
+                source.search(book, recordings, SourceSearchBudget(timeoutMs, now), words, ::status)
             } catch (timedOut: TimeoutCancellationException) { EbookLookupResult(emptyList(), "Ebook lookup timed out. Retry.") }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
@@ -150,7 +160,7 @@ class ProviderEbookSearch(
                     alsoFoundBy = if (others.isEmpty()) group.alsoFoundBy else group.alsoFoundBy + (shown.id to others))
             }
             val ordered = providers.map { output.getValue(it.id) }
-            mutable.value = StreamedEbookSearch(book, ordered, EbookRanking.choose(book, ordered), reported())
+            mutable.value = StreamedEbookSearch(book, ordered, EbookRanking.choose(book, ordered, recordings.isNotEmpty()), reported())
         }
     }
 
@@ -161,19 +171,17 @@ class ProviderEbookSearch(
     }
 }
 
-/** Pure ranking over confirmed ebooks; possible matches need the reader's own choice. Ties keep source priority. */
+/**
+ * Pure ranking over confirmed ebooks; possible matches need the reader's own choice. The recording's own files lead,
+ * then the likeliest fit with the narration (language, translator, abridgment), then EPUB. Ties keep source priority.
+ */
 object EbookRanking {
-    fun choose(book: Audiobook, groups: List<EbookGroup>): BestEbook? {
-        fun canonical(value: String) = when (value.lowercase().trim()) { "en", "eng", "english" -> "english"; else -> value.lowercase().trim() }
-        fun language(edition: BookTextSource) = when {
-            edition.language.isBlank() || BookMetadata.unknown(book.language) -> 1
-            canonical(edition.language) == canonical(book.language) -> 2
-            else -> 0
-        }
-        val chosen = groups.flatMap { group -> group.editions.map { it to group.providerId } }
-            .sortedWith(compareByDescending<Pair<BookTextSource, String>> { it.second == DeviceSourceProviderSettings.RECORDING_FILES }
-                .thenByDescending { language(it.first) }.thenByDescending { it.first.format == "EPUB" }).firstOrNull() ?: return null
-        val (edition, providerId) = chosen
+    /** [recording] means the book has a recording, so a likely fit with the narration is worth saying. */
+    fun choose(book: Audiobook, groups: List<EbookGroup>, recording: Boolean = false): BestEbook? {
+        val chosen = groups.flatMap { group -> group.editions.map { Triple(it, group.providerId, NarrationMatch.judge(book, it, group.providerId, confirmed = true)) } }
+            .sortedWith(compareByDescending<Triple<BookTextSource, String, NarrationFit>> { it.second == DeviceSourceProviderSettings.RECORDING_FILES }
+                .thenByDescending { it.third.score }.thenByDescending { it.first.format == "EPUB" }).firstOrNull() ?: return null
+        val (edition, providerId, fit) = chosen
         val reasons = buildList {
             when {
                 providerId == DeviceSourceProviderSettings.RECORDING_FILES -> add(EbookMatchReason.WITH_RECORDING)
@@ -181,9 +189,11 @@ object EbookRanking {
                 edition.provider == "gutenberg" -> add(EbookMatchReason.PUBLIC_DOMAIN)
                 edition.provider == "torbox" || edition.provider == "torbox-web" -> add(EbookMatchReason.IN_YOUR_TORBOX)
             }
+            // The recording's own file already says it's most likely the narrated edition.
+            if (recording && fit.likely && providerId != DeviceSourceProviderSettings.RECORDING_FILES) add(EbookMatchReason.LIKELY_NARRATION)
             add(EbookMatchReason.STRONG_MATCH)
             if (edition.format == "EPUB") add(EbookMatchReason.EPUB)
-            if (language(edition) == 2) add(EbookMatchReason.LANGUAGE_MATCH)
+            if (NarrationSignal.SAME_LANGUAGE in fit.signals) add(EbookMatchReason.LANGUAGE_MATCH)
         }
         return BestEbook(edition, reasons, providerId)
     }

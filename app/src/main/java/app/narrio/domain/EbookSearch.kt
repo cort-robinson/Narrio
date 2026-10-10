@@ -36,9 +36,22 @@ enum class EbookMatchReason {
     STRONG_MATCH,
     EPUB,
     LANGUAGE_MATCH,
+    /** Named signals point to the narrated text (same language or translator, nothing shortened); alignment still decides. */
+    LIKELY_NARRATION,
 }
 
 data class BestEbook(val edition: BookTextSource, val reasons: List<EbookMatchReason>, val providerId: String)
+
+/**
+ * The recording an ebook should follow, when the caller knows it: [recording] carries its own metadata (language,
+ * narrator, release name, description with any translator, abridgment or part, length) and [source] the audio files
+ * chosen to play. With it, narration hints and "In this recording's files" use only this recording, never a catalog
+ * book's placeholders or another saved recording's files. Hints stay hints: the pairing status decides after adding.
+ */
+data class NarrationContext(val recording: Audiobook, val source: AudioSource? = null) {
+    /** Identifies the recording and file choice, so results for another one are never reused. */
+    val key: String get() = "${recording.recordingId.ifBlank { recording.id }}/${source?.id ?: recording.sources.joinToString(",") { it.id }}"
+}
 
 /** A snapshot of an in-progress or finished ebook search, emitted as sources report. */
 data class StreamedEbookSearch(
@@ -56,6 +69,9 @@ interface EbookSearchSession {
 }
 
 interface StreamingEbookSearch {
-    /** [recordings] are the book's audio sources, whose companion files are checked first. */
-    fun start(book: Audiobook, recordings: List<AudioSource>, connected: Boolean, scope: CoroutineScope): EbookSearchSession
+    /**
+     * [recordings] are the book's audio sources, whose companion files are checked first. [words] are the reader's own
+     * search words, used by every source and its retries; blank searches by the book's title and author.
+     */
+    fun start(book: Audiobook, recordings: List<AudioSource>, connected: Boolean, scope: CoroutineScope, words: String = ""): EbookSearchSession
 }

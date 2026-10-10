@@ -65,7 +65,16 @@ data class Preparation(
     val torrentId: Long, val ready: Boolean, val progress: Float, val state: String,
     val downloadBytesPerSecond: Long = 0, val etaSeconds: Long = 0,
     val seeds: Long? = null, val checkedAtMs: Long = 0,
-)
+    /** TorBox no longer lists the item, or has no peers to fetch it from. */
+    val missing: Boolean = false, val stalled: Boolean = false,
+    /** Why it couldn't get ready, or why checking stopped when [paused], in the listener's words. */
+    val problem: String = "",
+    /** Narrio stopped checking (TorBox unreachable or disconnected); checking again can resume it. */
+    val paused: Boolean = false,
+) {
+    /** TorBox can't fetch this release; another recording is the way forward. */
+    val failed: Boolean get() = problem.isNotEmpty() && !paused
+}
 
 /** Full path comparison keeps disc folders and unpadded chapter numbers in order. */
 object AudioOrdering : Comparator<String> {
@@ -95,7 +104,13 @@ fun formatTime(ms: Long): String {
 }
 fun durationLabel(ms: Long): String = if (ms > 0) "${ms / 3_600_000}h ${(ms / 60_000) % 60}m" else "Length on playback"
 fun sizeLabel(bytes: Long): String = when { bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0); bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0); else -> "%.0f KB".format(bytes / 1000.0) }
-fun providerLabel(book: Audiobook) = when (book.provider) { "catalog" -> book.metadataSource.ifBlank { "Book catalog" }; "torbox" -> "My TorBox"; "knaben" -> book.sourceAddonName.ifBlank { "Indexed release" }; else -> "LibriVox" }
+fun providerLabel(book: Audiobook) = when (book.provider) { "catalog" -> book.metadataSource.ifBlank { "Book catalog" }; "torbox" -> "My TorBox"; "knaben" -> book.sourceAddonName.ifBlank { "Indexed release" }; "local" -> "On this phone"; else -> "LibriVox" }
+/** Where a source's audio plays from. */
+fun deliveryLabel(source: AudioSource?) = when {
+    source?.delivery == "local" -> "On this phone"
+    source?.delivery?.startsWith("torbox") == true -> "TorBox"
+    else -> "Internet Archive"
+}
 fun narrationLabel(book: Audiobook) = when {
     book.narratorFromCatalog -> "Catalog narrator: ${book.narrator}"
     book.narrator.startsWith("Narrator not ") -> book.narrator

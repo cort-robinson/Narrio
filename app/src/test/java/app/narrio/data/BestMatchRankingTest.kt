@@ -21,6 +21,21 @@ class BestMatchRankingTest {
         assertFalse(BestMatchReason.NEEDS_PREPARING in best.reasons)
     }
 
+    @Test fun theRecordingTheListenerUsesStaysTheChoiceOverABetterRankedOne() {
+        val mine = release("mine", "MP3", ready = false)
+        val listening = setOf("mine")
+        val best = BestMatchRanking.choose(book, listOf(SourceGroup("p0", "P", SourceGroupStatus.DONE, listOf(release("better", seeders = 900), release("downloaded"), mine))),
+            onPhone = setOf("downloaded"), listening = listening)!!
+        assertEquals("mine", best.recording.id)
+        assertEquals(BestMatchReason.LISTENING_NOW, best.reasons.first())
+        assertTrue(BestMatchReason.NEEDS_PREPARING in best.reasons)
+        // Its release hash identifies it too, as an adopted recording carries the book's id.
+        val adopted = release("other-id", "MP3").copy(torrentHash = "ABC")
+        assertEquals("other-id", BestMatchRanking.choose(book, listOf(SourceGroup("p", "P", SourceGroupStatus.DONE, listOf(release("better"), adopted))), listening = setOf("abc"))!!.recording.id)
+        // Without one, ranking is unchanged.
+        assertEquals("downloaded", choose(release("better", seeders = 900), release("downloaded"), phone = setOf("downloaded"))!!.recording.id)
+    }
+
     @Test fun readyAlwaysBeatsUncachedEvenWithPreferredFormatAndSeeders() {
         val best = choose(release("pending", ready = false, seeders = 900), release("ready", "MP3"))!!
         assertEquals("ready", best.recording.id)

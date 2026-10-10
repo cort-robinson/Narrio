@@ -34,10 +34,19 @@ class ProviderSourceSearch(
     private val preferredFormat: (Audiobook) -> String = { "M4B" },
     private val timeoutMs: Long = 15_000,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
-) : StreamingSourceSearch {
-    override fun start(book: Audiobook, connected: Boolean, scope: CoroutineScope): SourceSearchSession = Session(book, connected, scope)
+    /** Ids of the recording the listener already uses for a book; it stays the best match. */
+    private val listening: (Audiobook) -> Set<String> = { emptySet() },
+    /** Release keys the listener marked "Not this book", by book ID; changes arrive through [rankingChanges]. */
+    private val hidden: (String) -> Set<String> = { emptySet() },
+) : CustomWordsSourceSearch {
+    override fun start(book: Audiobook, connected: Boolean, scope: CoroutineScope): SourceSearchSession = Session(book, connected, scope, null)
+    override fun start(book: Audiobook, connected: Boolean, scope: CoroutineScope, words: String?): SourceSearchSession =
+        Session(book, connected, scope, SourceWords.clean(words))
 
-    private inner class Session(val book: Audiobook, val connected: Boolean, val scope: CoroutineScope) : SourceSearchSession {
+    private inner class Session(val book: Audiobook, val connected: Boolean, val scope: CoroutineScope, val words: String?) : SourceSearchSession {
+        /** Custom words replace the book's title and author in requests; matching still uses the book. */
+        val requestBook = if (words == null) book else book.copy(author = "Author not listed")
+        fun wanted(recording: Audiobook) = SourceQuality.isCandidate(book, recording) || words != null && SourceWords.matches(words, recording)
         val providers = settings.providers.value.sortedBy { it.order }
         val groups = providers.associate { provider -> provider.id to SourceGroup(provider.id, provider.name,
             if (!provider.enabled || provider.requiresTorBox && !connected) SourceGroupStatus.SKIPPED else SourceGroupStatus.SEARCHING,
@@ -88,10 +97,10 @@ class ProviderSourceSearch(
             try {
                 val source = lookup(provider) ?: error("Provider no longer installed")
                 val budget = SourceSearchBudget(timeoutMs, now)
-                val titles = if (source.titleVariants) SourceQuality.searchTitles(book) else listOf("")
+                val titles = if (!source.titleVariants) listOf("") else if (words != null) listOf(words) else SourceQuality.searchTitles(book)
                 for (title in titles) {
                     try {
-                        val found = source.search(book, title, budget, ::status).filter { SourceQuality.isCandidate(book, it) }
+                        val found = source.search(requestBook, title, budget, ::status).filter(::wanted)
                         status(SourceGroupStatus.CHECKING)
                         val checked = withTimeout(timeoutMs) {
                             val public = found.filter { it.provider == "archive" }.take(12).chunked(4).flatMap { batch ->
@@ -138,7 +147,8 @@ class ProviderSourceSearch(
             if (mutable.value.best?.reasons?.contains(BestMatchReason.ON_PHONE) == true ||
                 mutable.value.groups.any { it.recordings.any(SourceQuality::ready) }) { publish(); return }
             val candidates = raw.entries.flatMap { (id, recordings) -> recordings.map { id to it } }
-                .filter { (_, recording) -> recording.provider == "knaben" && recording.cacheState == "uncached" && recording.seeders > 0 }
+                .filter { (_, recording) -> recording.provider == "knaben" && recording.cacheState == "uncached" && recording.seeders > 0 &&
+                    !HiddenReleases.hidden(recording, hidden(book.id)) }
                 .sortedWith(compareBy<Pair<String, Audiobook>> { !SourceQuality.matches(book, it.second) }.thenByDescending { it.second.seeders })
                 .distinctBy { identity(it.second) }.take(8)
             if (candidates.isEmpty()) { publish(); return }
@@ -178,11 +188,12 @@ class ProviderSourceSearch(
 
         /** Ownership follows priority; better verified delivery evidence can come from another section. */
         private fun publish() {
-            val phone = phoneRecordings()
+            val hiddenKeys = hidden(book.id)
+            val phone = phoneRecordings().filterNot { HiddenReleases.hidden(it, hiddenKeys) }
             val phoneSources = phone.flatMap { it.sources }.map { it.id }.toSet()
             val matchedPhone = SourceQuality.filter(book, phone, phoneSources)
             val phoneIds = onPhone() + matchedPhone.flatMap { listOf(it.id, it.recordingId, identity(it)) }.filter(String::isNotBlank)
-            val combined = raw.toMutableMap()
+            val combined = raw.mapValues { (_, recordings) -> recordings.filterNot { HiddenReleases.hidden(it, hiddenKeys) } }.toMutableMap()
             matchedPhone.forEach { recording ->
                 val id = if (recording.provider == "archive") DeviceSourceProviderSettings.ARCHIVE else DeviceSourceProviderSettings.LIBRARY
                 if (id in groups && SourceQuality.isCandidate(book, recording)) combined[id] = listOf(recording) + combined[id].orEmpty()
@@ -190,7 +201,7 @@ class ProviderSourceSearch(
             val qualified = combined.mapValues { SourceQuality.filter(book, it.value, phoneSources) }
             val allQualified = qualified.values.flatten().map(::identity).toSet()
             val possible = combined.mapValues { (_, recordings) -> recordings.filter {
-                identity(it) !in allQualified && SourceQuality.confidence(book, it) != MatchConfidence.NONE &&
+                identity(it) !in allQualified && (SourceQuality.confidence(book, it) != MatchConfidence.NONE || words != null && SourceWords.matches(words, it)) &&
                     (it.provider != "knaben" || it.cacheState == "cached" || it.seeders > 0)
             }.distinctBy(::identity).sortedWith(compareBy<Audiobook> { SourceQuality.confidence(book, it) != MatchConfidence.STRONG }
                 .thenBy { !SourceQuality.ready(it) }.thenByDescending { it.seeders }).take(20) }
@@ -209,7 +220,7 @@ class ProviderSourceSearch(
                     alsoFoundBy = group.alsoFoundBy + (recording.id to origins.drop(1).map { it.name }))
             }
             val ordered = providers.map { output.getValue(it.id) }
-            mutable.value = StreamedSourceSearch(book, ordered, BestMatchRanking.choose(book, ordered, phoneIds, preferredFormat(book)), reported() && inspected && !inspecting)
+            mutable.value = StreamedSourceSearch(book, ordered, BestMatchRanking.choose(book, ordered, phoneIds, preferredFormat(book), listening(book)), reported() && inspected && !inspecting)
         }
     }
 

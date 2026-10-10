@@ -82,8 +82,9 @@ class ReadingIntegrationTest {
         assertEquals(PairingStatus.PARTIAL, catalogFormats.pairing)
         assertEquals(1, catalogFormats.textChapter)
         assertEquals(MappingConfidence.EXACT, catalogFormats.position!!.audioConfidence)
-        compose.runOnIdle { seeds.vm.sourceSearch.value = SourceSearchState(catalog, listOf(recording)); seeds.vm.chooseRecording(recording) }
-        compose.waitUntil(10_000) { seeds.vm.selection.value.book?.id == catalog.id }
+        // The chosen recording opens as the parent book's one page.
+        compose.runOnIdle { seeds.vm.sourceSearch.value = SourceSearchState(catalog, listOf(recording)); seeds.vm.open(associated) }
+        compose.waitUntil(10_000) { seeds.vm.selection.value.book?.id == catalog.id && !seeds.vm.selection.value.loading }
     }
 
     @Test fun readerWriteQueuedBehindARoomTransactionRechecksPlaybackOwnership() = runBlocking {

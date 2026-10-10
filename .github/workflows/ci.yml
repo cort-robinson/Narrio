@@ -144,13 +144,23 @@ jobs:
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=app.narrio.PersistenceAndRenewalTest,app.narrio.NowPlayingDismissTest,app.narrio.SourceExperienceTest,app.narrio.SourceSearchExperienceTest,app.narrio.BookDiscoveryExperienceTest,app.narrio.BookSourceDiscoveryAndroidTest,app.narrio.AddonSettingsExperienceTest,app.narrio.AppUpdatesExperienceTest,app.narrio.FollowAlongMigrationTest,app.narrio.ReadAlongExperienceTest,app.narrio.ReaderExperienceTest,app.narrio.ReaderAnnotationsExperienceTest,app.narrio.ReadingStorageMigrationTest,app.narrio.ReadingSyncSmokeTest,app.narrio.LibraryFormatsExperienceTest,app.narrio.ReadingIntegrationTest,app.narrio.ReadingRestartTest
+          # AGP 9's test engine splits instrumentation arguments on commas, so a comma-separated
+          # class list silently runs only its first class. The runner reads the list from a device file instead.
+          script: |
+            node scripts/ci/android-smoke-tests.mjs list > "$RUNNER_TEMP/android-smoke-tests.txt"
+            adb push "$RUNNER_TEMP/android-smoke-tests.txt" /data/local/tmp/narrio-smoke-tests.txt
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.testFile=/data/local/tmp/narrio-smoke-tests.txt
+      - name: Verify every smoke-test class ran
+        if: ${{ !cancelled() }}
+        run: node scripts/ci/android-smoke-tests.mjs verify app/build/outputs/androidTest-results/connected
       - name: Upload native test reports
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: android-smoke-reports
-          path: app/build/reports/androidTests/
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
           retention-days: 14
 
   gate:

@@ -10,7 +10,7 @@ const pr = paths => ({ event: 'pull_request', baseBranch: 'dev', paths });
 
 test('only known prose-only dev PRs skip Android', () => {
   assert.equal(androidRequired(pr(['README.md', 'AGENTS.md', 'docs/DEVELOPMENT.md'])), false);
-  for (const path of ['app/src/main/App.kt', '.github/workflows/ci.yml', 'gradle.properties',
+  for (const path of ['app/src/main/App.kt', '.github/workflows/ci.yml', '.github/android-smoke-tests.txt', 'gradle.properties',
     'package.json', 'scripts/release/preview.mjs', 'docs/fixture.apk', 'app/README.md']) {
     assert.equal(androidRequired(pr(['README.md', path])), true, path);
   }

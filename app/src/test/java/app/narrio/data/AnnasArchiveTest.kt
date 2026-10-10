@@ -2,6 +2,7 @@ package app.narrio.data
 
 import app.narrio.domain.*
 import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -34,6 +35,31 @@ class AnnasArchiveTest {
         assertEquals("https://annas-archive.gl/md5/$md5", first.url)
         assertEquals(AnnasArchive.PROVIDER, first.provider)
         assertEquals("EPUB", first.format)
+    }
+
+    /** Before, custom words went through the catalog title cleaner: brackets and "unabridged" vanished from the search. */
+    @Test fun customWordsReachTheSearchAsTyped() = runBlocking {
+        val addon = AddonManifest.parse(java.io.File("src/main/assets/addons/annas-archive-ebooks.json").readText(), AddonManager.bundledUrls.getValue("annas-archive-ebooks"))
+            .copy(enabled = true)
+        val addons = AddonManager(OkHttpClient(), listOf(addon))
+        val requested = mutableListOf<String>()
+        val archive = AnnasArchive(OkHttpClient(), { url, _, _ -> requested += url; "[]" })
+        val lookup = AnnasArchiveEbookLookup(archive, addons, addon.id)
+        val words = "  Crime and Punishment [Garnett]   unabridged & «Преступление» #1?  "
+        lookup.search(book, emptyList(), SourceSearchBudget(), words) {}
+        val query = requested.single().toHttpUrl().queryParameter("q")
+        assertEquals("Crime and Punishment [Garnett] unabridged & «Преступление» #1?", query)
+        assertTrue(requested.single().endsWith("&ext=epub"))
+        // Reserved characters stay inside the query instead of ending it.
+        assertFalse(requested.single().substringBefore("&ext=epub").contains('#'))
+        // Without words the book's own title and author are searched, as before.
+        lookup.search(book, emptyList(), SourceSearchBudget(), "") {}
+        assertEquals("https://annas-archive.gl/search?q=Project%20Hail%20Mary%20Andy%20Weir&ext=epub", requested.last())
+        // Website links follow the same words.
+        assertEquals(requested.first(), addons.ebookSearchLinks(book, words).single().url)
+        assertEquals(500_000L, archive.size("0.5MB"))
+        assertEquals(640_500L, archive.size("640.5kB"))
+        assertEquals(0L, archive.size("1998"))
     }
 
     @Test fun searchRejectsAnInsecureMirrorBeforeLoadingIt() = runBlocking {

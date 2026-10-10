@@ -44,7 +44,8 @@ import kotlinx.coroutines.launch
 /** Compact navigation states. Identity is by key so detail refreshes never restart a transition. */
 private sealed interface Screen { val depth: Int }
 private data object Home : Screen { override val depth = 0 }
-private data class Details(val id: String, val catalog: Boolean) : Screen { override val depth = if (catalog) 1 else 2 }
+/** A book has one page however it was reached, so its key is the book alone. */
+private data class Details(val id: String) : Screen { override val depth = 1 }
 private data object Listening : Screen { override val depth = 3 }
 private data class Reading(val id: String) : Screen { override val depth = 3 }
 
@@ -73,17 +74,20 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         onDispose { vm.graph.playback.visible = false; vm.graph.offline.visible = false; vm.graph.updates.visibility(false); lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    LaunchedEffect(state.playing) {
-        if (state.playing && Build.VERSION.SDK_INT >= 33 && !vm.graph.preferences.getBoolean("notificationAsked", false)) {
+    // Asked once per install: at the first playback, or when TorBox starts getting a book ready, whichever comes first.
+    val askNotifications = {
+        if (Build.VERSION.SDK_INT >= 33 && !vm.graph.preferences.getBoolean("notificationAsked", false)) {
             vm.graph.preferences.edit().putBoolean("notificationAsked", true).apply()
             if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+    LaunchedEffect(state.playing) { if (state.playing) askNotifications() }
+    LaunchedEffect(vm) { vm.notificationsWanted.collect { askNotifications() } }
     // Exiting detail content keeps rendering the book it showed, even after the selection clears.
     val recentBooks = remember { HashMap<String, Audiobook>() }
     selected.book?.let { recentBooks[it.id] = it }
     val bookFor: (String) -> Audiobook? = { id -> selected.book?.takeIf { it.id == id } ?: recentBooks[id] }
-    // Each book keeps its scroll position, so returning from a recording lands back among its sources.
+    // Each book keeps its scroll position, so returning to a book lands where the listener left it.
     val detailScroll = remember { object : LinkedHashMap<String, LazyListState>(16, .75f, true) { override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, LazyListState>) = size > 12 } }
     val scrollFor: (String) -> LazyListState = { id -> detailScroll.getOrPut(id) { LazyListState() } }
     // A closing reader keeps rendering the book it showed while it animates away.
@@ -135,7 +139,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             val current: Screen = when {
                 reader != null -> Reading(reader!!.book.id)
                 playerOpen && state.book != null -> Listening
-                selected.book != null -> selected.book!!.let { Details(it.id, it.provider == "catalog") }
+                selected.book != null -> Details(selected.book!!.id)
                 else -> Home
             }
             when {
@@ -169,12 +173,13 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             }
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).then(when {
                 snackbarLift.value > 0.dp -> Modifier.padding(bottom = snackbarLift.value)
-                !expanded && !tabletop && current == Home -> Modifier.padding(bottom = barHeight)
+                !expanded && !tabletop && (current == Home || current is Details && state.book != null) -> Modifier.padding(bottom = barHeight)
                 else -> Modifier.navigationBarsPadding()
             })) { NarrioSnackbar(it) }
         }
         }
         ebookWebsite.request?.let { request -> EbookWebsiteBrowser(request, ebookWebsite, vm::closeEbookWebsite) { vm.downloadWebsiteEbook(request, it) } }
+        ConnectTorBoxSheet(vm)
     }
 }
 
@@ -211,21 +216,31 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                     CompositionLocalProvider(LocalNavigationScope provides this) {
                         when (screen) {
                             Home -> Box(shellInsets.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
-                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
+                            // The mini-player stays docked under a book's details; it brings its own navigation-bar room.
+                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, if (hasPlayback) shellInsets.padding(bottom = barHeight) else shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
                             Listening -> PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
                             is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
                         }
                     }
                 }
-                transition.AnimatedVisibility({ it == Home }, Modifier.align(Alignment.BottomCenter),
-                    enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
-                    exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
-                    CompositionLocalProvider(LocalNavigationScope provides this) {
-                        Column(Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)).onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
-                            AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) { MiniPlayer(vm) }
-                            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-                                navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
+                // While a book plays, its controls stay at the bottom of every screen: above the tabs at home, and
+                // docked under a book's details. The Listening room and the reader carry their own.
+                Column(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
+                    transition.AnimatedVisibility({ it == Home || it is Details },
+                        enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
+                        exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
+                        CompositionLocalProvider(LocalNavigationScope provides this) {
+                            AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                                MiniPlayer(vm, aboveSystemBar = current is Details)
                             }
+                        }
+                    }
+                    transition.AnimatedVisibility({ it == Home },
+                        enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
+                        exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
+                        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                            navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
                         }
                     }
                 }
@@ -237,13 +252,11 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
 /** Mirrors [NarrioViewModel.back] so a gesture can preview its destination before committing. */
 private fun predictBack(vm: NarrioViewModel, current: Screen): Screen {
     val selected = vm.selection.value.book
-    val origin = vm.sourceSearch.value.book
     val reader = vm.reader.value
     return when {
         // Back from read along returns to the Listening room, or stays in the reader with read along turned off.
         current is Reading && reader?.together == true -> if (reader.fromListening && vm.playback.value.book != null) Listening else current
-        current == Listening || current is Reading -> selected?.let { Details(it.id, it.provider == "catalog") } ?: Home
-        current is Details && origin != null && selected?.recordingId?.isNotBlank() == true && selected.recordingId != origin.recordingId -> Details(origin.id, origin.provider == "catalog")
+        current == Listening || current is Reading -> selected?.let { Details(it.id) } ?: Home
         else -> Home
     }
 }

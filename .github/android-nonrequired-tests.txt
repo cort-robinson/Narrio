@@ -1,0 +1,14 @@
+# Android test classes deliberately left out of the required CI smoke job, one per line with a reason.
+# Run them locally; move a class back to android-smoke-tests.txt once it passes reliably in CI.
+app.narrio.AppUpdateInstallTest  # Opt-in real package replacement; skipped unless given isolated Narrio Local fixture arguments.
+app.narrio.FoldWindowTest  # Needs a window at least 600 dp wide; skipped on the CI Pixel 6 profile.
+app.narrio.FollowAlongTest  # Live provider check for book text; needs network.
+app.narrio.MetadataExperienceTest  # Uses real public metadata and artwork; needs network.
+app.narrio.NarrationSyncLiveTest  # Live LibriVox and Gutenberg check that downloads a speech model; needs network.
+app.narrio.NarrioListeningTest  # Streams a real LibriVox recording; needs network.
+app.narrio.OfflineListeningTest  # Downloads a real recording before toggling the network off; needs network.
+app.narrio.ConnectTorBoxVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.
+app.narrio.ReadAlongVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.
+app.narrio.ReaderAnnotationsVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.
+app.narrio.ReaderVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.
+app.narrio.SleepTimerVisualQa  # Screenshot capture for manual visual review, not a pass/fail test.

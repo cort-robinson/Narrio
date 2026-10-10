@@ -31,114 +31,21 @@ import app.narrio.data.SourceQuality
 import app.narrio.domain.*
 
 /*
- * Book details, listening by source: one Best match leads for listeners who just want to press Listen, and each
- * source keeps its own section that fills in as that provider answers. Copy stays in the listener's terms.
+ * Listening by source, for the recording chooser's Advanced view: each source keeps its own section that fills in
+ * as that provider answers, with release names, seeders, and possible matches. The book page itself stays simple.
  */
 
-/** What the listener can do from the sources area; book details bind these to the view model. */
+/** What the listener can do from the Advanced sources; the recording chooser binds these. */
 class SourceActions(
-    val listen: (Audiobook) -> Unit,
-    val prepare: (Audiobook) -> Unit,
-    val open: (Audiobook) -> Unit,
-    val options: (Audiobook?) -> Unit,
+    /** Makes a release the chooser's pick. */
+    val choose: (Audiobook) -> Unit,
     val retry: (String) -> Unit,
     val searchAgain: () -> Unit,
     val connectTorBox: () -> Unit,
     val sourceSettings: () -> Unit,
-    val showSources: () -> Unit,
+    /** Marks a release as not this book, keeping it out of the results; null offers no such action. */
+    val notThisBook: ((Audiobook) -> Unit)? = null,
 )
-
-/**
- * The listening slot on a catalog book: the best match, why it was chosen, and one primary action. While the
- * search runs it may improve, but once the listener has touched the page a better match waits behind a quiet
- * "Better match found" instead of replacing what they are about to press.
- */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun BestMatchCard(
-    search: StreamedSourceSearch, pinned: PinnedBest, chosen: Audiobook?, tally: SearchTally, providers: Map<String, SourceProvider>, book: Audiobook,
-    connected: Boolean, busy: Boolean, starting: Boolean, leading: Boolean, actions: SourceActions, acceptBetter: () -> Unit, useBest: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surfaceContainer)
-        .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp).animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized)).testTag("best-match")) {
-        AnimatedVisibility(pinned.pending != null && chosen?.let { it.id != pinned.shown?.recording?.id } != true, enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-            BetterMatchFound(acceptBetter, Modifier.padding(bottom = 12.dp))
-        }
-        // An explicit pick from Listening options leads; it carries no ranking reasons, so its own labels describe it.
-        val picked = chosen?.takeIf { it.id != pinned.shown?.recording?.id }
-        val shown = picked?.let { recording -> BestMatch(recording, emptyList(), search.groups.firstOrNull { group -> group.recordings.any { it.id == recording.id } || group.possible.any { it.id == recording.id } }?.providerId.orEmpty()) }
-            ?: pinned.shown
-        // The eyebrow names a match only when there is (or is about to be) one; an empty result leads with its title.
-        if (shown != null || !search.complete) Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(if (picked != null) "Your choice" else "Best match", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-            AnimatedVisibility(!search.complete && tally.active > 0, enter = fadeIn(), exit = fadeOut()) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Working(Modifier.size(14.dp))
-                    val left = tally.active - tally.answered
-                    Text(if (shown == null) "Checking ${tally.active} ${plural(tally.active, "source")}" else "Checking $left more", style = MaterialTheme.typography.labelMedium, color = muted)
-                }
-            }
-        }
-        if (shown != null || !search.complete) Spacer(Modifier.height(8.dp))
-        when {
-            shown != null -> AnimatedContent(shown, transitionSpec = { fadeIn(tween(Motion.MEDIUM, 90, Motion.EmphasizedDecelerate)).togetherWith(fadeOut(tween(90))) },
-                contentKey = { it.recording.id }, label = "best match") { best ->
-                Column {
-                    val copy = bestMatchCopy(best, book)
-                    Text(copy.headline, style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("best-match-reasons"))
-                    if (copy.detail.isNotBlank()) Text(copy.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
-                    Text(best.recording.releaseTitle.ifBlank { best.recording.title }, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 2,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                    val also = alsoFoundBy(search, best.recording.id, providers)
-                    Text(listOfNotNull("From ${providers[best.providerId]?.name ?: providerLabel(best.recording)}", also.takeIf { it.isNotEmpty() }?.let { "also found by ${it.joinToString()}" }).joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall, color = muted, modifier = Modifier.padding(top = 2.dp))
-                }
-            }
-            !search.complete && tally.active > 0 -> CardSkeleton()
-            else -> {
-                val copy = noMatchCopy(search, tally)
-                Text(copy.title, style = MaterialTheme.typography.titleMedium)
-                Text(copy.message, style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.padding(top = 4.dp))
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-        val button = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-        when {
-            starting -> ModeButton({}, button.testTag("listen-action"), leading, enabled = false) { WorkingLabel("Starting…") }
-            shown != null && needsPreparing(shown) && !connected -> ModeButton(actions.connectTorBox, button.testTag("listen-action"), leading) { SlotLabel(Icons.Rounded.Link, "Connect TorBox to listen") }
-            shown != null && needsPreparing(shown) -> ModeButton({ actions.prepare(shown.recording) }, button.testTag("listen-action"), leading, enabled = !busy) { SlotLabel(Icons.Rounded.CloudDownload, "Prepare in TorBox") }
-            shown != null -> ModeButton({ actions.listen(shown.recording) }, button.testTag("listen-action"), leading, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
-            !search.complete && tally.active > 0 -> ModeButton({}, button.testTag("listen-action"), leading, enabled = false) { WorkingLabel("Finding audio…") }
-            else -> when (noMatchCopy(search, tally).kind) {
-                NoMatchKind.POSSIBLE_ONLY -> ModeButton(actions.showSources, button, leading) { SlotLabel(Icons.Rounded.Search, "Review possible matches") }
-                NoMatchKind.ALL_FAILED -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Try again") }
-                NoMatchKind.NEEDS_TORBOX -> ModeButton(actions.connectTorBox, button, leading) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
-                NoMatchKind.ALL_OFF -> ModeButton(actions.sourceSettings, button, leading) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
-                else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
-            }
-        }
-        // The secondary row keeps its height while searching, so the page below never shifts when results land.
-        val secondary = shown != null || !search.complete || noMatchCopy(search, tally).kind == NoMatchKind.NEEDS_TORBOX && tally.active > 0
-        if (!secondary) Spacer(Modifier.height(14.dp))
-        else FlowRow(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
-            val count = tally.found + tally.possible
-            when {
-                picked != null && pinned.shown != null -> {
-                    TextButton(useBest) { Text("Use the best match") }
-                    TextButton({ actions.options(picked) }, Modifier.testTag("listening-options-action")) { Text("Format and download") }
-                }
-                shown != null -> {
-                    TextButton(actions.showSources) { Text(if (search.complete) "Other choices · $count found" else "Other choices · $count so far") }
-                    TextButton({ actions.options(shown.recording) }, Modifier.testTag("listening-options-action")) { Text("Format and download") }
-                }
-                search.complete && noMatchCopy(search, tally).kind == NoMatchKind.NEEDS_TORBOX && tally.active > 0 -> TextButton(actions.searchAgain) { Text("Search again") }
-            }
-        }
-    }
-}
 
 @Composable
 internal fun BetterMatchFound(show: () -> Unit, modifier: Modifier = Modifier) {
@@ -153,7 +60,7 @@ internal fun BetterMatchFound(show: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Roughly the height of a found best match, so the card doesn't grow when the first one arrives. */
+/** Roughly the height of a found best match, so a card doesn't grow when the first one arrives. */
 @Composable
 internal fun CardSkeleton() {
     Column(Modifier.clearAndSetSemantics { }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -251,7 +158,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
         }
         val shown = if (showAll) group.recordings else group.recordings.take(SHOWN_RELEASES)
         shown.forEach { recording ->
-            ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers)) { actions.open(recording) }
+            ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers), actions.notThisBook) { actions.choose(recording) }
         }
         if (group.recordings.size > SHOWN_RELEASES) TextButton({ showAll = !showAll }) {
             Text(if (showAll) "Show fewer" else "Show all ${group.recordings.size} from ${group.name}")
@@ -268,7 +175,7 @@ private fun SourceSection(group: SourceGroup, search: StreamedSourceSearch, prov
                 Column {
                     Text("These might be this book. Check the release name and narrator before listening.", style = MaterialTheme.typography.bodySmall, color = muted)
                     group.possible.forEach { recording ->
-                        ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers)) { actions.open(recording) }
+                        ReleaseRow(recording, book, recording.id == bestId, checking, alsoFoundBy(search, recording.id, providers), actions.notThisBook) { actions.choose(recording) }
                     }
                 }
             }
@@ -311,13 +218,13 @@ internal fun ReleaseSkeleton() {
 
 /**
  * One release: its name, narrator and kind, then how it plays and its quality (format, size, language, seeders)
- * in one scannable line. Choosing it opens the recording's own page, as before.
+ * in one scannable line. Choosing it makes it the recording chooser's pick.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReleaseRow(recording: Audiobook, book: Audiobook, best: Boolean, checking: Boolean, also: List<String>, open: () -> Unit) {
+private fun ReleaseRow(recording: Audiobook, book: Audiobook, best: Boolean, checking: Boolean, also: List<String>, notThisBook: ((Audiobook) -> Unit)?, open: () -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = "Open this recording", role = Role.Button, onClick = open)
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClickLabel = "Choose this recording", role = Role.Button, onClick = open)
         .heightIn(min = 48.dp).padding(vertical = 10.dp).testTag("release:${recording.id}"), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -337,6 +244,7 @@ private fun ReleaseRow(recording: Audiobook, book: Audiobook, best: Boolean, che
             }
             if (also.isNotEmpty()) Text("Also found by ${also.joinToString()}", style = MaterialTheme.typography.labelSmall, color = muted)
         }
+        notThisBook?.let { hide -> NotThisBookIcon(recording.releaseTitle.ifBlank { recording.title }) { hide(recording) } }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = muted)
     }
 }

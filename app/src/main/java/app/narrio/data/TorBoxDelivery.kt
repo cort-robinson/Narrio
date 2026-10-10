@@ -14,13 +14,22 @@ class TorBoxDelivery(
     private val credential: () -> String?,
     private val baseUrl: String = "https://api.torbox.app/v1/api/",
 ) : DeliveryProvider {
+    /** The verified .torrent file of a release added from a link; see [LinkedReleases.torrentFor]. */
+    var linkedTorrent: (suspend (Audiobook) -> ByteArray?)? = null
+
     private fun token() = credential()?.takeIf { it.isNotBlank() } ?: throw ProviderException("Connect TorBox in Settings to use this source.")
 
-    suspend fun connect(candidate: String): String = withContext(Dispatchers.IO) {
-        val root = request("user/me", overrideToken = candidate)
+    /** Checks a key before it's saved, cancelled with its caller; every failure is a [ProviderException] worded for the person entering it. */
+    suspend fun connect(candidate: String): String {
+        val me = Request.Builder().url((baseUrl + "user/me").toHttpUrl()).header("Authorization", "Bearer $candidate").build()
+        val root = try { http.readCancellable(me, ::readResponse) }
+            catch (error: ProviderAuthorizationException) {
+                throw ProviderException("TorBox didn't accept this API key. Copy the whole key from your TorBox settings and check that your plan includes API access.")
+            } catch (error: ProviderException) { throw error }
+            catch (error: java.io.IOException) { throw ProviderException("Couldn't reach TorBox. Check your internet connection and try again.") }
         val data = root["data"] as? JsonObject
         if (data?.number("plan") == 0L) throw ProviderException("This TorBox account needs a plan with API access. Public recordings can still play directly.")
-        "TorBox connected"
+        return "TorBox connected"
     }
 
     override suspend fun prepare(book: Audiobook): Preparation = withContext(Dispatchers.IO) {
@@ -30,8 +39,9 @@ class TorBoxDelivery(
         if (book.magnetUri.startsWith("magnet:?")) form.addFormDataPart("magnet", book.magnetUri)
         else {
         if (book.torrentUrl.isBlank()) throw ProviderException("This recording has no torrent source. Choose another recording.")
-        // Upload a real .torrent file. Archive URLs are not assumed to be magnets.
-        val torrent = http.newCall(Request.Builder().url(book.torrentUrl).build()).execute().use { r ->
+        // Upload a real .torrent file. Archive URLs are not assumed to be magnets. A release added from a link uploads
+        // the verified bytes the listener inspected, fetched through the link checks.
+        val torrent = linkedTorrent?.invoke(book) ?: http.newCall(Request.Builder().url(book.torrentUrl).build()).execute().use { r ->
             if (!r.isSuccessful) throw ProviderException("The recording's torrent is unavailable. Try direct streaming.")
             val body = r.body ?: throw ProviderException("The torrent source is empty.")
             if (body.contentLength() > 4_000_000) throw ProviderException("This torrent file is too large.")
@@ -51,10 +61,13 @@ class TorBoxDelivery(
     }
 
     /** Book-text files (EPUB/TXT) in already-cached releases, by hash. Nothing is added to the account. */
-    suspend fun cachedTextFiles(hashes: List<String>): Map<String, List<String>> = withContext(Dispatchers.IO) {
+    suspend fun cachedTextFiles(hashes: List<String>): Map<String, List<String>> = cachedText(hashes).mapValues { (_, files) -> files.map { it.first } }
+
+    /** Cached ebook files by release hash, each with its size in bytes (0 when TorBox doesn't say). */
+    suspend fun cachedText(hashes: List<String>): Map<String, List<Pair<String, Long>>> = withContext(Dispatchers.IO) {
         hashes.map { it.lowercase() }.filter { it.matches(Regex("[a-f0-9]{40}")) }.distinct().chunked(100).flatMap { batch ->
             parseCached(request("torrents/checkcached", mapOf("hash" to batch.joinToString(","), "format" to "object", "list_files" to "true"))["data"], ::isBookTextFile)
-                .map { (hash, item) -> hash to item.objects("files").map { it.text("name") } }
+                .map { (hash, item) -> hash to item.objects("files").map { it.text("name") to (it.number("size") ?: 0L).toLong() } }
         }.filter { it.second.isNotEmpty() }.toMap()
     }
 
@@ -111,14 +124,25 @@ class TorBoxDelivery(
         }
     }
 
-    suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = withContext(Dispatchers.IO) {
-        val item = list().firstOrNull { if (torrentId > 0) it.number("id") == torrentId else it.text("hash").equals(book.torrentHash, true) }
-        item?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox")
+    suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = account().preparation(book, torrentId)
+
+    /** The account's items, listed once, so several preparations can be checked with one request. */
+    suspend fun account(): PreparationAccount = withContext(Dispatchers.IO) { Account(list()) }
+
+    private inner class Account(private val items: List<JsonObject>) : PreparationAccount {
+        private fun item(book: Audiobook, torrentId: Long) =
+            items.firstOrNull { if (torrentId > 0) it.number("id") == torrentId else book.torrentHash.isNotBlank() && it.text("hash").equals(book.torrentHash, true) }
+        override fun preparation(book: Audiobook, torrentId: Long) =
+            item(book, torrentId)?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
+        override fun sources(book: Audiobook, torrentId: Long): List<AudioSource> {
+            val item = item(book, torrentId)?.takeIf { preparation(it).ready } ?: throw ProviderException("This recording is still getting ready in TorBox.")
+            return mapSources(item, book)
+        }
     }
 
     override suspend fun status(torrentId: Long): Preparation = withContext(Dispatchers.IO) {
         val item = list().firstOrNull { it.number("id") == torrentId }
-            ?: return@withContext Preparation(torrentId, false, 0f, "Waiting for TorBox")
+            ?: return@withContext Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
         preparation(item)
     }
 
@@ -126,15 +150,17 @@ class TorBoxDelivery(
         item.number("id"), item.flag("download_finished") && item.flag("download_present"),
         (item.text("progress").toFloatOrNull()?.takeIf { it.isFinite() } ?: 0f).coerceIn(0f, 1f),
         when (val state = item.text("download_state")) {
-            "cached", "completed", "uploading" -> if (item.flag("download_finished") && item.flag("download_present")) "Ready to listen" else "Preparing files"
+            "cached", "completed", "uploading" -> if (item.flag("download_finished") && item.flag("download_present")) "Ready to listen" else "Getting ready in TorBox"
             "stalled (no seeds)" -> "Waiting for available peers"
             "metaDL" -> "Finding audio files"
-            "downloading" -> "Preparing in TorBox"
+            "downloading" -> "Getting ready in TorBox"
             "paused" -> "Paused in TorBox"
-            else -> state.ifBlank { "Preparing in TorBox" }
+            else -> if (failedState(state)) "Couldn't get it ready" else "Getting ready in TorBox"
         },
         downloadBytesPerSecond = item.number("download_speed"), etaSeconds = item.number("eta"),
         seeds = item["seeds"]?.let { item.number("seeds") }, checkedAtMs = System.currentTimeMillis(),
+        stalled = item.text("download_state") == "stalled (no seeds)",
+        problem = if (failedState(item.text("download_state"))) PreparationPolicy.UNKNOWN_PROBLEM else "",
     )
 
     override suspend fun sources(book: Audiobook, torrentId: Long): List<AudioSource> = withContext(Dispatchers.IO) {
@@ -157,7 +183,13 @@ class TorBoxDelivery(
 
     override fun resolve(part: AudioPart): String {
         if (part.torrentId == null || part.fileId == null) return part.archiveUrl
-        val result = request("torrents/requestdl", params = mapOf("token" to token(), "torrent_id" to part.torrentId.toString(), "file_id" to part.fileId.toString(), "redirect" to "false"))
+        // Usenet and web downloads chosen from the TorBox library have their own link endpoints.
+        val (path, key) = when (TorBoxKind.of(part.id)) {
+            TorBoxKind.USENET -> "usenet/requestdl" to "usenet_id"
+            TorBoxKind.WEB -> "webdl/requestdl" to "web_id"
+            TorBoxKind.TORRENT -> "torrents/requestdl" to "torrent_id"
+        }
+        val result = request(path, params = mapOf("token" to token(), key to part.torrentId.toString(), "file_id" to part.fileId.toString(), "redirect" to "false"))
         val url = result["data"].stringValue()
         if (!url.startsWith("https://")) throw ProviderException("TorBox did not return a secure audio link. Try again.")
         return url
@@ -184,7 +216,7 @@ class TorBoxDelivery(
     }
 
     private fun readResponse(r: Response): JsonObject {
-            if (r.code == 401 || r.code == 403) throw ProviderException("TorBox could not authorize this request. Check your API key and account's API access in Settings.")
+            if (r.code == 401 || r.code == 403) throw ProviderAuthorizationException("TorBox could not authorize this request. Check your API key and account's API access in Settings.")
             if (r.code == 429) throw ProviderException("TorBox needs a moment between requests. Please retry shortly.")
             if (!r.isSuccessful) throw ProviderException("TorBox is unavailable (${r.code}). Retry when your connection returns.")
             val root = runCatching { NarrioJson.parseToJsonElement(r.body?.string().orEmpty()).jsonObject }
@@ -195,6 +227,8 @@ class TorBoxDelivery(
     }
 
     companion object {
+        /** TorBox's terminal download states; it won't fetch these without a new request. */
+        private fun failedState(state: String) = Regex("(?i)^(error|failed|dead)|missingfiles").containsMatchIn(state)
         private fun sameFile(a: String, b: String) = a == b || a.endsWith("/$b")
         private fun audioFormat(name: String) = when (val ext = name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" }
         internal fun parseCached(data: JsonElement?, keep: (String) -> Boolean = ::isBookAudioFile): Map<String, JsonObject> {
