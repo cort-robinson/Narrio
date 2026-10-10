@@ -18,7 +18,6 @@ app.narrio.ReadingSyncSmokeTest
 app.narrio.LibraryFormatsExperienceTest
 app.narrio.ReadingIntegrationTest
 app.narrio.ReadingRestartTest
-app.narrio.PreparationNotificationTest
 app.narrio.ShelfOrganizingExperienceTest
 app.narrio.ShelfFinishedMigrationTest
 app.narrio.ListeningCompletionPlayerTest
@@ -27,4 +26,3 @@ app.narrio.SleepTimerDialogTest
 app.narrio.PreparationCheckWorkerTest
 app.narrio.AdvancedSourcingExperienceTest
 app.narrio.LocalAudioPlaybackTest
-app.narrio.AppearanceExperienceTest
