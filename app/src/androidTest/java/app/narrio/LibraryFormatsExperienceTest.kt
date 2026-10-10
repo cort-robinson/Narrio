@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.narrio.data.*
@@ -71,7 +72,10 @@ class LibraryFormatsExperienceTest {
         compose.runOnIdle { vm.readingLibrary.value = fake; vm.connected.value = false }
     }
 
-    @After fun clean() = runBlocking { listOf(audioOnly, ebookOnly, both, fake.importable).forEach { graph.library.remove(it.id) } }
+    @After fun clean() = runBlocking {
+        listOf(audioOnly, ebookOnly, both, fake.importable).forEach { graph.library.remove(it.id) }
+        graph.preferences.edit().remove("ebookWords:${audioOnly.id}").commit(); Unit
+    }
 
     @Test fun shelfFiltersByFormatAndContinueReopensTheLastMode() {
         seed()
@@ -145,15 +149,21 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithTag("find-ebook-action").performClick()
         compose.onNodeWithText("Find an ebook").assertIsDisplayed()
         compose.onNodeWithText("Finding an ebook…").assertIsDisplayed()
-        compose.onNodeWithTag("ebook-sources-summary").assertTextEquals("0 of 2 sources answered · 0 found")
+        compose.onNodeWithText("Checking 2 sources").assertIsDisplayed()
         capture("find-ebook-searching-night")
         compose.waitUntil(10_000) { shown("Free public-domain ebook · EPUB") }
+        compose.onNodeWithText("Likely matches the narration · Matches this title and author · English").assertIsDisplayed()
+        // The simple layer keeps each source's own section and status in Advanced; the file choice stays visible.
+        compose.onNodeWithTag("ebook-sources-summary").assertDoesNotExist()
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Choose an EPUB or text file"))
+        compose.onNodeWithText("Choose an EPUB or text file").assertExists()
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-advanced"))
+        compose.onNodeWithTag("ebook-advanced").performClick()
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-sources-summary"))
         compose.onNodeWithTag("ebook-sources-summary").assertTextEquals("1 found · 1 of 2 sources couldn't be checked")
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-retry:addon:knaben-ebooks"))
         compose.onNodeWithText("Ebook lookup timed out. Retry.").assertExists()
         capture("find-ebook-results-night")
-        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Choose an EPUB or text file"))
-        compose.onNodeWithText("Choose an EPUB or text file").assertExists()
         // One tap adds the best match and opens it, as Listen plays the best recording.
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("best-ebook-action"))
         compose.onNodeWithTag("best-ebook-action").performClick()
@@ -224,6 +234,8 @@ class LibraryFormatsExperienceTest {
                 vm.selection.value = SelectionState(audioOnly)
             }
             compose.onNodeWithTag("find-ebook-action").performClick()
+            compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-advanced"))
+            compose.onNodeWithTag("ebook-advanced").performClick()
             compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Search Anna's Archive"))
             compose.onNodeWithText("Search Anna's Archive").performClick()
             compose.onNodeWithTag("ebook-website").assertIsDisplayed()
@@ -273,6 +285,114 @@ class LibraryFormatsExperienceTest {
             instrumentation.runOnMainSync { CookieManager.getInstance().setCookie(fixtureUrl, "verification=; Max-Age=0; Secure") }
             compose.runOnIdle { vm.closeEbookWebsite(); graph.addons.enable(addonId, original) }
         }
+    }
+
+    /** Simple first: Advanced reveals each source's own section, and the reader's own words search again and are kept. */
+    @Test fun advancedRevealsSourcesAndOwnWordsSearchAgain() {
+        seed()
+        theme(ThemeMode.DAY)
+        val words = "The Lamp Keeper Mara Ellison"
+        val found = BookTextSource("gutenberg:77", "The Lamp Keeper", "Mara Ellison", "EPUB", "gutenberg", attribution = "Project Gutenberg · ebook 77", language = "en")
+        val sample = BookTextSource("cache:sample", "The Lamp Keeper (Sample)", "Mara Ellison", "EPUB", "torbox-cache", attribution = "Cached ebook release via TorBox", language = "en")
+        val possible = BookTextSource("gutenberg:78", "Lantern Keeper [EPUB]", "", "EPUB", "gutenberg", attribution = "Project Gutenberg · ebook 78")
+        compose.runOnIdle {
+            fake.searchedWords.clear()
+            fake.found = { if (fake.searchedWords.lastOrNull().isNullOrBlank()) listOf(
+                EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE, possible = listOf(possible)),
+                EbookGroup("addon:knaben-ebooks", "Knaben Ebooks", SourceGroupStatus.FAILED, message = "Ebook lookup timed out. Retry."),
+            ) else listOf(
+                EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE, editions = listOf(found)),
+                EbookGroup("addon:knaben-ebooks", "Knaben Ebooks", SourceGroupStatus.DONE, editions = listOf(sample)),
+            ) }
+            vm.selection.value = SelectionState(audioOnly)
+        }
+        val sheet = compose.onNodeWithTag("ebook-sheet")
+        compose.onNodeWithTag("find-ebook-action").performClick()
+        compose.waitUntil(10_000) { shown("No sure match") }
+        compose.onNodeWithTag("ebook-section:gutenberg").assertDoesNotExist()
+        // Possible matches wait in Other choices for the reader's check.
+        compose.onNodeWithText("Review possible matches").performClick()
+        sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
+        compose.onNodeWithText("Check the title and author").assertExists()
+        capture("ebook-chooser-possible-day")
+        // With only possible matches, the disclosure still closes and reopens the list.
+        val toggle = compose.onNodeWithTag("ebook-other-choices-toggle")
+        fun state(value: String) = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, value)
+        sheet.performScrollToNode(hasTestTag("ebook-other-choices-toggle"))
+        toggle.assert(state("Expanded")).assertTextContains("Other choices · 1", substring = true).performClick()
+        toggle.assert(state("Collapsed"))
+        compose.onNodeWithTag("ebook-choice:${possible.id}").assertDoesNotExist()
+        toggle.performClick()
+        sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
+
+        sheet.performScrollToNode(hasTestTag("ebook-advanced"))
+        compose.onNodeWithTag("ebook-advanced").performClick()
+        sheet.performScrollToNode(hasTestTag("ebook-section:gutenberg"))
+        sheet.performScrollToNode(hasTestTag("ebook-retry:addon:knaben-ebooks"))
+        sheet.performScrollToNode(hasTestTag("ebook-search-words"))
+        compose.onNodeWithTag("ebook-search-words-field").assertTextContains("${audioOnly.title} ${audioOnly.author}")
+        capture("ebook-chooser-advanced-day")
+        compose.onNodeWithTag("ebook-search-words-field").performTextReplacement(words)
+        compose.onNodeWithTag("ebook-search-words-action").performClick()
+        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == words && shown("Free public-domain ebook · EPUB") }
+        assertEquals(words, vm.ebookWords(audioOnly.id))
+        sheet.performScrollToNode(hasTestTag("ebook-custom-words"))
+        compose.onNodeWithText("Searching for “$words”").assertIsDisplayed()
+        // Other choices stay open from reviewing possible matches, now listing what the reader's words found.
+        sheet.performScrollToNode(hasTestTag("ebook-other-choices-toggle"))
+        compose.onNodeWithTag("ebook-other-choices-toggle").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Expanded"))
+        sheet.performScrollToNode(hasTestTag("ebook-choice:${sample.id}"))
+        compose.onNodeWithText("May not follow the narration: abridged or a sample").assertExists()
+        theme(ThemeMode.NIGHT)
+        capture("ebook-chooser-own-words-night")
+
+        // Searching again keeps the reader's words; Use book details returns to the default search.
+        compose.runOnIdle { vm.findEbooks(audioOnly, force = true) }
+        compose.waitUntil(10_000) { fake.searchedWords.size == 3 }
+        assertEquals(words, fake.searchedWords.last())
+        sheet.performScrollToNode(hasTestTag("ebook-custom-words"))
+        compose.onNodeWithText("Use book details").performClick()
+        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == "" && shown("No sure match") }
+        assertEquals("", vm.ebookWords(audioOnly.id))
+        compose.onNodeWithTag("ebook-custom-words").assertDoesNotExist()
+
+        // Results are kept per set of words: returning to kept words reuses their complete results without searching.
+        compose.runOnIdle { vm.searchEbooksWith(audioOnly, words) }
+        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == words && vm.ebookSearch.value.streamed?.complete == true }
+        val searches = fake.searchedWords.size
+        compose.runOnIdle { graph.preferences.edit().remove("ebookWords:${audioOnly.id}").commit(); vm.findEbooks(audioOnly) }
+        compose.waitUntil(10_000) { fake.searchedWords.size == searches + 1 }
+        assertEquals("", fake.searchedWords.last())
+        compose.runOnIdle { graph.preferences.edit().putString("ebookWords:${audioOnly.id}", words).commit(); vm.findEbooks(audioOnly) }
+        compose.runOnIdle {
+            assertEquals(searches + 1, fake.searchedWords.size)
+            assertEquals(words, vm.ebookSearch.value.words)
+            assertEquals(listOf(found.id), vm.ebookSearch.value.streamed!!.groups.first().editions.map { it.id })
+        }
+        // A fresh view model, as after the app's process restarts, searches with the kept words.
+        val fresh = compose.runOnIdle { NarrioViewModel(compose.activity.application).also { it.readingLibrary.value = fake; it.findEbooks(audioOnly) } }
+        try {
+            compose.waitUntil(10_000) { fake.searchedWords.size == searches + 2 }
+            assertEquals(words, fake.searchedWords.last())
+            assertEquals(words, fresh.ebookSearch.value.words)
+        } finally { compose.runOnIdle { fresh.viewModelScope.cancel() } }
+
+        // The recording on screen is part of the search: another recording or file choice searches again, and later
+        // searches for the book (Search again, own words) keep following it.
+        val first = NarrationContext(audioOnly.copy(id = "rec-a", recordingId = "rec-a", language = "English"), parts)
+        val second = NarrationContext(audioOnly.copy(id = "rec-b", recordingId = "rec-b", language = "English"), parts.copy(id = "other-parts"))
+        compose.runOnIdle { vm.openEbookSearch(audioOnly, first) }
+        compose.waitUntil(10_000) { fake.searchedNarrations.lastOrNull() == first.key && !vm.ebookSearch.value.searching }
+        val before = fake.searchedNarrations.size
+        compose.runOnIdle { vm.openEbookSearch(audioOnly, first) }
+        compose.runOnIdle { assertEquals(before, fake.searchedNarrations.size) }
+        compose.runOnIdle { vm.openEbookSearch(audioOnly, second) }
+        compose.waitUntil(10_000) { fake.searchedNarrations.size == before + 1 }
+        assertEquals(second.key, fake.searchedNarrations.last())
+        compose.runOnIdle { vm.findEbooks(audioOnly, force = true) }
+        compose.waitUntil(10_000) { fake.searchedNarrations.size == before + 2 }
+        assertEquals(second.key, fake.searchedNarrations.last())
+        assertEquals(second.key, vm.ebookSearch.value.narration)
     }
 
     @Test fun addingAnEbookFileOpensItsBookOrExplainsTheFile() {
@@ -326,6 +446,10 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
     @Volatile var found: (Audiobook) -> List<EbookGroup> = { emptyList() }
     @Volatile var findDelayMs = 0L
     @Volatile var websiteDownload: EbookDownloadRequest? = null
+    /** The reader's own search words each search used, in order; blank is the default search. */
+    val searchedWords: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+    /** The recording each search followed ([NarrationContext.key]); blank when the caller gave none. */
+    val searchedNarrations: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
     override fun observeShelf(): Flow<Map<String, BookFormats>> = formats
     override fun observeBook(book: Audiobook): Flow<BookFormats> =
         formats.map { it[book.id] ?: BookFormats(book.id, audio = book.provider != "catalog" && book.sources.isNotEmpty()) }
@@ -349,10 +473,12 @@ class FakeReadingLibrary(initial: Map<String, BookFormats>) : ReadingLibrary {
         return edition
     }
     override suspend fun activate(bookId: String, editionId: String) = Unit
-    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope): EbookSearchSession {
+    override suspend fun searchEditions(book: Audiobook, connected: Boolean, scope: CoroutineScope, words: String, narration: NarrationContext?): EbookSearchSession {
+        searchedNarrations += narration?.key.orEmpty()
+        searchedWords += words
         val groups = found(book)
         val state = MutableStateFlow(StreamedEbookSearch(book, groups.map { EbookGroup(it.providerId, it.name, SourceGroupStatus.SEARCHING) }))
-        scope.launch { delay(findDelayMs); state.value = StreamedEbookSearch(book, groups, EbookRanking.choose(book, groups), complete = true) }
+        scope.launch { delay(findDelayMs); state.value = StreamedEbookSearch(book, groups, EbookRanking.choose(book, groups, book.sources.isNotEmpty()), complete = true) }
         return object : EbookSearchSession {
             override val state = state.asStateFlow()
             override fun retry(providerId: String) = Unit

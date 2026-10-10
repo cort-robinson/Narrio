@@ -81,6 +81,10 @@ data class EbookSearchState(
     val adding: String? = null, val added: String? = null,
     /** What a slow add is doing right now, such as waiting for a website's download server. */
     val step: String = "",
+    /** The reader's own search words this search used; blank searched by the book's title and author. */
+    val words: String = "",
+    /** [NarrationContext.key] of the recording this search judged ebooks against; blank without one. */
+    val narration: String = "",
 ) {
     val results: List<BookTextSource> get() = streamed?.groups.orEmpty().flatMap { it.editions + it.possible }
     /** A source couldn't be checked, so the results may be missing something. */
@@ -163,6 +167,8 @@ class NarrioViewModel @JvmOverloads constructor(
     val ebookProviderSettings: SourceProviderSettings = graph.ebookProviderSettings
     private var ebookSession: EbookSearchSession? = null
     private var ebookBook: Audiobook? = null
+    /** The recording the latest ebook search for a book followed; later searches for that book reuse it. */
+    private var ebookNarration: Pair<String, NarrationContext?> = "" to null
     private val ebookResults = RecentSourceResults<EbookSearchState>()
     val ebookWebsite = MutableStateFlow(EbookWebsiteState())
     private var ebookWebsiteJob: Job? = null
@@ -532,21 +538,25 @@ class NarrioViewModel @JvmOverloads constructor(
      * Every enabled ebook source looks for [book] at once, as listening sources do. Complete, error-free results are
      * reused for ten minutes; changing ebook sources invalidates them.
      */
-    fun findEbooks(book: Audiobook, force: Boolean = false) {
+    fun findEbooks(book: Audiobook, force: Boolean = false, narration: NarrationContext? = ebookNarration.takeIf { it.first == book.id }?.second) {
         ebookJob?.cancel(); ebookSession = null
         ebookBook = book
-        val key = "${book.id}|${connected.value}|$torBoxAccount|${book.sources.joinToString(",") { it.id }}"
+        ebookNarration = book.id to narration
+        val words = ebookWords(book.id)
+        val heard = narration?.key.orEmpty()
+        // Another recording, file choice, or set of words is a different search, never served from these results.
+        val key = "${book.id}|${connected.value}|$torBoxAccount|${book.sources.joinToString(",") { it.id }}|$words|$heard"
         ebookResults.get(key, force)?.let { ebookSearch.value = it; return }
-        ebookSearch.value = EbookSearchState(book.id, searching = true, searched = true)
+        ebookSearch.value = EbookSearchState(book.id, searching = true, searched = true, words = words, narration = heard)
         fun update(change: (EbookSearchState) -> EbookSearchState) = ebookSearch.update { if (it.bookId == book.id) change(it) else it }
         ebookJob = viewModelScope.launch {
             try {
-                val session = readingLibrary.value.searchEditions(book, connected.value, this)
+                val session = readingLibrary.value.searchEditions(book, connected.value, this, words, narration)
                 ebookSession = session
                 session.state.collect { snapshot ->
                     update { it.copy(streamed = snapshot, searching = !snapshot.complete) }
                     if (snapshot.complete && snapshot.groups.none { it.status == SourceGroupStatus.FAILED })
-                        ebookResults.put(key, EbookSearchState(book.id, searched = true, streamed = snapshot))
+                        ebookResults.put(key, EbookSearchState(book.id, searched = true, streamed = snapshot, words = words, narration = heard))
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { update { it.copy(searching = false, searchError = friendly(error)) } }
@@ -555,10 +565,24 @@ class NarrioViewModel @JvmOverloads constructor(
 
     fun retryEbookSource(providerId: String) { ebookSession?.retry(providerId) }
 
-    /** Opening Find ebook again reuses a running or complete lookup for the same book; a failed one starts over. */
-    fun openEbookSearch(book: Audiobook) {
+    /** The reader's own ebook search words for a book, kept on this phone until reset; blank uses its title and author. */
+    fun ebookWords(bookId: String): String = graph.preferences.getString("ebookWords:$bookId", "").orEmpty()
+
+    /** Searches every ebook source with [words], kept for this book's later searches and retries; blank resets to its details. */
+    fun searchEbooksWith(book: Audiobook, words: String) {
+        val kept = words.trim().take(200)
+        graph.preferences.edit().apply { if (kept.isBlank()) remove("ebookWords:${book.id}") else putString("ebookWords:${book.id}", kept) }.apply()
+        findEbooks(book, force = true)
+    }
+
+    /**
+     * Opening Find ebook again reuses a running or complete lookup for the same book and recording; a failed one, or
+     * one for another recording or file choice, starts over. [narration] is the recording on screen, if any.
+     */
+    fun openEbookSearch(book: Audiobook, narration: NarrationContext? = null) {
         val state = ebookSearch.value
-        if (state.bookId != book.id || !state.searched || state.searchError != null || !state.searching && state.incomplete) findEbooks(book)
+        if (state.bookId != book.id || state.narration != narration?.key.orEmpty() || !state.searched || state.searchError != null ||
+            !state.searching && state.incomplete) findEbooks(book, narration = narration)
         else ebookSearch.update { it.copy(added = null, error = null) }
     }
 

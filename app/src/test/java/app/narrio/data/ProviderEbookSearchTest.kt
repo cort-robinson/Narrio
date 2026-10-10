@@ -29,7 +29,7 @@ class ProviderEbookSearchTest {
         override fun move(id: String, index: Int) = Unit
     }
     private fun lookup(block: suspend () -> List<EbookCandidate>) = object : EbookLookup {
-        override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, status: suspend (SourceGroupStatus) -> Unit) =
+        override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String, status: suspend (SourceGroupStatus) -> Unit) =
             EbookLookupResult(budget.run { block() })
     }
     private fun strong(source: BookTextSource) = EbookCandidate(source, MatchConfidence.STRONG)
@@ -157,6 +157,65 @@ class ProviderEbookSearchTest {
             assertTrue(SourceGroupStatus.CHECKING in states)
             assertEquals(listOf("/torrents/checkcached"), List(torbox.requestCount) { torbox.takeRequest().requestUrl!!.encodedPath })
         } finally { torbox.shutdown() }
+    }
+
+    /** The reader's own words reach every source, and a retry searches with them again rather than the book's details. */
+    @Test fun customWordsReachEverySourceAndItsRetry() = runTest {
+        val asked = mutableListOf<Pair<String, String>>()
+        var failFirst = true
+        val engine = ProviderEbookSearch(settings(provider("first", 0), provider("second", 1)), { source ->
+            object : EbookLookup {
+                override suspend fun search(book: Audiobook, recordings: List<AudioSource>, budget: SourceSearchBudget, words: String, status: suspend (SourceGroupStatus) -> Unit): EbookLookupResult {
+                    asked += source.id to words
+                    return if (source.id == "second" && failFirst) { failFirst = false; EbookLookupResult(emptyList(), "Ebook lookup failed. Retry.") } else EbookLookupResult(emptyList())
+                }
+            }
+        })
+        val session = engine.start(book, emptyList(), true, backgroundScope, words = "  Pride Prejudice Austen ")
+        runCurrent()
+        session.retry("second"); runCurrent()
+        assertEquals(listOf("first" to "Pride Prejudice Austen", "second" to "Pride Prejudice Austen", "second" to "Pride Prejudice Austen"), asked.sortedBy { it.first })
+        // Default searches are unchanged: no words.
+        asked.clear()
+        engine.start(book, emptyList(), true, backgroundScope); runCurrent()
+        assertTrue(asked.all { it.second == "" })
+    }
+
+    /** A UK title the catalog doesn't know is a possible match by the reader's words; words never confirm a match by themselves. */
+    @Test fun customWordsAdmitPossibleMatchesOnly() {
+        val potter = Audiobook("hp", "Harry Potter and the Sorcerer's Stone", "J.K. Rowling", provider = "catalog")
+        val uk = "Harry Potter and the Philosopher's Stone - J. K. Rowling.epub"
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(potter, uk))
+        assertEquals(MatchConfidence.POSSIBLE, EbookMatch.confidence(potter, uk, "Philosopher's Stone Rowling"))
+        // Author words may be left out of a file name; the title words may not.
+        assertEquals(MatchConfidence.POSSIBLE, EbookMatch.confidence(potter, "Harry Potter and the Philosopher's Stone.epub", "philosopher's stone rowling"))
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(potter, "Harry Potter and the Chamber of Secrets.epub", "Philosopher's Stone Rowling"))
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(potter, uk, "Rowling"))
+        // Unrelated releases stay out unless the reader asked for them.
+        assertEquals(MatchConfidence.NONE, EbookMatch.confidence(potter, "Philosopher's Stone - Study Guide.epub", "Philosopher's Stone"))
+        assertEquals(MatchConfidence.STRONG, EbookMatch.confidence(potter, "Harry Potter and the Sorcerer's Stone - J. K. Rowling", "Philosopher's Stone"))
+    }
+
+    /** Gutenberg and an ebook add-on search the reader's words as typed, once, instead of the title variants. */
+    @Test fun customWordsReplaceTheBooksOwnQueries() = runBlocking {
+        val gutendex = MockWebServer().apply { start() }
+        val queries = mutableListOf<String>()
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            val body = Buffer().also { chain.request().body!!.writeTo(it) }.readUtf8()
+            synchronized(queries) { queries += NarrioJson.parseToJsonElement(body).jsonObject["query"]!!.jsonPrimitive.content }
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body("""{"hits":[]}""".toResponseBody("application/json".toMediaType())).build()
+        }.build()
+        try {
+            gutendex.enqueue(MockResponse().setBody("""{"results":[]}"""))
+            val finder = BookTextFinder(GutenbergTextDiscovery(OkHttpClient(), gutendex.url("/").toString()), KnabenDiscovery(OkHttpClient()),
+                TorBoxDelivery(OkHttpClient(), { "fixture-key" }))
+            GutenbergEbookLookup(finder).search(book.copy(title = "Pride and Prejudice: A Novel"), emptyList(), SourceSearchBudget(), "Orgueil et préjugés") {}
+            assertEquals("Orgueil et préjugés", gutendex.takeRequest().requestUrl!!.queryParameter("search"))
+            val addon = AddonManifest.parse(File("src/main/assets/addons/knaben-ebooks.json").readText(), AddonManager.bundledUrls.getValue("knaben-ebooks"))
+            AddonEbookLookup(finder, AddonManager(client, listOf(addon)), addon.id).search(book.copy(title = "Pride and Prejudice: A Novel"), emptyList(), SourceSearchBudget(), "Orgueil et préjugés") {}
+            assertEquals(listOf("Orgueil et préjugés"), queries)
+        } finally { gutendex.shutdown() }
     }
 
     @Test fun ebookSourcesKeepGutenbergLastAndTheirOwnSettings() = runTest {

@@ -22,6 +22,8 @@ data class BookTextSource(
     val torrentHash: String = "",
     val magnetUri: String = "",
     val fileName: String = "",
+    /** The file's size when the source reports it; 0 when unknown. Only used to spot files far too small for the book. */
+    val sizeBytes: Long = 0,
 )
 
 @Serializable

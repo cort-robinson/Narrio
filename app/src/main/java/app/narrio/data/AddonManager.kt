@@ -58,17 +58,20 @@ class AddonManager(
     override suspend fun searchBook(book: Audiobook, title: String): List<Audiobook> = sources(title, book.author.takeUnless(BookMetadata::unknown).orEmpty(), "audiobook")
     suspend fun ebooks(query: String): List<Audiobook> = sources(query, "", "ebook")
     /** Browser-only providers are offered separately from verified ebook files and need no delivery account. */
-    fun ebookSearchLinks(book: Audiobook): List<EbookSearchLink> = installed.value.filter { it.enabled && it.ebookSearch }
-        .mapNotNull { addon -> ebookSearchUrl(addon, book)?.let { EbookSearchLink(addon.name, it) } }
+    /** [words] are the reader's own search words, sent as typed; blank searches by the book's title and author. */
+    fun ebookSearchLinks(book: Audiobook, words: String = ""): List<EbookSearchLink> = installed.value.filter { it.enabled && it.ebookSearch }
+        .mapNotNull { addon -> ebookSearchUrl(addon, book, words)?.let { EbookSearchLink(addon.name, it) } }
 
-    /** The enabled ebook website's search for [book], or null when it's disabled, removed, or the book has no title. */
-    fun ebookSearchUrl(id: String, book: Audiobook): String? =
-        installed.value.firstOrNull { it.id == id && it.enabled && it.ebookSearch }?.let { ebookSearchUrl(it, book) }
+    /** The enabled ebook website's search for [book] or the reader's [words], or null when it's disabled, removed, or has nothing to search. */
+    fun ebookSearchUrl(id: String, book: Audiobook, words: String = ""): String? =
+        installed.value.firstOrNull { it.id == id && it.enabled && it.ebookSearch }?.let { ebookSearchUrl(it, book, words) }
 
-    private fun ebookSearchUrl(addon: InstalledAddon, book: Audiobook): String? {
-        val title = BookIdentity.title(book.title)
+    private fun ebookSearchUrl(addon: InstalledAddon, book: Audiobook, words: String): String? {
+        // The reader's words aren't cleaned like a catalog title: brackets, "unabridged", and translator names are what they asked for.
+        val typed = words.trim().replace(Regex("\\s+"), " ")
+        val title = if (typed.isNotEmpty()) typed else BookIdentity.title(book.title)
         if (title.isBlank()) return null
-        val author = book.author.takeUnless(BookMetadata::unknown).orEmpty()
+        val author = if (typed.isNotEmpty()) "" else book.author.takeUnless(BookMetadata::unknown).orEmpty()
         val replacements = mapOf("{TITLE}" to title.take(250), "{AUTHOR}" to author.take(200), "{QUERY}" to "$title $author".trim().take(450))
         val spec = addon.manifest["adapters"]!!.jsonObject["ebook-search"]!!.jsonObject["request"]!!.jsonObject
         val url = Regex("\\{(?:TITLE|AUTHOR|QUERY)\\}").replace(spec.text("url")) { match ->
