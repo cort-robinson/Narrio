@@ -136,7 +136,7 @@ class PreparationNotificationTest {
 
     @Test fun aFailedPreparationShowsOnTheShelfAndItsNotificationLeadsToAnotherRecording() {
         val (book, wave) = fixture("failed-fixture", "A Silent Release")
-        val problem = "No one has shared this release for a day."
+        val problem = "No one has shared this recording for a day."
         try {
             prepare()
             seed(book, PreparationStates.FAILED, problem = problem)
@@ -147,7 +147,7 @@ class PreparationNotificationTest {
             capture("preparation-failed-shelf-night")
 
             val failed = announce(book, ready = false, problem = problem)
-            assertEquals("A Silent Release couldn't be prepared", failed.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
+            assertEquals("A Silent Release couldn't get ready", failed.extras.getCharSequence(Notification.EXTRA_TITLE).toString())
             assertTrue("Nothing to listen to yet", failed.actions.isNullOrEmpty())
             failed.contentIntent.send()
             compose.waitUntil(10_000) { vm.selection.value.book?.id == book.id }

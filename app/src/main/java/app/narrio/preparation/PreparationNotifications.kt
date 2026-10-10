@@ -36,14 +36,14 @@ object PreparationNotifications {
     fun show(context: Context, change: PreparationChange) {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL, "TorBox preparation", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "When a book TorBox was getting ready is ready to listen, or couldn't be prepared"
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Ready to listen", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = "When a book getting ready in TorBox is ready to listen, or couldn't get ready"
         })
         val book = change.book
         val text = if (change.ready) "TorBox finished getting it ready. Listening streams it; nothing downloads to your phone."
             else "${change.problem} Open the book to try another recording."
         val notification = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(R.drawable.ic_headphones)
-            .setContentTitle(if (change.ready) "${book.title} is ready to listen" else "${book.title} couldn't be prepared")
+            .setContentTitle(if (change.ready) "${book.title} is ready to listen" else "${book.title} couldn't get ready")
             .setContentText(text).setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(pending(context, ACTION_OPEN, book.id, change.generation)).setAutoCancel(true).setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS)

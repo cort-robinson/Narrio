@@ -15,7 +15,7 @@ fun shelfPreparationLabel(state: String): String? = when (state) {
 fun preparationNote(prep: Preparation, cacheState: String): String = when {
     prep.ready -> "Your source is ready. Choose Listen to begin."
     prep.failed -> "${prep.problem} Try another recording, or check again if you restarted it in TorBox."
-    prep.paused -> "${prep.problem} Nothing is lost; TorBox keeps the release."
-    cacheState == "cached" -> "TorBox is making the cached source available in your account. You can leave; Narrio keeps checking and tells you when it's ready."
-    else -> "TorBox is fetching this uncached source. Audio isn't being downloaded to your phone. You can leave; Narrio keeps checking and tells you when it's ready. Cached releases can stream now."
+    prep.paused -> "${prep.problem} Nothing is lost; TorBox keeps the recording."
+    cacheState == "cached" -> "TorBox already has this recording and is adding it to your account. You can leave; Narrio keeps checking and tells you when it's ready."
+    else -> "TorBox is getting this recording ready. Nothing downloads to your phone. You can leave; Narrio keeps checking and tells you when it's ready."
 }

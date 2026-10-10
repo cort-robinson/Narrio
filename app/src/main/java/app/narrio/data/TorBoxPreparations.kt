@@ -81,7 +81,7 @@ object PreparationPolicy {
     const val GIVE_UP_MS = 24 * 60 * 60_000L
     const val FAILED_STATE = "Couldn't get it ready"
     const val PAUSED_STATE = "Stopped checking TorBox"
-    const val UNKNOWN_PROBLEM = "TorBox couldn't fetch this release."
+    const val UNKNOWN_PROBLEM = "TorBox couldn't get this recording."
     const val DISCONNECTED = "TorBox is disconnected. Connect it in Settings to keep checking."
     const val KEY_REJECTED = "TorBox didn't accept your key. Reconnect TorBox in Settings to keep checking."
     const val UNREACHABLE = "Narrio couldn't reach TorBox for a while. Check again to keep going."
@@ -103,9 +103,9 @@ object PreparationPolicy {
         val problem = when {
             // A known item that keeps not appearing was removed; a queued request (no id yet) gets a day to appear.
             prep.missing && prep.torrentId > 0 && missing >= MISSING_CHECKS && now - missingSince >= MISSING_MS ->
-                "This release is no longer in your TorBox account."
-            prep.missing && now - missingSince >= GIVE_UP_MS -> "TorBox never started this release."
-            prep.stalled && now - stalledSince >= GIVE_UP_MS -> "No one has shared this release for a day."
+                "This recording is no longer in your TorBox account."
+            prep.missing && now - missingSince >= GIVE_UP_MS -> "TorBox never started getting this recording."
+            prep.stalled && now - stalledSince >= GIVE_UP_MS -> "No one has shared this recording for a day."
             else -> ""
         }
         val next = PreparationWatch(missing, missingSince, stalledSince)
@@ -186,9 +186,18 @@ class PreferencePreparationRecords(private val preferences: SharedPreferences) :
  * checks alike. Results are revalidated against the shelf row and saved in one transaction; a change is announced
  * after it's saved, exactly once, even if the check is cancelled or the process stops in between.
  *
- * Book pages: [begin] when asking TorBox to prepare, [placeholder] then [check] to show status, [played] when its
+ * Identity: a preparation is the TorBox item [ShelfEntry.preparationId] in [ShelfEntry.pendingFormat] (a [PreparationKey]),
+ * with its [PreparationRecord] naming the recording and a [PreparationRecord.generation]. Every write rechecks, inside
+ * one transaction, that the row still holds that key in the state it was read in; a removed, replaced, or played row
+ * is never written. A preparation completes only when a source from that same TorBox item plays: one of its ready
+ * sources, or a source whose torrent id is the preparation id (in its format, when one was asked for). A matching
+ * format alone, or another recording, never completes it. Notifications carry the generation; [current] must still
+ * return it before Listen plays anything.
+ *
+ * Book pages: [begin] when asking TorBox to get a book ready, [placeholder] then [check] to show status, [played] when a
  * recording starts, [current] to validate a notification, [forget] when the book is removed. Background: [checkAll] and
- * [unreachable]. Account: [pauseAll] on disconnect, [resumeAll] on connect.
+ * [unreachable]. Account: [pauseAll] on disconnect, [resumeAll] on connect. Never write a tracked row's `state`,
+ * `preparationId`, or `pendingFormat` directly; go through these.
  */
 class TorBoxPreparations(
     private val shelf: PreparationShelf,
@@ -225,7 +234,7 @@ class TorBoxPreparations(
     suspend fun placeholder(entry: ShelfEntry): Preparation? {
         val problem = records.get(entry.bookId)?.takeIf { it.key == entry.preparationKey }?.problem.orEmpty()
         return when (entry.state) {
-            PreparationStates.PREPARING -> Preparation(entry.preparationId, false, 0f, "Preparing in TorBox")
+            PreparationStates.PREPARING -> Preparation(entry.preparationId, false, 0f, "Getting ready in TorBox")
             PreparationStates.READY -> Preparation(entry.preparationId, true, 0f, "Ready to listen")
             PreparationStates.FAILED -> Preparation(entry.preparationId, false, 0f, PreparationPolicy.FAILED_STATE,
                 problem = problem.ifBlank { PreparationPolicy.UNKNOWN_PROBLEM })
