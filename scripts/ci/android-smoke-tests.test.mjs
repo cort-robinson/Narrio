@@ -3,9 +3,13 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { SMOKE_TEST_LIST, executedTests, missingClasses, parseSmokeTests } from './android-smoke-tests.mjs';
 
-test('the checked-in smoke-test list parses', () => {
-  const classes = parseSmokeTests(readFileSync(SMOKE_TEST_LIST, 'utf8'));
-  assert.ok(classes.includes('app.narrio.PersistenceAndRenewalTest'));
+test('the checked-in lists parse, give reasons, and do not overlap', () => {
+  const required = parseSmokeTests(readFileSync(SMOKE_TEST_LIST, 'utf8'));
+  const deferred = readFileSync('.github/android-nonrequired-tests.txt', 'utf8').split(/\r?\n/)
+    .filter(line => line.trim() && !line.startsWith('#'));
+  for (const line of deferred) assert.match(line, /^\S+\s+#\s*\S/, `${line} needs a reason`);
+  const names = parseSmokeTests(deferred.map(line => line.split('#')[0]).join('\n'));
+  assert.deepEqual(names.filter(name => required.includes(name)), []);
 });
 
 test('list parsing ignores comments and rejects ambiguous entries', () => {
