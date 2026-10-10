@@ -21,6 +21,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -253,9 +255,10 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
         Spacer(Modifier.height(12.dp))
         ShelfProgress(place)
     }
-    if (entry.state == "preparing" || entry.state == "ready") {
+    shelfPreparationLabel(entry.state)?.let { label ->
         Spacer(Modifier.height(12.dp))
-        Text(if (entry.state == "ready") "TorBox source ready" else "Preparing in TorBox", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(label, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelMedium,
+            color = if (entry.state == "failed") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
     }
 }
 

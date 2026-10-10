@@ -102,4 +102,6 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
     }
 }
 
-class ProviderException(message: String) : java.io.IOException(message)
+open class ProviderException(message: String) : java.io.IOException(message)
+/** The provider rejected the account's key; retrying won't help until it's reconnected. */
+class ProviderAuthorizationException(message: String) : ProviderException(message)

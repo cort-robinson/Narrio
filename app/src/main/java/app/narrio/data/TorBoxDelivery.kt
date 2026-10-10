@@ -113,12 +113,12 @@ class TorBoxDelivery(
 
     suspend fun refresh(book: Audiobook, torrentId: Long): Preparation = withContext(Dispatchers.IO) {
         val item = list().firstOrNull { if (torrentId > 0) it.number("id") == torrentId else it.text("hash").equals(book.torrentHash, true) }
-        item?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox")
+        item?.let(::preparation) ?: Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
     }
 
     override suspend fun status(torrentId: Long): Preparation = withContext(Dispatchers.IO) {
         val item = list().firstOrNull { it.number("id") == torrentId }
-            ?: return@withContext Preparation(torrentId, false, 0f, "Waiting for TorBox")
+            ?: return@withContext Preparation(torrentId, false, 0f, "Waiting for TorBox", missing = true)
         preparation(item)
     }
 
@@ -131,10 +131,12 @@ class TorBoxDelivery(
             "metaDL" -> "Finding audio files"
             "downloading" -> "Preparing in TorBox"
             "paused" -> "Paused in TorBox"
-            else -> state.ifBlank { "Preparing in TorBox" }
+            else -> if (failedState(state)) "Couldn't get it ready" else state.ifBlank { "Preparing in TorBox" }
         },
         downloadBytesPerSecond = item.number("download_speed"), etaSeconds = item.number("eta"),
         seeds = item["seeds"]?.let { item.number("seeds") }, checkedAtMs = System.currentTimeMillis(),
+        stalled = item.text("download_state") == "stalled (no seeds)",
+        problem = if (failedState(item.text("download_state"))) "TorBox couldn't fetch this release." else "",
     )
 
     override suspend fun sources(book: Audiobook, torrentId: Long): List<AudioSource> = withContext(Dispatchers.IO) {
@@ -184,7 +186,7 @@ class TorBoxDelivery(
     }
 
     private fun readResponse(r: Response): JsonObject {
-            if (r.code == 401 || r.code == 403) throw ProviderException("TorBox could not authorize this request. Check your API key and account's API access in Settings.")
+            if (r.code == 401 || r.code == 403) throw ProviderAuthorizationException("TorBox could not authorize this request. Check your API key and account's API access in Settings.")
             if (r.code == 429) throw ProviderException("TorBox needs a moment between requests. Please retry shortly.")
             if (!r.isSuccessful) throw ProviderException("TorBox is unavailable (${r.code}). Retry when your connection returns.")
             val root = runCatching { NarrioJson.parseToJsonElement(r.body?.string().orEmpty()).jsonObject }
@@ -195,6 +197,8 @@ class TorBoxDelivery(
     }
 
     companion object {
+        /** TorBox's terminal download states; it won't fetch these without a new request. */
+        private fun failedState(state: String) = Regex("(?i)^(error|failed|dead)|missingfiles").containsMatchIn(state)
         private fun sameFile(a: String, b: String) = a == b || a.endsWith("/$b")
         private fun audioFormat(name: String) = when (val ext = name.substringAfterLast('.').uppercase()) { "MP3", "M4B" -> ext; else -> "OTHER" }
         internal fun parseCached(data: JsonElement?, keep: (String) -> Boolean = ::isBookAudioFile): Map<String, JsonObject> {

@@ -65,7 +65,13 @@ data class Preparation(
     val torrentId: Long, val ready: Boolean, val progress: Float, val state: String,
     val downloadBytesPerSecond: Long = 0, val etaSeconds: Long = 0,
     val seeds: Long? = null, val checkedAtMs: Long = 0,
-)
+    /** TorBox no longer lists the item, or has no peers to fetch it from. */
+    val missing: Boolean = false, val stalled: Boolean = false,
+    /** Why it couldn't get ready, in the listener's words; blank while it still can. */
+    val problem: String = "",
+) {
+    val failed: Boolean get() = problem.isNotEmpty()
+}
 
 /** Full path comparison keeps disc folders and unpadded chapter numbers in order. */
 object AudioOrdering : Comparator<String> {

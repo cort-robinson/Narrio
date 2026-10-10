@@ -114,6 +114,8 @@ class NarrioViewModel @JvmOverloads constructor(
     val downloads = graph.offline.books
     val wifiOnly = MutableStateFlow(graph.preferences.getBoolean("downloadWifi", true))
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Asks the shell to request notification permission (once per install), so a TorBox preparation can say when it's ready. */
+    val notificationsWanted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     /** Emitted after Now playing is dismissed, so the shell can offer Undo. */
     val dismissedPlayback = MutableSharedFlow<ListeningState>(extraBufferCapacity = 1)
     val shelf = graph.library.observeShelf().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -201,6 +203,12 @@ class NarrioViewModel @JvmOverloads constructor(
                 if (book != null && ebookSearch.value.searched && ebookSearch.value.adding == null) {
                     if (selection.value.book?.id == book.id) findEbooks(book, force = true) else stopEbookSearch(reset = true)
                 }
+            }
+        }
+        viewModelScope.launch {
+            // Background checks notify only while Narrio is away; on screen, say it here.
+            graph.preparations.changes.collect { change ->
+                if (graph.playback.visible) messages.emit(if (change.ready) "${change.book.title} is ready to listen." else "${change.book.title} couldn't be prepared. Try another recording.")
             }
         }
         viewModelScope.launch {
@@ -396,8 +404,9 @@ class NarrioViewModel @JvmOverloads constructor(
                 val saved = graph.library.find(full.id)
                 saved?.book()?.takeIf { it.metadataUpdatedAtMs > full.metadataUpdatedAtMs }?.let { full = full.withMetadataFrom(it) }
                 preferredFormat.value = saved?.pendingFormat?.takeIf { it.isNotBlank() } ?: graph.preferences.getString("format:${full.id}", saved?.source()?.format.orEmpty()).orEmpty()
-                if (saved?.state == "preparing" || saved?.state == "ready") {
-                    preparation.value = Preparation(saved.preparationId, saved.state == "ready", 0f, if (saved.state == "ready") "Ready to listen" else "Preparing in TorBox")
+                val placeholder = saved?.let(graph.preparations::placeholder)
+                if (saved != null && placeholder != null) {
+                    preparation.value = placeholder
                     if (connected.value) {
                         updatePreparation(full, saved)
                         selection.value.book?.takeIf { it.id == full.id }?.let { full = it.withMetadataFrom(full) }
@@ -613,6 +622,7 @@ class NarrioViewModel @JvmOverloads constructor(
         try {
             val resolved = playableSource(book, source, delivery) ?: return@launch
             awaitService().load(book, resolved)
+            app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
             val saved = graph.library.find(book.id)
             if (saved?.pendingFormat == resolved.format) graph.library.finishPreparation(book.id)
             playerOpen.value = true
@@ -639,7 +649,7 @@ class NarrioViewModel @JvmOverloads constructor(
         }
         if (selection.value.book?.id == book.id) preparation.value = prep
         graph.library.save(book); graph.library.preparing(book.id, prep.torrentId, source.format)
-        if (!prep.ready) { messages.emit("This source isn't ready yet. Choose a cached release to listen now; its status is saved on your shelf."); return null }
+        if (!prep.ready) { notificationsWanted.tryEmit(Unit); messages.emit("This source isn't ready yet. Choose a cached release to listen now; its status is saved on your shelf."); return null }
         return graph.torbox.sources(book, prep.torrentId).firstOrNull { it.format == source.format }
             ?: throw ProviderException("The selected format is missing from this TorBox source. Choose another format.")
     }
@@ -651,8 +661,10 @@ class NarrioViewModel @JvmOverloads constructor(
             val prep = if (book.provider == "torbox") graph.torbox.status(book.sources.first().torrentId!!) else graph.torbox.prepare(book)
             graph.library.save(book); graph.library.preparing(book.id, prep.torrentId, format)
             if (selection.value.book?.id == book.id) { preparation.value = prep; preferredFormat.value = format }
-            updatePreparation(book, graph.library.find(book.id)!!)
-            messages.emit(if (prep.ready) "Ready in TorBox. Choose your audio format to listen." else "Preparation stays in TorBox. It doesn't download audio to your phone.")
+            if (!prep.ready) notificationsWanted.tryEmit(Unit)
+            // A preparation that's already finished is announced by the check itself.
+            if (updatePreparation(book, graph.library.find(book.id)!!).change == null)
+                messages.emit(if (prep.ready) "Ready in TorBox. Choose your audio format to listen." else "Preparation stays in TorBox. It doesn't download audio to your phone. Narrio tells you when it's ready.")
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { messages.emit(friendly(error)) }
         finally { busy.value = false }
@@ -689,30 +701,46 @@ class NarrioViewModel @JvmOverloads constructor(
         finally { busy.value = false }
     }
 
-    private suspend fun updatePreparation(book: Audiobook, saved: ShelfEntry) {
-        val prep = graph.torbox.refresh(book, saved.preparationId)
-        if (prep.ready) {
-            graph.library.state(book.id, "ready")
-            val sources = graph.torbox.sources(book, prep.torrentId)
-            val updated = book.copy(cacheState = "cached", cachedFormats = sources.map { it.format }, sources = if (book.provider == "archive") book.sources else sources)
-            graph.library.save(updated)
-            if (selection.value.book?.id == book.id) selection.value = SelectionState(updated)
-        }
-        if (selection.value.book?.id == book.id) preparation.value = prep
+    /** Checks TorBox through the same path the background checks use, so both keep one shelf state. */
+    private suspend fun updatePreparation(book: Audiobook, saved: ShelfEntry): PreparationUpdate {
+        val update = graph.preparations.check(book, saved)
+        if (update.book != null && selection.value.book?.id == book.id) selection.value = SelectionState(update.book)
+        if (selection.value.book?.id == book.id) preparation.value = update.preparation
+        return update
     }
+
+    /** A notification's tap: the book's page, with its preparation status. */
+    fun openBook(bookId: String) = viewModelScope.launch {
+        graph.library.find(bookId)?.book()?.let { open(it) } ?: messages.emit("This book is no longer on your shelf.")
+    }
+
+    /** A "ready to listen" notification's Listen: plays the prepared recording, in the format it was prepared for. */
+    fun listenPrepared(bookId: String) = viewModelScope.launch {
+        val entry = graph.library.find(bookId) ?: return@launch messages.emit("This book is no longer on your shelf.")
+        val book = entry.book()
+        val wanted = entry.pendingFormat.ifBlank { savedFormat(bookId) }
+        val sources = book.sources.filter { it.parts.isNotEmpty() }
+        val source = sources.firstOrNull { it.format == wanted } ?: sources.firstOrNull { it.format == "M4B" } ?: sources.firstOrNull()
+        if (source == null) open(book) else start(book, source, source.delivery)
+    }
+
+    /** After a preparation fails, looks for the book's other recordings, as opening it from search does. */
+    fun findAnotherRecording(book: Audiobook) = open(Audiobook(book.id, book.title, book.author, "Narrator depends on source", "Language depends on source",
+        book.description, coverUrl = book.coverUrl, provider = "catalog", detailsLoaded = true, metadataSource = book.metadataSource,
+        metadataUrl = book.metadataUrl, metadataUpdatedAtMs = book.metadataUpdatedAtMs))
 
     fun connect(key: String) = viewModelScope.launch {
         if (key.isBlank() || busy.value) return@launch
         busy.value = true
         try {
             graph.torbox.connect(key.trim()); graph.credentials.write(key.trim())
-            connected.value = true; messages.emit("TorBox connected. Books now also check TorBox for ready audio.")
+            connected.value = true; graph.preparationChecks.resume(); messages.emit("TorBox connected. Books now also check TorBox for ready audio.")
             selection.value.book?.takeIf { it.provider == "catalog" }?.let { findSources(it) }
         } catch (error: Exception) { messages.emit(friendly(error)) }
         finally { busy.value = false }
     }
     fun disconnect() {
-        graph.playback.service?.disconnect(); graph.offline.disconnect(); graph.credentials.clear(); connected.value = false
+        graph.playback.service?.disconnect(); graph.offline.disconnect(); graph.credentials.clear(); graph.preparationChecks.cancel(); connected.value = false
         sourceSearchJob?.cancel()
         sourceSearch.value = SourceSearchState(book = selection.value.book)
         selection.value.book?.takeIf { it.provider == "catalog" }?.let { findSources(it) }

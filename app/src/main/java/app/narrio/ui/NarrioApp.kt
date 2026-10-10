@@ -73,12 +73,15 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
         onDispose { vm.graph.playback.visible = false; vm.graph.offline.visible = false; vm.graph.updates.visibility(false); lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    LaunchedEffect(state.playing) {
-        if (state.playing && Build.VERSION.SDK_INT >= 33 && !vm.graph.preferences.getBoolean("notificationAsked", false)) {
+    // Asked once per install: at the first playback, or when TorBox starts getting a book ready, whichever comes first.
+    val askNotifications = {
+        if (Build.VERSION.SDK_INT >= 33 && !vm.graph.preferences.getBoolean("notificationAsked", false)) {
             vm.graph.preferences.edit().putBoolean("notificationAsked", true).apply()
             if (ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
+    LaunchedEffect(state.playing) { if (state.playing) askNotifications() }
+    LaunchedEffect(vm) { vm.notificationsWanted.collect { askNotifications() } }
     // Exiting detail content keeps rendering the book it showed, even after the selection clears.
     val recentBooks = remember { HashMap<String, Audiobook>() }
     selected.book?.let { recentBooks[it.id] = it }

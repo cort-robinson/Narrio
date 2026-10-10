@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.FragmentFactory
+import app.narrio.preparation.PreparationNotifications
 import app.narrio.ui.NarrioApp
 import org.readium.r2.navigator.epub.EpubNavigatorFragment
 
@@ -27,11 +28,14 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         setContent { NarrioApp(this) }
         openUpdates(intent)
+        // A recreated activity keeps its launch intent; only a fresh launch acts on it.
+        if (savedInstanceState == null) openPreparedBook(intent)
     }
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         openUpdates(intent)
+        openPreparedBook(intent)
     }
     // Volume keys reach the activity because no view consumes them; the reader can claim them before the system does.
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = keyInterceptor?.invoke(event) == true || super.onKeyDown(keyCode, event)
@@ -41,6 +45,19 @@ class MainActivity : FragmentActivity() {
             ViewModelProvider(this)[app.narrio.ui.NarrioViewModel::class.java].navigate(2)
             intent.removeExtra("showUpdates")
         }
+    }
+    /** A TorBox preparation notification: its tap opens the book, its Listen plays the prepared recording. */
+    private fun openPreparedBook(intent: Intent?) {
+        val bookId = intent?.getStringExtra(PreparationNotifications.EXTRA_BOOK) ?: return
+        // Reopening from Recents replays the task's original intent; it mustn't start the book again.
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val vm = ViewModelProvider(this)[app.narrio.ui.NarrioViewModel::class.java]
+        when (intent.action) {
+            PreparationNotifications.ACTION_LISTEN -> { PreparationNotifications.clear(this, bookId); vm.listenPrepared(bookId) }
+            PreparationNotifications.ACTION_OPEN -> vm.openBook(bookId)
+            else -> return
+        }
+        intent.removeExtra(PreparationNotifications.EXTRA_BOOK)
     }
 }
 
