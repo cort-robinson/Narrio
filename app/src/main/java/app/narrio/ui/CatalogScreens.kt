@@ -40,6 +40,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val formats by vm.shelfFormats.collectAsStateWithLifecycle()
     val playing by vm.playback.collectAsStateWithLifecycle()
+    val connected by vm.connected.collectAsStateWithLifecycle()
+    val torBoxNudge = rememberTorBoxNudge(vm.graph.preferences)
     val focus = LocalFocusManager.current
     val browse = query.isBlank() && category == "All"
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -69,6 +71,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+        if (query.isBlank() && torBoxNudge.visible(connected)) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem()) }
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {

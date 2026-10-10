@@ -28,6 +28,8 @@ data class SourceSearchState(
     val book: Audiobook? = null, val recordings: List<Audiobook> = emptyList(), val loading: Boolean = false, val searched: Boolean = false,
     val error: String? = null, val possible: List<Audiobook> = emptyList(), val chosenId: String? = null,
     val streamed: StreamedSourceSearch? = null,
+    /** The listener's pick carried into a new search of the same book until its results include it again. */
+    val kept: Audiobook? = null,
 ) {
     /** The listener may pick any match, including a possible one; otherwise the best verified recording leads. */
     val choice: Audiobook? get() = results.firstOrNull { it.id == chosenId } ?: streamed?.best?.recording ?: recordings.firstOrNull()
@@ -39,13 +41,24 @@ data class SourceSearchState(
         val best = snapshot.best?.recording
         val recordings = if (best == null) all else listOf(best) + all.filter { it.id != best.id }
         val possible = snapshot.groups.flatMap { it.possible }
-        val picked = results.firstOrNull { it.id == chosenId }
+        val picked = results.firstOrNull { it.id == chosenId } ?: kept?.takeIf { it.id == chosenId }
         val chosen = (recordings + possible).firstOrNull {
             picked != null && (it.id == picked.id || picked.torrentHash.isNotBlank() && it.torrentHash.equals(picked.torrentHash, true))
         }?.id ?: chosenId
         return SourceSearchState(snapshot.book, recordings, loading = !snapshot.complete, searched = true,
             error = snapshot.groups.filter { it.status == SourceGroupStatus.FAILED }.mapNotNull { it.message }.distinct().joinToString(" ").ifBlank { null },
-            possible = possible, chosenId = chosen, streamed = snapshot)
+            possible = possible, chosenId = chosen, streamed = snapshot, kept = picked)
+    }
+
+    /**
+     * Searching the same book again (after connecting TorBox, or Search again) keeps the listener's own pick, matched
+     * by recording id or torrent hash as results arrive; only when it doesn't come back does the best match lead.
+     */
+    fun keepingChoiceOf(previous: SourceSearchState): SourceSearchState {
+        if (previous.book?.id != book?.id || previous.chosenId == null) return this
+        val picked = previous.results.firstOrNull { it.id == previous.chosenId } ?: previous.kept?.takeIf { it.id == previous.chosenId } ?: return this
+        val match = results.firstOrNull { it.id == picked.id || picked.torrentHash.isNotBlank() && it.torrentHash.equals(picked.torrentHash, true) }
+        return copy(chosenId = match?.id ?: picked.id, kept = match ?: picked)
     }
 }
 /** The playing book's active text and its timing bindings, for narration sync and read along. */
@@ -86,6 +99,8 @@ data class ReaderRequest(val book: Audiobook, val edition: EbookEdition, val pla
 class NarrioViewModel @JvmOverloads constructor(
     application: Application,
     private val sourceEngine: StreamingSourceSearch = (application as NarrioApplication).graph.streamingSourceSearch,
+    /** Checks a TorBox key and stores it; replaceable so tests never need a real account. */
+    private val torBoxSave: suspend (String) -> Unit = (application as NarrioApplication).graph.let { graph -> { key -> graph.torbox.connect(key); graph.credentials.write(key) } },
 ) : AndroidViewModel(application) {
     val graph = (application as NarrioApplication).graph
     val catalog = MutableStateFlow(CatalogState())
@@ -100,6 +115,13 @@ class NarrioViewModel @JvmOverloads constructor(
     /** True only while a tapped Listen is loading its audio, so the button can say so. */
     val starting = MutableStateFlow(false)
     val connected = MutableStateFlow(graph.credentials.read() != null)
+    private val torBoxConnector = TorBoxConnector(viewModelScope, torBoxSave) { torBoxConnected() }
+    /** The Connect TorBox sheet and its attempt; see [requestTorBoxConnect]. */
+    val torBox = torBoxConnector.state
+    /** Changes whenever the TorBox key does, so results found with another account (or none) are never reused. */
+    private var torBoxAccount = 0
+    /** Settings shows Sources & add-ons instead of its home; see [openSourceSettings]. */
+    val sourceSettingsOpen = MutableStateFlow(false)
     private val appearanceStore = AppearanceStore(graph.preferences)
     private val appearanceState = MutableStateFlow(appearanceStore.read())
     val appearance = appearanceState.asStateFlow()
@@ -300,9 +322,10 @@ class NarrioViewModel @JvmOverloads constructor(
     fun findSources(book: Audiobook, force: Boolean = false) {
         sourceSearchJob?.cancel()
         sourceSession = null
-        val key = "${book.id}|${connected.value}"
-        sourceResults.get(key, force)?.let { sourceSearch.value = it; return }
-        sourceSearch.value = SourceSearchState(book = book, loading = true, searched = true)
+        val key = "${book.id}|${connected.value}|$torBoxAccount"
+        val previous = sourceSearch.value
+        sourceResults.get(key, force)?.let { sourceSearch.value = it.keepingChoiceOf(previous); return }
+        sourceSearch.value = SourceSearchState(book = book, loading = true, searched = true).keepingChoiceOf(previous)
         sourceSearchJob = viewModelScope.launch {
             try {
                 sourceSession = sourceEngine.start(book, connected.value, this)
@@ -446,7 +469,9 @@ class NarrioViewModel @JvmOverloads constructor(
 
     fun refreshMetadata(book: Audiobook) = loadMetadata(book, true)
     fun back() { val open = reader.value; if (open?.together == true && open.fromListening) { reader.value = null; playerOpen.value = true; returnToListening() } else if (open?.together == true) setReadAlong(false) else if (open != null) reader.value = null else if (playerOpen.value) playerOpen.value = false else if (sourceSearch.value.book != null && selection.value.book?.recordingId?.isNotBlank() == true && selection.value.book?.recordingId != sourceSearch.value.book?.recordingId) open(sourceSearch.value.book!!, keepSources = true) else { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); stopEbookSearch(); selection.value = SelectionState(); sourceSearch.value = SourceSearchState() } }
-    fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); sourceSearch.value = SourceSearchState(); stopEbookSearch(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false; reader.value = null }
+    fun navigate(index: Int) { detailJob?.cancel(); detailMetadataJob?.cancel(); sourceSearchJob?.cancel(); sourceSearch.value = SourceSearchState(); stopEbookSearch(); destination.value = index; selection.value = SelectionState(); playerOpen.value = false; reader.value = null; sourceSettingsOpen.value = false }
+    /** Settings, opened straight on Sources & add-ons. */
+    fun openSourceSettings() { navigate(2); sourceSettingsOpen.value = true }
     fun save(book: Audiobook) = viewModelScope.launch { graph.library.save(book); messages.emit("Saved to your shelf") }
     fun remove(book: Audiobook) = viewModelScope.launch {
         if (reader.value?.book?.id == book.id) reader.value = null
@@ -487,7 +512,7 @@ class NarrioViewModel @JvmOverloads constructor(
     fun findEbooks(book: Audiobook, force: Boolean = false) {
         ebookJob?.cancel(); ebookSession = null
         ebookBook = book
-        val key = "${book.id}|${connected.value}|${book.sources.joinToString(",") { it.id }}"
+        val key = "${book.id}|${connected.value}|$torBoxAccount|${book.sources.joinToString(",") { it.id }}"
         ebookResults.get(key, force)?.let { ebookSearch.value = it; return }
         ebookSearch.value = EbookSearchState(book.id, searching = true, searched = true)
         fun update(change: (EbookSearchState) -> EbookSearchState) = ebookSearch.update { if (it.bookId == book.id) change(it) else it }
@@ -729,18 +754,32 @@ class NarrioViewModel @JvmOverloads constructor(
         book.description, coverUrl = book.coverUrl, provider = "catalog", detailsLoaded = true, metadataSource = book.metadataSource,
         metadataUrl = book.metadataUrl, metadataUpdatedAtMs = book.metadataUpdatedAtMs))
 
-    fun connect(key: String) = viewModelScope.launch {
-        if (key.isBlank() || busy.value) return@launch
-        busy.value = true
-        try {
-            graph.torbox.connect(key.trim()); graph.credentials.write(key.trim())
-            connected.value = true; graph.preparationChecks.resume(); messages.emit("TorBox connected. Books now also check TorBox for ready audio.")
-            selection.value.book?.takeIf { it.provider == "catalog" }?.let { findSources(it) }
-        } catch (error: Exception) { messages.emit(friendly(error)) }
-        finally { busy.value = false }
+    /** Opens the Connect TorBox sheet over the current screen; the open book stays selected. */
+    fun requestTorBoxConnect() = torBoxConnector.request()
+    /** Closing the sheet also cancels an attempt it started; that key is never saved. */
+    fun dismissTorBoxConnect() = torBoxConnector.dismiss()
+    fun clearTorBoxError() = torBoxConnector.clearError()
+
+    /** A failure stays under the key field; success closes the sheet and the current book looks again with TorBox. */
+    fun connect(key: String) = torBoxConnector.connect(key)
+
+    private suspend fun torBoxConnected() {
+        torBoxAccount++; connected.value = true; graph.preparationChecks.resume()
+        messages.emit("TorBox connected. Books now also check TorBox for ready audio.")
+        refreshForTorBox()
+    }
+
+    /** In place, after connecting: the open recording checks its cache, and its book's sources and an ebook lookup run again, fresh. */
+    private fun refreshForTorBox() {
+        val book = selection.value.book
+        val search = sourceSearch.value
+        if (book != null && book.provider != "catalog" && !playerOpen.value && reader.value == null) open(book, keepSources = true)
+        search.book?.takeIf { it.provider == "catalog" && search.searched }?.let { findSources(it, force = true) }
+        val ebooks = ebookSearch.value
+        ebookBook?.takeIf { it.id == ebooks.bookId && ebooks.searched && ebooks.adding == null && (it.id == book?.id || it.id == playback.value.book?.id) }?.let { findEbooks(it, force = true) }
     }
     fun disconnect() {
-        graph.playback.service?.disconnect(); graph.offline.disconnect(); graph.credentials.clear(); graph.preparationChecks.cancel(); connected.value = false
+        graph.playback.service?.disconnect(); graph.offline.disconnect(); graph.credentials.clear(); graph.preparationChecks.cancel(); torBoxAccount++; connected.value = false
         sourceSearchJob?.cancel()
         sourceSearch.value = SourceSearchState(book = selection.value.book)
         selection.value.book?.takeIf { it.provider == "catalog" }?.let { findSources(it) }

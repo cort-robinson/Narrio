@@ -40,7 +40,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import kotlinx.coroutines.launch
 import androidx.core.view.WindowCompat
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.narrio.domain.*
@@ -113,8 +112,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             options = { recording -> recording?.let(vm::chooseVersion); listeningOptions = true },
             retry = vm::retrySource,
             searchAgain = { vm.findSources(book, force = true) },
-            connectTorBox = { vm.navigate(2) },
-            sourceSettings = { vm.navigate(2) },
+            connectTorBox = vm::requestTorBoxConnect,
+            sourceSettings = vm::openSourceSettings,
             showSources = { scope.launch { listState.animateScrollToItem(sourcesIndex) } },
         )
     }
@@ -208,7 +207,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             } else if (book.detailsLoaded && book.sources.isEmpty()) {
                 Spacer(Modifier.height(12.dp)); Text(if (book.provider == "knaben") "No cached audio files found for this release. Try another ready source. File formats appear once a source is available in TorBox." else "This edition has no compatible audio files. Try another recording.", style = MaterialTheme.typography.bodyMedium)
                 if (book.provider == "knaben" && connected && preparation == null) OutlinedButton({ vm.prepareUncached(book, "") }, enabled = !busy) { Text("Prepare this release in TorBox") }
-                if (book.provider == "knaben" && !connected) OutlinedButton({ vm.navigate(2) }) { Text("Connect TorBox to check availability") }
+                if (book.provider == "knaben" && !connected) OutlinedButton(vm::requestTorBoxConnect) { Text("Connect TorBox to check availability") }
             } else if (connected) {
                 Spacer(Modifier.height(12.dp))
                 Text(when (book.cacheState) { "cached" -> "Ready in TorBox · ${book.cachedFormats.joinToString(" / ")}"; "uncached" -> "Not cached in TorBox · Pick a ready source to listen immediately"; else -> "TorBox cache hasn't been checked" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -276,7 +275,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         searchAgain = { vm.findEbooks(book, force = true) },
         chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
-        sourceSettings = { ebookSheet = false; vm.navigate(2) }, connectTorBox = { ebookSheet = false; vm.navigate(2) },
+        sourceSettings = { ebookSheet = false; vm.openSourceSettings() }, connectTorBox = vm::requestTorBoxConnect,
     ), dismiss = { ebookSheet = false }, searchLinks = ebookSearchLinks)
 }
 
@@ -338,7 +337,7 @@ private fun SourcePicker(vm: NarrioViewModel, book: Audiobook, connected: Boolea
                 RadioButton(delivery == "torbox", { delivery = "torbox" }); Column(Modifier.weight(1f)) { Text("TorBox", style = MaterialTheme.typography.titleSmall); Text(if (!connected) "Connect your account to use this source" else if (chosen.format in book.cachedFormats) "Cached · Ready to stream" else "Not cached · Requires cloud preparation", style = MaterialTheme.typography.bodySmall) }
             }
             Text("Streaming doesn't save the book to your phone. Each audio format and delivery source keeps its own listening position.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button({ close { if (delivery == "torbox" && !connected) vm.navigate(2) else vm.start(book, chosen, delivery) } }, Modifier.fillMaxWidth(), enabled = !busy && (ready || !connected && delivery == "torbox")) {
+            Button({ close { if (delivery == "torbox" && !connected) vm.requestTorBoxConnect() else vm.start(book, chosen, delivery) } }, Modifier.fillMaxWidth(), enabled = !busy && (ready || !connected && delivery == "torbox")) {
                 Text(if (delivery == "torbox" && !connected) "Connect TorBox" else if (delivery == "torbox") "Stream now" else "Start listening")
             }
             if (delivery == "torbox" && connected && !ready) {
@@ -391,38 +390,47 @@ fun OfflineStatus(vm: NarrioViewModel, download: OfflineBook, modifier: Modifier
 @Composable
 fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val connected by vm.connected.collectAsStateWithLifecycle()
-    val busy by vm.busy.collectAsStateWithLifecycle()
     val appearance by vm.appearance.collectAsStateWithLifecycle()
     val wifiOnly by vm.wifiOnly.collectAsStateWithLifecycle()
-    var key by remember { mutableStateOf("") }
     var appearanceOpen by rememberSaveable { mutableStateOf(false) }
-    var addonsOpen by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(connected) { if (connected) key = "" }
+    // Held by the view model so "Open source settings" can land here directly.
+    val addonsOpen by vm.sourceSettingsOpen.collectAsStateWithLifecycle()
     // Every sub-page, not only Appearance, slides in and back out along the same axis.
     val page = when { addonsOpen -> "addons"; appearanceOpen -> "appearance"; else -> "home" }
     AnimatedContent(page, modifier, transitionSpec = { Motion.sharedAxisX(targetState != "home") }, label = "settings page") { shown ->
         when (shown) {
-            "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, { addonsOpen = false }, vm::addonsChanged, { addonsOpen = false })
+            "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, vm::requestTorBoxConnect, vm::addonsChanged, { vm.sourceSettingsOpen.value = false })
             "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
-            else -> SettingsHome(vm, connected, busy, appearance, wifiOnly, key, { key = it }, { addonsOpen = true }) { appearanceOpen = true }
+            else -> SettingsHome(vm, connected, appearance, wifiOnly, { vm.sourceSettingsOpen.value = true }) { appearanceOpen = true }
         }
     }
 }
 
 @Composable
-private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, key: String, setKey: (String) -> Unit, openAddons: () -> Unit, openAppearance: () -> Unit) {
+private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, openAddons: () -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
     val backgroundAlignment by vm.backgroundAlignment.collectAsStateWithLifecycle()
     val readAlongSync by vm.readAlongSync.collectAsStateWithLifecycle()
+    // TorBox leads: it gates every source beyond LibriVox. Everyday listening settings follow, then the app itself.
     LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
-        item { AppearanceEntry(appearance, openAppearance) }
+        item(key = "torbox") { TorBoxSettings(vm, connected) }
         item {
             OutlinedButton(openAddons, Modifier.fillMaxWidth()) {
                 Text("Sources & add-ons · Audiobooks, ebooks & book info")
             }
         }
-        item { UpdateSettings(vm.graph.updates) }
+        item {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
+            Text("Downloads", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(12.dp))
+            Text("Use Download to phone on a recording to save its chosen audio format. Manage downloads on your shelf. Streaming plays over the internet without saving the book.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Download only on Wi-Fi", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                Switch(wifiOnly, vm::setWifiOnly)
+            }
+            Text(if (wifiOnly) "Downloads wait for an unmetered connection." else "Downloads can use mobile data, including large whole-book files.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         item {
             Text("Reading & listening", style = MaterialTheme.typography.headlineSmall)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -439,35 +447,8 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, busy: Boolean,
             Text("While read along is open, listens to the narration on this phone to keep the highlight in step. Audio isn't uploaded.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        item {
-            Text("TorBox", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Crossfade(connected, label = "account") { Icon(if (it) Icons.Rounded.CheckCircle else Icons.Rounded.CloudQueue, null, tint = MaterialTheme.colorScheme.secondary) }
-                Text(if (connected) "Connected on this device" else "Connect your delivery account", style = MaterialTheme.typography.titleSmall)
-            }
-            Spacer(Modifier.height(12.dp))
-            Text("Use your TorBox API key to deliver recordings and browse the audio in your account. Your plan needs API access.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(16.dp))
-            if (!connected) {
-                OutlinedTextField(key, setKey, Modifier.fillMaxWidth(), label = { Text("TorBox API key") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(12.dp))
-                Spacer(Modifier.height(12.dp))
-                Button({ vm.connect(key) }, Modifier.fillMaxWidth(), enabled = key.isNotBlank() && !busy) { if (busy) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }; Text(if (busy) "Connecting…" else "Connect TorBox") }
-                TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }) { Text("Find my API key") }
-            } else OutlinedButton({ vm.disconnect() }) { Text("Disconnect and remove key") }
-            Text("Protected by Android Keystore. Never synced, backed up, or included in logs.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        item {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
-            Text("Downloads", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            Text("Use Download to phone on a recording to save its chosen audio format. Manage downloads on your shelf. Streaming plays over the internet without saving the book.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Download only on Wi-Fi", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Switch(wifiOnly, vm::setWifiOnly)
-            }
-            Text(if (wifiOnly) "Downloads wait for an unmetered connection." else "Downloads can use mobile data, including large whole-book files.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        item { AppearanceEntry(appearance, openAppearance) }
+        item { UpdateSettings(vm.graph.updates) }
         item {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
             Text("About Narrio", style = MaterialTheme.typography.headlineSmall)

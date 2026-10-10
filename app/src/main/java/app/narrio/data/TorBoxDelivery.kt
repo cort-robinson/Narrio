@@ -16,11 +16,17 @@ class TorBoxDelivery(
 ) : DeliveryProvider {
     private fun token() = credential()?.takeIf { it.isNotBlank() } ?: throw ProviderException("Connect TorBox in Settings to use this source.")
 
-    suspend fun connect(candidate: String): String = withContext(Dispatchers.IO) {
-        val root = request("user/me", overrideToken = candidate)
+    /** Checks a key before it's saved, cancelled with its caller; every failure is a [ProviderException] worded for the person entering it. */
+    suspend fun connect(candidate: String): String {
+        val me = Request.Builder().url((baseUrl + "user/me").toHttpUrl()).header("Authorization", "Bearer $candidate").build()
+        val root = try { http.readCancellable(me, ::readResponse) }
+            catch (error: ProviderAuthorizationException) {
+                throw ProviderException("TorBox didn't accept this API key. Copy the whole key from your TorBox settings and check that your plan includes API access.")
+            } catch (error: ProviderException) { throw error }
+            catch (error: java.io.IOException) { throw ProviderException("Couldn't reach TorBox. Check your internet connection and try again.") }
         val data = root["data"] as? JsonObject
         if (data?.number("plan") == 0L) throw ProviderException("This TorBox account needs a plan with API access. Public recordings can still play directly.")
-        "TorBox connected"
+        return "TorBox connected"
     }
 
     override suspend fun prepare(book: Audiobook): Preparation = withContext(Dispatchers.IO) {
