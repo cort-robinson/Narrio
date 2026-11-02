@@ -12,6 +12,9 @@ import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.CodingErrorAction
 import java.security.MessageDigest
+import java.util.zip.Inflater
+import java.util.zip.InflaterInputStream
+import java.util.zip.ZipException
 import java.util.zip.ZipInputStream
 
 /** Parses inert text only. EPUB scripts, styles, images, and remote resources never execute. */
@@ -38,21 +41,98 @@ object BookTextParser {
      * such as a website download saved as ".bin" with "application/octet-stream". Text is never guessed from bytes.
      */
     fun detect(bytes: ByteArray): String? {
-        if (bytes.size < 4 || bytes[0] != 'P'.code.toByte() || bytes[1] != 'K'.code.toByte() || bytes[2].toInt() != 3 || bytes[3].toInt() != 4) return null
+        if (!looksLikeZip(bytes)) return null
         return try {
-            ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-                var entries = 0
-                while (entries++ < 2_000) {
-                    val entry = zip.nextEntry ?: break
-                    if (entry.name == "META-INF/container.xml") return "EPUB"
-                    if (entry.name == "mimetype" && String(zip.readNBytesCompat(64), Charsets.US_ASCII).trim() == "application/epub+zip") return "EPUB"
-                }
-                null
+            var entries = 0
+            forEachZipEntry(bytes) { name, input ->
+                if (++entries > 2_000) return null
+                if (name == "META-INF/container.xml") return "EPUB"
+                if (name == "mimetype" && String(input.readNBytesCompat(64), Charsets.US_ASCII).trim() == "application/epub+zip") return "EPUB"
             }
+            null
         } catch (_: Exception) { null }
     }
 
-    private fun ZipInputStream.readNBytesCompat(limit: Int): ByteArray {
+    /** A short name for a file that isn't an EPUB or text, such as "a PDF", or null when its kind is unknown. */
+    fun describe(bytes: ByteArray): String? {
+        fun startsWith(text: String, at: Int = 0) = bytes.size >= at + text.length && text.indices.all { bytes[at + it] == text[it].code.toByte() }
+        return when {
+            startsWith("%PDF") -> "a PDF"
+            startsWith("BOOKMOBI", 60) || startsWith("TPZ") -> "a Kindle (MOBI/AZW) file"
+            startsWith("AT&TFORM") -> "a DjVu file"
+            startsWith("Rar!") -> "a RAR archive"
+            startsWith("7z\u00BC\u00AF") -> "a 7-Zip archive"
+            startsWith("\u001F\u008B") -> "a compressed (gzip) file"
+            looksLikeZip(bytes) -> "a ZIP archive without an EPUB inside"
+            else -> null
+        }
+    }
+
+    private fun looksLikeZip(bytes: ByteArray) = (bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() && bytes[2].toInt() == 3 && bytes[3].toInt() == 4) ||
+        centralDirectory(bytes) != null
+
+    /** One file listed in a ZIP's central directory, its data starting at [dataOffset] in the archive's bytes. */
+    private class ZipItem(val name: String, val method: Int, val dataOffset: Int, val compressedSize: Int)
+
+    /**
+     * The files of a ZIP read from its central directory, or null when there isn't a usable one. Unlike [ZipInputStream],
+     * this reads EPUBs that store entries uncompressed with trailing data descriptors or that have bytes before the
+     * archive, as some ebook tools and download sites produce.
+     */
+    private fun centralDirectory(bytes: ByteArray): List<ZipItem>? {
+        fun u16(at: Int) = (bytes[at].toInt() and 0xFF) or ((bytes[at + 1].toInt() and 0xFF) shl 8)
+        fun u32(at: Int) = u16(at).toLong() or (u16(at + 2).toLong() shl 16)
+        if (bytes.size < 22) return null
+        var end = -1
+        for (at in bytes.size - 22 downTo maxOf(0, bytes.size - 22 - 0xFFFF)) if (u32(at) == 0x06054b50L) { end = at; break }
+        if (end < 0) return null
+        val count = u16(end + 10)
+        val size = u32(end + 12)
+        val offset = u32(end + 16)
+        if (count == 0xFFFF || size == 0xFFFFFFFFL || offset == 0xFFFFFFFFL || size > end) return null
+        val start = (end - size).toInt()
+        // Bytes before the archive shift every recorded offset by the same amount.
+        val shift = start - offset
+        if (shift < 0) return null
+        val items = ArrayList<ZipItem>(minOf(count, 4_096))
+        var at = start
+        repeat(count) {
+            if (at + 46 > end || u32(at) != 0x02014b50L) return null
+            val nameLength = u16(at + 28)
+            val next = at + 46 + nameLength + u16(at + 30) + u16(at + 32)
+            if (next > end) return null
+            val compressedSize = u32(at + 20)
+            val local = u32(at + 42) + shift
+            if (local < 0 || local + 30 > bytes.size || u32(local.toInt()) != 0x04034b50L) return null
+            val data = local.toInt() + 30 + u16(local.toInt() + 26) + u16(local.toInt() + 28)
+            if (data.toLong() + compressedSize > bytes.size) return null
+            items += ZipItem(String(bytes, at + 46, nameLength, Charsets.UTF_8), u16(at + 10), data, compressedSize.toInt())
+            at = next
+        }
+        return items
+    }
+
+    /** Visits each ZIP entry with a stream of its uncompressed contents; read from the central directory when possible. */
+    private inline fun forEachZipEntry(bytes: ByteArray, visit: (name: String, input: InputStream) -> Unit) {
+        val items = centralDirectory(bytes)
+        if (items == null) {
+            ZipInputStream(ByteArrayInputStream(bytes)).use { zip -> while (true) { val entry = zip.nextEntry ?: break; visit(entry.name, zip) } }
+            return
+        }
+        for (item in items) {
+            val raw = ByteArrayInputStream(bytes, item.dataOffset, item.compressedSize)
+            when (item.method) {
+                0 -> visit(item.name, raw)
+                8 -> {
+                    val inflater = Inflater(true)
+                    try { visit(item.name, InflaterInputStream(raw, inflater)) } finally { inflater.end() }
+                }
+                else -> throw ZipException("Unsupported compression method ${item.method}")
+            }
+        }
+    }
+
+    private fun InputStream.readNBytesCompat(limit: Int): ByteArray {
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(limit)
         while (output.size() < limit) {
@@ -150,11 +230,10 @@ object BookTextParser {
         var expanded = 0L
         var entries = 0
         val names = mutableSetOf<String>()
-        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
-            while (true) {
-                val entry = zip.nextEntry ?: break
+        try {
+            forEachZipEntry(bytes) { name, zip ->
                 if (++entries > 2048) throw ProviderException("This EPUB has too many files. Choose a simpler edition.")
-                val path = safePath(entry.name)
+                val path = safePath(name)
                 if (!names.add(path)) throw ProviderException("This EPUB has duplicate file paths. Choose another edition.")
                 val keep = path.substringAfterLast('.').lowercase() in setOf("xml", "opf", "xhtml", "html", "htm")
                 val output = if (keep) ByteArrayOutputStream() else null
@@ -169,7 +248,8 @@ object BookTextParser {
                 }
                 if (output != null) files[path] = output.toByteArray()
             }
-        }
+        } catch (_: ZipException) { throw ProviderException("This isn't a readable EPUB. Choose another file.") }
+        catch (_: java.io.EOFException) { throw ProviderException("This isn't a readable EPUB. Choose another file.") }
         fun xml(path: String) = files[path]?.let { Jsoup.parse(ByteArrayInputStream(it), null, "", Parser.xmlParser()) }
             ?: throw ProviderException("This EPUB is missing a required book file. Choose another edition.")
         files["META-INF/encryption.xml"]?.let { data ->
