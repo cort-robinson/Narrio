@@ -89,6 +89,9 @@ class EbookWebAcquisitionTest {
             assertEquals("EPUB", result.format)
             server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream").setBody("%PDF-1.7 not an ebook"))
             assertTrue(runCatching { acquisition.acquire(EbookDownloadRequest(server.url("/file").toString(), "downloadfile.bin", "application/octet-stream"), false) {} }
+                .exceptionOrNull()?.message.orEmpty().contains("is a PDF, not an EPUB"))
+            server.enqueue(MockResponse().setHeader("Content-Type", "application/octet-stream").setBody("unknown bytes"))
+            assertTrue(runCatching { acquisition.acquire(EbookDownloadRequest(server.url("/file").toString(), "downloadfile.bin", "application/octet-stream"), false) {} }
                 .exceptionOrNull()?.message.orEmpty().contains("isn't an EPUB"))
         } finally { server.shutdown() }
     }
