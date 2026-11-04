@@ -163,7 +163,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // Saved reads as a state, not a greyed-out button.
             TextButton({ vm.save(book) }, enabled = !saved,
                 colors = ButtonDefaults.textButtonColors(disabledContentColor = MaterialTheme.colorScheme.secondary)) {
-                AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
+                AnimatedContent(saved, transitionSpec = { ((scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()))
+                    .using(SizeTransform(clip = false)) }, label = "saved") { done ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (done) Icons.Rounded.LibraryAddCheck else Icons.Rounded.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
                     }
@@ -184,7 +185,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             }
         },
         windowInsets = WindowInsets(0), scrollBehavior = scroll,
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer))
+        // The bar takes its colour only when it names the book, so it's never an empty band above the page.
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent,
+            scrolledContainerColor = if (titleGone) MaterialTheme.colorScheme.surfaceContainer else Color.Transparent))
     // Loading shows in a fixed slot under the bar; the page never shifts when it begins or ends.
     Box(Modifier.fillMaxWidth().height(2.dp)) {
         androidx.compose.animation.AnimatedVisibility(visible = selected.loading, enter = fadeIn(), exit = fadeOut()) { LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), gapSize = 0.dp) }
@@ -314,7 +317,8 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         if (line.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary) }
         val length = (recording?.durationMs?.takeIf { it > 0 } ?: book.durationMs).takeIf { it > 0 }
         val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
-        if (time != null) Text(time, style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
+        // The line keeps its height before the length is known, so nothing below moves when it arrives.
+        Text(time.orEmpty(), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
     // A short window, such as a folding phone's cover screen, sets a smaller cover beside the title, so the actions and
     // the description start above the mini-player.
@@ -448,11 +452,20 @@ private fun RecordingLine(text: String, change: () -> Unit, changing: Boolean = 
         TextButton(change, Modifier.testTag("change-recording").semantics { contentDescription = "Change recording" }) {
             // The label keeps its width while the spinner stands in, so nothing beside it moves.
             Box(contentAlignment = Alignment.Center) {
-                Text("Change", Modifier.graphicsLayer { alpha = if (changing) 0f else 1f })
-                if (changing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                val waiting = afterAMoment(changing)
+                Text("Change", Modifier.graphicsLayer { alpha = if (waiting) 0f else 1f })
+                if (waiting) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             }
         }
     }
+}
+
+/** True once [waiting] has lasted a moment: a sheet that opens at once needs no spinner flashing before it. */
+@Composable
+private fun afterAMoment(waiting: Boolean): Boolean {
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(waiting) { shown = false; if (waiting) { kotlinx.coroutines.delay(150); shown = true } }
+    return waiting && shown
 }
 
 /** Read with one line for the active edition and Change, or Find ebook when the book has none. */
@@ -464,7 +477,7 @@ private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, re
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = change).heightIn(min = 48.dp).padding(vertical = 6.dp)
             .semantics(mergeDescendants = true) { }.testTag("find-ebook-action"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                if (opening) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                if (afterAMoment(opening)) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 else Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = MaterialTheme.colorScheme.primary)
             }
             Column(Modifier.weight(1f)) {

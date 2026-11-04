@@ -55,6 +55,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     val appearance by vm.appearance.collectAsStateWithLifecycle()
     val selected by vm.selection.collectAsStateWithLifecycle()
     val playerOpen by vm.playerOpen.collectAsStateWithLifecycle()
+    val startingBook by vm.startingBook.collectAsStateWithLifecycle()
     val state by vm.playback.collectAsStateWithLifecycle()
     val destination by vm.destination.collectAsStateWithLifecycle()
     val reader by vm.reader.collectAsStateWithLifecycle()
@@ -139,7 +140,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             val statusTop = WindowInsets.statusBars.getTop(density)
             val current: Screen = when {
                 reader != null -> Reading(reader!!.book.id)
-                playerOpen && state.book != null -> Listening
+                playerOpen && (state.book != null || startingBook != null) -> Listening
                 selected.book != null -> Details(selected.book!!.id)
                 else -> Home
             }
@@ -155,7 +156,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
                 expanded -> {
                     BackHandler(backEnabled, goBack)
                     // A landscape phone has width but little height: give an open player the whole canvas.
-                    val fullPlayer = maxHeight < 480.dp && playerOpen && state.book != null
+                    val fullPlayer = maxHeight < 480.dp && playerOpen && (state.book != null || startingBook != null)
                     // The reader takes the whole window, rail included: a book open on the inner display is just the book.
                     AnimatedContent(reader != null, Modifier.fillMaxSize(), transitionSpec = { Motion.sharedAxisX(targetState) }, label = "reading") { reading ->
                         if (reading) recentReader?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }

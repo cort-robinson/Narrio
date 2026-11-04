@@ -85,7 +85,11 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
             })
         .graphicsLayer { translationY = lift.value * .35f; alpha = 1f - (lift.value / 160f).coerceIn(0f, 1f) * .6f },
         color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, interactionSource = interaction) {
-        Column(if (aboveSystemBar) Modifier.navigationBarsIgnoringVisibilityPadding() else Modifier) {
+        // Docked under a book's page it keeps clear of the system bar itself; at home the tabs below do. The change
+        // eases over the tabs' own entrance, so the mini-player rises with them instead of dipping first.
+        val systemBar = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
+        val dock by animateDpAsState(if (aboveSystemBar) systemBar else 0.dp, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "dock")
+        Column(Modifier.padding(bottom = dock)) {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BookCover(book, Modifier.size(48.dp))
                 Column(Modifier.weight(1f)) {
@@ -112,7 +116,9 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
 @Composable
 fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modifier, hingeY: Float? = null, hingeGap: Float = 0f) {
     val state by vm.playback.collectAsStateWithLifecycle()
-    val book = state.book ?: return
+    // Until its audio has loaded, the room shows the book Listen is starting, in its loading state.
+    val starting by vm.startingBook.collectAsStateWithLifecycle()
+    val book = state.book ?: starting ?: return
     var speedOpen by remember { mutableStateOf(false) }
     var sleepOpen by remember { mutableStateOf(false) }
     var partsOpen by remember { mutableStateOf(false) }

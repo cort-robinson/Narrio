@@ -142,6 +142,8 @@ class NarrioViewModel @JvmOverloads constructor(
     val busy = MutableStateFlow(false)
     /** True only while a tapped Listen is loading its audio, so the button can say so. */
     val starting = MutableStateFlow(false)
+    /** The book Listen is starting, shown by the Listening room while its audio is found and loaded. */
+    val startingBook = MutableStateFlow<Audiobook?>(null)
     val connected = MutableStateFlow(graph.credentials.read() != null)
     private val torBoxConnector = TorBoxConnector(viewModelScope, torBoxSave) { torBoxConnected() }
     /** The Connect TorBox sheet and its attempt; see [requestTorBoxConnect]. */
@@ -887,15 +889,17 @@ class NarrioViewModel @JvmOverloads constructor(
     fun start(book: Audiobook, source: AudioSource, delivery: String, place: ((AudioSource) -> StartAt?)? = null) = viewModelScope.launch {
         if (busy.value) return@launch
         busy.value = true; starting.value = true
+        // The Listening room opens on the tap and shows its one loading state while the audio is found and loaded;
+        // while another book still plays, it waits so that book never shows in this one's place.
+        val wasOpen = playerOpen.value
+        if (playback.value.book.let { it == null || it.id == book.id }) { startingBook.value = book; playerOpen.value = true }
         try {
-            val resolved = playableSource(book, source, delivery)?.let { graph.releaseFiles.apply(book, it) } ?: return@launch
+            val resolved = try { playableSource(book, source, delivery)?.let { graph.releaseFiles.apply(book, it) } }
+                catch (failed: Exception) { if (playback.value.book?.id != book.id) playerOpen.value = wasOpen; throw failed }
+            if (resolved == null) { if (playback.value.book?.id != book.id) playerOpen.value = wasOpen; return@launch }
             // Loading replaces the row's book, so the recording being got ready is pinned down first.
             graph.library.find(book.id)?.let { rememberOlderShelf(it) }
             val at = place?.invoke(resolved)
-            // The Listening room opens as the book loads, so Listen leads straight to it rather than through the
-            // mini-player; while another book still plays, it waits so that book never shows in its place.
-            val wasOpen = playerOpen.value
-            if (playback.value.book.let { it == null || it.id == book.id }) playerOpen.value = true
             try {
                 if (at == null || at.approximate) awaitService().load(book, resolved, near = at?.cursor)
                 else awaitService().load(book, resolved, partId = at.cursor.partId, positionMs = at.cursor.positionMs)
@@ -906,7 +910,7 @@ class NarrioViewModel @JvmOverloads constructor(
             if (book.provider != "catalog") graph.listeningRecordings.played(book, resolved.id)
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { messages.emit(friendly(error)) }
-        finally { busy.value = false; starting.value = false }
+        finally { busy.value = false; starting.value = false; startingBook.value = null }
     }
 
     private suspend fun playableSource(book: Audiobook, source: AudioSource, delivery: String): AudioSource? {

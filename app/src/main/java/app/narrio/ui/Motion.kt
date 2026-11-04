@@ -66,8 +66,9 @@ object Motion {
             .apply { targetContentZIndex = 1f }
 
     fun fall(): ContentTransform =
+        // The room stays opaque as it drops, so it never lies see-through over the page; it fades only once nearly gone.
         fadeIn(tween(SHORT))
-            .togetherWith(slideOutVertically(tween(MEDIUM, easing = EmphasizedAccelerate)) { it } + fadeOut(tween(MEDIUM, delayMillis = SHORT)))
+            .togetherWith(slideOutVertically(tween(MEDIUM, easing = EmphasizedAccelerate)) { it } + fadeOut(tween(60, delayMillis = MEDIUM - 60)))
             .apply { targetContentZIndex = -1f }
 }
 
