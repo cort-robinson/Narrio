@@ -19,10 +19,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
-import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.draw.blur
 import app.narrio.R
 import app.narrio.domain.Audiobook
 
@@ -111,15 +109,16 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
             }
             val painter = rememberAsyncImagePainter(request,
                 onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false })
-            // Square audiobook art in a book-shaped frame: its own softened light fills the margins. Large covers
-            // blur the art on Android 12+; elsewhere a tiny upscaled decode gives the same soft light cheaply.
+            // Square audiobook art in a book-shaped frame: small covers fill the margins with the art's own softened
+            // light from a tiny upscaled decode; large ones use a flat matte.
             if (coverLoaded) {
-                if (large && Build.VERSION.SDK_INT >= 31) Image(painter, null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }.blur(18.dp), contentScale = ContentScale.Crop)
+                // Large covers sit on a flat matte like a mounted print; a blur of square art reads as smudged at this size.
+                if (large) Box(Modifier.matchParentSize().graphicsLayer { alpha = reveal }.background(MaterialTheme.colorScheme.surfaceContainerHighest))
                 else {
                     val glow = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(16).memoryCacheKey("${book.coverUrl}#glow").build() }
                     Image(rememberAsyncImagePainter(glow), null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Crop)
                 }
-                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
+                if (!large) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
             }
             // Rows and the mini-player already read the title beside the art; only standalone covers describe it.
             Image(painter, if (large) "Cover of ${book.title}" else null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Fit)
