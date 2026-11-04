@@ -339,8 +339,10 @@ class NarrioViewModel @JvmOverloads constructor(
     /** Leaving read along for the Listening room starts the audio where reading left the shared place. */
     private fun returnToListening() = viewModelScope.launch { graph.playback.service?.alignToSharedPosition() }
 
-    fun search(value: String = query.value, cat: String = category.value) {
-        val browseCategory = if (value.isBlank()) cat else "All"
+    /** The category browsing was on before a typed search, so clearing the search goes back to it. */
+    private var lastBrowse = homeCategory
+    fun search(value: String = query.value, cat: String = if (query.value.isBlank()) category.value else lastBrowse) {
+        val browseCategory = if (value.isBlank()) cat.also { lastBrowse = it } else "All"
         query.value = value; category.value = browseCategory
         searchJob?.cancel()
         // The last results stay on screen while the next ones load, so typing never blanks the list.

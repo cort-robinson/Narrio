@@ -98,8 +98,10 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 Column(Modifier.animateItem()) {
                     Text(browseTitle(category), style = MaterialTheme.typography.headlineSmall)
                     // Once the TorBox hint is gone, the list itself still says what most of it needs.
-                    if (!connected && category != "Classics" && !(torBoxNudge.visible(connected) && playing.book == null))
-                        Text(FREE_AND_TORBOX, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!connected && category != "Classics" && !(torBoxNudge.visible(connected) && playing.book == null)) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Most of these need TorBox.", Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(vm::requestTorBoxConnect) { Text("Connect TorBox") }
+                    }
                 }
             }
             if (query.isNotBlank()) item(key = "results-title") {

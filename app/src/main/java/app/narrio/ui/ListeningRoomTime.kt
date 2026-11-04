@@ -50,7 +50,7 @@ internal fun sleepStatus(state: ListeningState, nowMs: Long = System.currentTime
     fun count(n: Long) = "$n minute${if (n == 1L) "" else "s"}"
     val about = minutes?.let { ", in about ${count(it)}" }.orEmpty()
     return when (state.sleep.mode) {
-        SleepMode.OFF -> "Choose when playback pauses. The narration fades out over its last few seconds."
+        SleepMode.OFF -> "Pauses playback with a gentle fade."
         SleepMode.MINUTES -> "Pauses in about ${count(minutes ?: 1)}."
         SleepMode.END_OF_CHAPTER -> "Pauses at the end of this chapter$about."
         SleepMode.END_OF_PART -> "Pauses at the end of this audio part$about."

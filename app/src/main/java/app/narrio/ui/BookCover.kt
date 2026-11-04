@@ -6,6 +6,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -30,7 +32,12 @@ private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>
 @Composable
 fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null, blank: Boolean = false) {
     // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
-    if (blank) { Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest)); return }
+    if (blank) {
+        Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.AutoStories, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .35f))
+        }
+        return
+    }
     val key = book.title.lowercase()
     val palette = when {
         "pride" in key -> Pair(Color(0xFF694851), Color(0xFFEAD7B4))

@@ -141,7 +141,7 @@ fun RecordingChooser(
                     ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close)
                 }
                 item(key = "advanced") {
-                    SearchOtherSourcesRow("Not the one you want? Search more, or add your own file.", expanded = null, open = { advanced = true },
+                    SearchOtherSourcesRow("Find another recording, or add your own file", expanded = null, open = { advanced = true },
                         modifier = Modifier.padding(top = 8.dp).testTag("advanced-entry"))
                 }
             }
@@ -194,7 +194,7 @@ internal fun releaseNote(recording: Audiobook, book: Audiobook): String? {
  * ebook sheet (where it unfolds in place).
  */
 @Composable
-internal fun SearchOtherSourcesRow(detail: String, expanded: Boolean?, open: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SearchOtherSourcesRow(detail: String?, expanded: Boolean?, open: () -> Unit, modifier: Modifier = Modifier, title: String = "Search other sources") {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val turn by androidx.compose.animation.core.animateFloatAsState(if (expanded == true) 180f else 0f, label = "sources")
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClickLabel = "Search other sources", onClick = open)
@@ -202,8 +202,8 @@ internal fun SearchOtherSourcesRow(detail: String, expanded: Boolean?, open: () 
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Icon(Icons.Rounded.ManageSearch, null, tint = muted)
         Column(Modifier.weight(1f)) {
-            Text("Search other sources", style = MaterialTheme.typography.titleSmall)
-            Text(detail, style = MaterialTheme.typography.bodySmall, color = muted)
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
         }
         if (expanded == null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = muted)
         else Icon(Icons.Rounded.ExpandMore, null, Modifier.graphicsLayer { rotationZ = turn }, tint = muted)
@@ -280,7 +280,7 @@ private fun ChooserActions(
             preparingThis || mine && current.preparing && current.source == null && preparation?.ready != true -> Button({}, button, enabled = false) { WorkingLabel("Getting ready in TorBox…") }
             !onPhone && needsTorBox(picked) && !connected -> Button({ close { vm.requestTorBoxConnect() } }, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox to listen") }
             mine && ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, if (override == null) resumeLabel(current) else "Listen in $override") }
-            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, recordingNarrator(picked).takeIf(String::isNotBlank)?.let { "Listen to $it" } ?: "Listen to this recording") }
+            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, recordingNarrator(picked).takeIf(String::isNotBlank)?.let { "Listen to $it's reading" } ?: "Listen to this recording") }
             else -> {
                 Button({ close { vm.getReady(picked, override ?: format) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.CloudDownload, getReadyLabel) }
                 Text("TorBox can take from minutes to hours to get it ready. Nothing downloads to your phone, and its progress shows on the book's page.",

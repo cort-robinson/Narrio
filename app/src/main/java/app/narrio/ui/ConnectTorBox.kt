@@ -80,7 +80,7 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 
 /** What TorBox is, in one breath: it costs money, it's what most books need, and free recordings don't. */
 /** The one line Discover uses, on its hint and under the list, about what plays free and what needs TorBox. */
-internal const val FREE_AND_TORBOX = "Classics are usually free. Most new audiobooks need TorBox, a paid service."
+internal const val FREE_AND_TORBOX = "Many classics have free recordings. Most new audiobooks need TorBox, a paid service."
 
 internal const val TORBOX_PITCH = "TorBox is a paid service that can find and stream many more audiobooks. Free LibriVox recordings play without it."
 
@@ -130,11 +130,11 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Two numbered steps: get the key, then paste it.
-        Text("1. Sign in to TorBox, or create a paid account. Your API key is under Settings → API; copy it.", style = MaterialTheme.typography.labelLarge)
+        Text("1. Sign in to TorBox, or create a paid account, and copy your API key from its settings.", style = MaterialTheme.typography.bodyMedium)
         OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
-            Text("Open TorBox settings"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+            Text("Open TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        Text("2. Paste it below", style = MaterialTheme.typography.labelLarge)
+        Text("2. Paste it here", style = MaterialTheme.typography.bodyMedium)
         OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Your API key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),

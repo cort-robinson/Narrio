@@ -259,7 +259,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "advanced") {
                 Column {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(bottom = 4.dp))
-                    SearchOtherSourcesRow("Search for another edition", expanded = advanced, open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
+                    SearchOtherSourcesRow(null, expanded = advanced, title = "Find another edition", open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
                 }
             }
             if (advanced) {
@@ -339,7 +339,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Column {
                     val copy = bestEbookCopy(best, search.book, narrated)
                     Text(best.edition.title.ifBlank { search.book.title }, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(listOf(copy.headline, providers[best.providerId]?.name ?: best.edition.attribution).filter(String::isNotBlank).joinToString(" · "),
+                    // What it is and where it's from; the file format is the app's business.
+                    Text((copy.headline.split(" · ").filterNot { it == best.edition.format } + (providers[best.providerId]?.name ?: best.edition.attribution)).filter(String::isNotBlank).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp).testTag("best-ebook-reasons"))
                     if (copy.detail.isNotBlank()) Text(copy.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
                 }
