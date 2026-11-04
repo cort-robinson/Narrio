@@ -462,9 +462,9 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 
 /** Format marks for a shelf row: quiet icons and words, no extra container around the row. */
 @Composable
-fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier) {
+fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox: Boolean = false) {
     // A book saved before choosing a recording or ebook says what it's waiting for.
-    if (!formats.audio && !formats.ebook) { Text("Saved · Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Saved · Needs TorBox or your own audio file" else "Saved · Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
     // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
     if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

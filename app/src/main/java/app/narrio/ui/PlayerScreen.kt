@@ -272,7 +272,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 val density = LocalDensity.current
                 var controlsHeight by remember { mutableStateOf(430.dp) }
                 // Audiobook art is square, and so is the room's cover.
-                val cap = minOf(width * .82f, 360.dp)
+                val cap = minOf(width - 48.dp, 420.dp)
                 val space = height - controlsHeight - 40.dp
                 val coverHeight = minOf(space, cap).coerceAtLeast(if (compact) 150.dp else 180.dp)
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
@@ -361,7 +361,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))}" else "Loading audio…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (state.durationMs > 0) "${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))} left" else "Loading audio…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TimeLeftLine(state, Modifier.padding(top = if (dense) 0.dp else 4.dp), dense)
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))

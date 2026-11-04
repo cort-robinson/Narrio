@@ -113,6 +113,10 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val chosen = search?.chosenId?.let { id -> search.results.firstOrNull { it.id == id } }
     val providersById = remember(sourceProviders) { sourceProviders.associateBy { it.id } }
     val tally = streamed?.let { remember(it, providersById, connected) { tally(it, providersById, connected) } }
+    // A finished search remembers whether this book needs TorBox, for its shelf row.
+    LaunchedEffect(book.id, streamed?.complete, tally, current == null) {
+        if (streamed?.complete == true && tally != null) vm.noteNeedsTorBox(book.id, current == null && noMatchCopy(streamed, tally).kind == NoMatchKind.NEEDS_TORBOX && tally.found + tally.possible == 0)
+    }
     // Once the listener touches the page (or listens with TalkBack), a better match waits in the chooser instead of moving Listen.
     val talkBack = remember(context) { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager).isTouchExplorationEnabled }
     var interacted by remember(book.id) { mutableStateOf(talkBack) }

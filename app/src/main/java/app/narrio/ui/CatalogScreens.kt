@@ -96,7 +96,12 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             items(4, key = { "skeleton$it" }) { SkeletonBookRow(Modifier.animateItem()) }
         } else if (catalog.books.isNotEmpty()) {
             if (query.isBlank()) item(key = "browse-title") {
-                Text(browseTitle(category), Modifier.animateItem(), style = MaterialTheme.typography.headlineSmall)
+                Column(Modifier.animateItem()) {
+                    Text(browseTitle(category), style = MaterialTheme.typography.headlineSmall)
+                    // Once the TorBox hint is gone, the list itself still says what most of it needs.
+                    if (!connected && category != "Classics" && !(torBoxNudge.visible(connected) && playing.book == null))
+                        Text("Most need TorBox. Classics are often free.", Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             if (query.isNotBlank()) item(key = "results-title") {
                 AnimatedContent(if (catalog.loading) "Searching…" else "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}",
@@ -164,6 +169,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val playing by vm.playback.collectAsStateWithLifecycle()
     val sort by vm.shelfSort.collectAsStateWithLifecycle()
+    val connected by vm.connected.collectAsStateWithLifecycle()
+    val needsTorBox by vm.needsTorBox.collectAsStateWithLifecycle()
     val typed by vm.shelfQuery.collectAsStateWithLifecycle()
     var remove by remember { mutableStateOf<Audiobook?>(null) }
     var showFinished by rememberSaveable { mutableStateOf(false) }
@@ -184,18 +191,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val finishedOpen = showFinished || !finishedCollapsible
     LazyColumn(modifier.fillMaxSize().testTag("shelf"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item(key = "heading") {
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.Center, itemVerticalAlignment = Alignment.CenterVertically) {
-                Text("My shelf", style = MaterialTheme.typography.displaySmall)
-                // Adding a file is occasional, so it waits in a menu; an empty shelf offers it outright below.
-                var menu by remember { mutableStateOf(false) }
-                Box {
-                    IconButton({ menu = true }, Modifier.testTag("shelf-more")) { Icon(Icons.Rounded.MoreVert, "More shelf options") }
-                    DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem({ Text("Add an ebook from your phone") }, { menu = false; addEbook() }, enabled = !importing.working,
-                            leadingIcon = { Icon(Icons.Rounded.UploadFile, null) })
-                    }
-                }
-            }
+            Text("My shelf", style = MaterialTheme.typography.displaySmall)
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
             if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),
                 close = if (alwaysSearchable) null else ({ vm.setShelfQuery(""); searchOpen = false }), focus = searchOpen)
@@ -227,7 +223,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 // The book in the mini-player shows its live place, so the row and the player never disagree.
                 val live = if (!here) null else (playing.bookTime?.remainingMs ?: (playing.durationMs - playing.positionMs).takeIf { playing.durationMs > 0 })
                     ?.let { "${if (playing.playing) "Playing" else "Paused"} · ${timeLeftLabel(it)} left" }
-                ShelfRow(entry, book, bookFormats, here, live, { vm.continueBook(entry) }, { vm.open(book) },
+                ShelfRow(entry, book, bookFormats, here, live, !connected && entry.bookId in needsTorBox, { vm.continueBook(entry) }, { vm.open(book) },
                     { vm.setFinished(entry.bookId, it) }) { remove = book }
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Spacer(Modifier.height(20.dp))
@@ -239,6 +235,12 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             item(key = "finished-header") { FinishedHeader(finished.size, finishedOpen, finishedCollapsible, { showFinished = !showFinished }, Modifier.animateItem()) }
             if (finishedOpen) items(finished, key = { it.entry.bookId }, itemContent = row)
         }
+        // Adding a file is occasional, so it's a quiet last line rather than a header action; an empty shelf offers it outright.
+        if (shelf.isNotEmpty()) item(key = "add-file") {
+            TextButton(addEbook, Modifier.offset(x = (-12).dp).animateItem(), enabled = !importing.working) {
+                Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add an ebook from your phone")
+            }
+        }
     }
     remove?.let { book -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove from your shelf?") },
         text = { Text("This removes phone downloads, ebooks, saved progress, and bookmarks for ${book.title} on this device.") },
@@ -246,14 +248,14 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, live: String?, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
+private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, live: String?, needsTorBox: Boolean, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
     val finished = entry.finishedAt > 0
     val mode = formats.leadingMode
     var menu by remember { mutableStateOf(false) }
     // A shelf row is the book, its formats, and its place; the recording's details live on the book's page.
     // Formats and the place sit in the text column beside the cover.
     BookRow(book, details, recording = false, extra = {
-        FormatMarks(formats, Modifier.padding(top = 2.dp))
+        FormatMarks(formats, Modifier.padding(top = 2.dp), needsTorBox)
         if (finished) FinishedMark(Modifier.padding(top = 6.dp))
         else placeSummary(formats)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp), live = live) }
     }) {

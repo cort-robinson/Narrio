@@ -138,7 +138,7 @@ class BookDiscoveryExperienceTest {
         // The chooser on the same page offers those results without looking again.
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:lookup-fixture").assertIsDisplayed()
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording")
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true)
         assertEquals(1, calls.get())
         assertEquals(migrated.id, fixture.selection.value.book?.id)
     }
@@ -274,7 +274,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:${chosen.id}").assertIsDisplayed().assertIsSelected()
         compose.onNodeWithText("Best match").assertIsDisplayed()
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording").assertIsEnabled()
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true).assertIsEnabled()
         // Advanced keeps the per-source sections, the release, its files, and how it plays.
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
         compose.onNodeWithTag("advanced-entry").performClick()
@@ -306,7 +306,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithTag("recording:${possible.id}").performClick()
         compose.runOnIdle { assertEquals(possible.id, vm.sourceSearch.value.choice?.id) }
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording")
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true)
 
         // Disconnected and nothing found: the slot says so and offers TorBox for the sources that need it.
         compose.runOnIdle { vm.back() }
@@ -368,7 +368,7 @@ class BookDiscoveryExperienceTest {
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Start near 2:30:00 (≈)") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Start from the beginning").assertExists()
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording").assertIsEnabled()
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true).assertIsEnabled()
         capture("chooser-switch-night")
         compose.runOnIdle { fixture.updateAppearance(appearance.copy(mode = ThemeMode.DAY)) }
         capture("chooser-switch-day")

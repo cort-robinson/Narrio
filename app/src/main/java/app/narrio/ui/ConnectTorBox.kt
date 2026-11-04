@@ -126,8 +126,7 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun change(value: String) { key = value.filterNot(Char::isWhitespace); edited() }
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Getting the key comes first; pasting it follows.
-        Text("Copy your key from your TorBox account, then come back and paste it below.", style = MaterialTheme.typography.bodyMedium)
+        // Getting the key comes first; pasting it follows, and the field says how.
         TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
             Text("Get your key from TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
@@ -141,7 +140,8 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
                     Icon(Icons.Rounded.ContentPaste, "Paste your key")
                 } else IconButton({ shown = !shown }) { Icon(if (shown) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (shown) "Hide API key" else "Show API key") }
             },
-            supportingText = state.error?.let { error -> { Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("torbox-error")) } },
+            supportingText = state.error?.let { error -> { Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("torbox-error")) } }
+                ?: { Text("Copy it from your TorBox account, then come back and paste it here.") },
             shape = RoundedCornerShape(12.dp))
         Button(::submit, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("torbox-connect"), enabled = key.isNotBlank() && !state.connecting) {
             if (state.connecting) { CircularProgressIndicator(Modifier.size(18.dp), LocalContentColor.current, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }

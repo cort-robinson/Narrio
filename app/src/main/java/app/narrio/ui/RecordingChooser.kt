@@ -266,7 +266,7 @@ private fun ChooserActions(
             preparingThis || mine && current.preparing && current.source == null && preparation?.ready != true -> Button({}, button, enabled = false) { WorkingLabel("Getting ready in TorBox…") }
             !onPhone && needsTorBox(picked) && !connected -> Button({ close { vm.requestTorBoxConnect() } }, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox to listen") }
             mine && ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, if (override == null) resumeLabel(current) else "Listen in $override") }
-            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen to this recording") }
+            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, recordingNarrator(picked).takeIf(String::isNotBlank)?.let { "Listen to $it" } ?: "Listen to this recording") }
             else -> {
                 Button({ close { vm.getReady(picked, override ?: format) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.CloudDownload, getReadyLabel) }
                 Text("TorBox can take from minutes to hours to get it ready. Nothing downloads to your phone, and its progress shows on the book's page.",

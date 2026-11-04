@@ -417,7 +417,7 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
         SeekSlider(playback.positionMs, playback.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: playback.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (playback.durationMs > 0) "−${formatTime((playback.durationMs - (scrub ?: playback.positionMs)).coerceAtLeast(0))}" else "Loading audio…",
+            Text(if (playback.durationMs > 0) "${formatTime((playback.durationMs - (scrub ?: playback.positionMs)).coerceAtLeast(0))} left" else "Loading audio…",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {

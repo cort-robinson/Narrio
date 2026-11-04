@@ -105,9 +105,11 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item(key = "torbox") {
+            Text("Where books come from", style = MaterialTheme.typography.headlineSmall)
+            Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                AppearanceEntry(appearance, openAppearance)
+                SettingsRow(Icons.Rounded.Hub, "Sources", "Where Narrio finds audiobooks, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
             }
         }
         // Listening's two everyday switches share one heading.
@@ -117,21 +119,18 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights the words as they're read. For streamed books, the highlighting is prepared on Wi-Fi while charging.",
+            SettingSwitch("Read-along highlights", "Highlights words as they're read. Prepared on Wi-Fi while charging.",
                 backgroundAlignment, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
-        // Where books come from is for the curious; it follows the everyday switches.
-        item { SettingsRow(Icons.Rounded.Hub, "Sources", "Where Narrio finds audiobooks, ebooks, and book details", openAddons, Modifier.testTag("sources-entry")) }
+        item { AppearanceEntry(appearance, openAppearance) }
         // Local builds have no update channel and show their version under About instead.
         if (updates.channel != null) item { UpdateSettings(vm.graph.updates) }
         item {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
             Text("About Narrio", style = MaterialTheme.typography.headlineSmall)
             Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 4.dp))
             Spacer(Modifier.height(12.dp))
-            Text("Free LibriVox recordings play right away. With TorBox connected, Narrio also finds recordings of most other books. Your shelf, progress, and bookmarks stay on this phone.",
-                style = MaterialTheme.typography.bodyMedium, color = muted)
-            TextButton({ aboutOpen = !aboutOpen }, Modifier.offset(x = (-12).dp)) { Text(if (aboutOpen) "Less about how it works" else "How Narrio finds books") }
+            Text("Your shelf, progress, and bookmarks stay on this phone.", style = MaterialTheme.typography.bodyMedium, color = muted)
+            TextButton({ aboutOpen = !aboutOpen }, Modifier.offset(x = (-12).dp)) { Text(if (aboutOpen) "Hide credits and details" else "Credits and details") }
             AnimatedVisibility(aboutOpen) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Search identifies books from catalog details. Opening a book looks for LibriVox recordings and, with TorBox connected, your TorBox library and enabled sources, then picks the best match with audio ready to play. Other versions appear only when the narrator, language, or edition differs. Some releases don't confirm their narrator, language, or abridgment, so check the release and files before listening.",

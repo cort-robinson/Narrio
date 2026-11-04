@@ -158,6 +158,12 @@ class NarrioViewModel @JvmOverloads constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val downloads = graph.offline.books
     val wifiOnly = MutableStateFlow(graph.preferences.getBoolean("downloadWifi", true))
+    /** Books whose last search found no free recording, so the shelf can say what they need without searching again. */
+    val needsTorBox = MutableStateFlow(graph.preferences.getStringSet("needsTorBox", emptySet()).orEmpty().toSet())
+    fun noteNeedsTorBox(bookId: String, needs: Boolean) {
+        val next = if (needs) needsTorBox.value + bookId else needsTorBox.value - bookId
+        if (next != needsTorBox.value) { needsTorBox.value = next; graph.preferences.edit().putStringSet("needsTorBox", next).apply() }
+    }
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     /** Asks the shell to request notification permission (once per install), so a TorBox preparation can say when it's ready. */
     val notificationsWanted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -600,6 +606,7 @@ class NarrioViewModel @JvmOverloads constructor(
         if (playback.value.book?.id == book.id) graph.playback.service?.forget()
         downloads.value.filter { it.book.id == book.id }.forEach { graph.offline.remove(it.source) }
         advanced.forget(book.id)
+        noteNeedsTorBox(book.id, false)
         graph.followAlong.remove(book.id)
         graph.listeningRecordings.remove(book.id)
         graph.library.remove(book.id); graph.preparations.forget(book.id); app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
