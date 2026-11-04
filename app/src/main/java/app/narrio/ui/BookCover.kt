@@ -3,6 +3,8 @@ package app.narrio.ui
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,14 +28,18 @@ import app.narrio.domain.Audiobook
 
 /** Covers already decoded this session render immediately, so shared transitions never flash a fallback. */
 private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>())
-private const val SLOW_COVER_MS = 2_500L
+
+@Composable
+private fun CoverPlaceholderMark() =
+    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .35f))
 
 @Composable
 fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null, blank: Boolean = false) {
     // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
     if (blank) {
-        // The page below already says what it's finding, so the shape stays plain.
-        Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest))
+        // The page below already says what it's finding, so the shape holds only a quiet book mark.
+        Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center) { CoverPlaceholderMark() }
         return
     }
     val key = book.title.lowercase()
@@ -60,12 +66,8 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         // A replacement that fails stops the bridge, so the old art never stands in for the new book indefinitely.
         val previous = lastLoaded?.takeIf { !failed && it != book.coverUrl && it in loadedCovers }
         val fallback = reveal < 1f && previous == null && drawn
-        // A large cover that is slow to arrive says so, rather than reading as a missing image; a quick one stays a plain shape.
-        var slow by remember(book.coverUrl) { mutableStateOf(false) }
-        LaunchedEffect(book.coverUrl) { kotlinx.coroutines.delay(SLOW_COVER_MS); slow = true }
-        if (large && slow && !drawn && !coverLoaded && previous == null) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, strokeWidth = 2.5.dp)
-        }
+        // A large cover still on its way holds a quiet book mark, so the shape never reads as a broken image.
+        if (large && !drawn && !coverLoaded && previous == null) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) { CoverPlaceholderMark() }
         if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))
@@ -96,10 +98,11 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                         drawOval(palette.second.copy(alpha=.45f),Offset(w*.22f,h*.53f),Size(w*.56f,h*.29f),style=androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
                         drawLine(palette.second.copy(alpha=.45f),Offset(w*.15f,h*.92f),Offset(w*.85f,h*.92f),1.5f)
                     }
+                    // Kept above the author line at the foot of the cover, so nothing strikes through it.
                     else -> {
-                        drawCircle(palette.second.copy(alpha=.7f),w*.23f,Offset(w*.65f,h*.67f))
-                        drawCircle(palette.first,w*.23f,Offset(w*.37f,h*.61f))
-                        drawLine(palette.second.copy(alpha=.5f),Offset(w*.18f,h*.87f),Offset(w*.82f,h*.87f),2f)
+                        drawCircle(palette.second.copy(alpha=.7f),w*.23f,Offset(w*.65f,h*.58f))
+                        drawCircle(palette.first,w*.23f,Offset(w*.37f,h*.52f))
+                        drawLine(palette.second.copy(alpha=.5f),Offset(w*.18f,h*.8f),Offset(w*.82f,h*.8f),2f)
                     }
                 }
             }

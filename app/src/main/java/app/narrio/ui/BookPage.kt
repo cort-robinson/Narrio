@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -188,7 +189,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && streamed?.complete != true
             // While this book plays, its length gives way to the time left, matching the mini-player docked below.
             val left = playback.takeIf { it.book?.id == book.id }?.let { state -> state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 } }
-            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left)
+            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left,
+                scrolled = { if (listState.firstVisibleItemIndex > 0) Int.MAX_VALUE else listState.firstVisibleItemScrollOffset })
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
@@ -272,7 +274,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null) {
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null, scrolled: () -> Int = { 0 }) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
     val cover = when {
@@ -297,6 +299,9 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
     // actions stay above the mini-player.
     val height = LocalConfiguration.current.screenHeightDp
     val coverSize = if (height < SHORT_WINDOW_DP) (height * .2f).dp.coerceIn(140.dp, 240.dp) else 240.dp
+    // The cover fades as it scrolls under the top bar, so no sliver of it is left showing there.
+    val coverPx = with(LocalDensity.current) { coverSize.toPx() }
+    val fading = Modifier.graphicsLayer { alpha = 1f - (scrolled() / coverPx).coerceIn(0f, 1f) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
         // so the page's cover is too.
@@ -304,7 +309,7 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
             BookCover(cover, Modifier.size(260.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover)
             Column(Modifier.weight(1f), content = identity)
         } else Column {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(coverSize), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
+            Box(Modifier.fillMaxWidth().then(fading), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(coverSize), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
             Spacer(Modifier.height(24.dp))
             identity()
         }

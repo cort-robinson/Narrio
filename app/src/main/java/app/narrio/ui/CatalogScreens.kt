@@ -56,8 +56,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val short = LocalConfiguration.current.screenHeightDp < SHORT_WINDOW_DP
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = if (short) 8.dp else 20.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (short) 16.dp else 24.dp)) {
-        // On a short window, results start under the search field; the name returns when the search is cleared.
-        if (!(short && query.isNotBlank())) item(key = "heading") {
+        // While searching, results start under the search field; the name returns when the search is cleared.
+        if (query.isBlank()) item(key = "heading") {
             Row(Modifier.fillMaxWidth().animateItem(), verticalAlignment = Alignment.CenterVertically) {
                 NarrioMark(); Spacer(Modifier.width(10.dp))
                 Text("narrio", style = MaterialTheme.typography.headlineMedium)
@@ -216,7 +216,20 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val finishedOpen = showFinished || !finishedCollapsible
     LazyColumn(modifier.fillMaxSize().testTag("shelf"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item(key = "heading") {
-            Text("My shelf", style = MaterialTheme.typography.displaySmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("My shelf", Modifier.weight(1f), style = MaterialTheme.typography.displaySmall)
+                // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
+                if (shelf.isNotEmpty()) {
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton({ menu = true }, Modifier.testTag("shelf-more")) { Icon(Icons.Rounded.MoreVert, "More shelf options") }
+                        DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem({ Text("Add an ebook from your phone") }, { menu = false; if (!importing.working) addEbook() },
+                                leadingIcon = { Icon(Icons.Rounded.UploadFile, null) })
+                        }
+                    }
+                }
+            }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
             if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),
                 close = if (alwaysSearchable) null else ({ vm.setShelfQuery(""); searchOpen = false }), focus = searchOpen)
@@ -260,8 +273,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             item(key = "finished-header") { FinishedHeader(finished.size, finishedOpen, finishedCollapsible, { showFinished = !showFinished }, Modifier.animateItem()) }
             if (finishedOpen) items(finished, key = { it.entry.bookId }, itemContent = row)
         }
-        // Adding an ebook file belongs with the shelf's ebooks; a shelf too small for filters always offers it, as an empty one does.
-        if (shelf.isNotEmpty() && (filter == ShelfFilter.EBOOKS && visible.isNotEmpty() || !organizable)) item(key = "add-file") {
+        // The Ebooks filter also offers adding one under its list.
+        if (shelf.isNotEmpty() && filter == ShelfFilter.EBOOKS && visible.isNotEmpty()) item(key = "add-file") {
             // A footer action under the last row's divider, so the list holds only books.
             Column(Modifier.animateItem()) {
                 TextButton({ if (!importing.working) addEbook() }, Modifier.padding(top = 8.dp).heightIn(min = 48.dp).testTag("shelf-add-ebook")) {

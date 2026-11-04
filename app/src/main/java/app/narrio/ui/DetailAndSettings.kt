@@ -104,7 +104,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // TorBox leads: it gates every source beyond LibriVox. Where books come from and how the app looks follow as rows,
     // then everyday switches, then the app itself.
-    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
+    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item(key = "torbox") {
             Text("Where books come from", style = MaterialTheme.typography.headlineSmall)
@@ -121,7 +121,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books get them while charging on Wi-Fi.",
+            SettingSwitch("Read-along highlights", "Highlights words as they're read. For streamed books, they're prepared while your phone charges on Wi-Fi.",
                 backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         item {

@@ -477,6 +477,6 @@ internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}Ã
 @Composable
 internal fun ChoiceDialog(title: String, dismiss: () -> Unit, extra: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) },
-        // Choosing applies and closes; Close (or Back) leaves it as it was.
-        confirmButton = { Row { extra?.invoke(); TextButton(dismiss) { Text("Close") } } })
+        // Choosing applies and closes; Done (or Back) leaves it as it is.
+        confirmButton = { Row { extra?.invoke(); TextButton(dismiss) { Text("Done") } } })
 }

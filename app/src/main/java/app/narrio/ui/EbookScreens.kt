@@ -349,12 +349,12 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             // What it is, where it's from, and the one doubt, said once.
             possible != null -> Column(Modifier.testTag("ebook-choice:${possible.edition.id}")) {
                 Text(ebookChoiceTitle(possible, search.book), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(listOf(ebookChoiceDetail(possible, search.book), possible.source).filter(String::isNotBlank).joinToString(" · "),
+                Text(possibleMatchSource(possible, search.book),
                     style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 ebookChoiceNotes(possible, narrated).filter { it.kind == ChoiceNoteKind.CAUTION }.forEach {
                     Text(it.text, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
-                Text(possibleMatchCaution(possible), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
+                Text(POSSIBLE_MATCH_CAUTION, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
             }
             else -> {
                 val copy = ebookNoMatchCopy(search, tally)
@@ -374,7 +374,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Adding…") }
                 AddingStep(step, Modifier.padding(top = 8.dp))
             }
-            possible != null -> Button({ actions.addAndOpen(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
+            // Weaker than a confirmed match's filled button, as the doubt above it says.
+            possible != null -> FilledTonalButton({ actions.addAndOpen(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
             // The header already says it's searching; the action's place is held so nothing shifts when one is found.
             !search.complete && tally.active > 0 -> Spacer(button)
             else -> when (ebookNoMatchCopy(search, tally).kind) {
@@ -485,7 +486,8 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 @Composable
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox: Boolean = false) {
     // A book saved before choosing a recording or ebook says what it's waiting for.
-    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Connect TorBox to listen" else "Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Connect TorBox to search for audio" else "Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium,
+        color = if (needsTorBox) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant); return }
     // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
     if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

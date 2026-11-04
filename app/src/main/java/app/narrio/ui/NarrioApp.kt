@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -232,7 +233,13 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                         exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
                         CompositionLocalProvider(LocalNavigationScope provides this) {
                             AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                                MiniPlayer(vm, aboveSystemBar = current is Details)
+                                // A short fade above it, so a page scrolling underneath trails off rather than being cut through.
+                                val page = MaterialTheme.colorScheme.background
+                                MiniPlayer(vm, Modifier.drawBehind {
+                                    val fade = 20.dp.toPx()
+                                    drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(page.copy(alpha = 0f), page), startY = -fade, endY = 0f),
+                                        topLeft = androidx.compose.ui.geometry.Offset(0f, -fade), size = androidx.compose.ui.geometry.Size(size.width, fade))
+                                }, aboveSystemBar = current is Details)
                             }
                         }
                     }

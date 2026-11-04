@@ -34,7 +34,7 @@ fun bestEbookCopy(best: BestEbook, book: Audiobook, recording: Boolean = false):
     val caution = if (recording) cautionLabel(NarrationMatch.judge(book, best.edition, best.providerId, confirmed = true)) else null
     val detail = buildList {
         if (EbookMatchReason.WITH_RECORDING in reasons) add("Most likely the narrated edition")
-        if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Fits this recording")
+        if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Matches this recording")
         caution?.let { add("May not follow the narration: ${it.replaceFirstChar(Char::lowercase)}") }
         // Only what helps reading along is said; a matching title or the book's own language goes without saying.
     }
@@ -150,9 +150,11 @@ fun ebookTitle(title: String, book: Audiobook): String = title.replace(FORMAT_TA
 private val FORMAT_TAG = Regex("""\s*[\[(](?:EPUB|PDF|TXT|MOBI|AZW3?|FB2)[\])]""", RegexOption.IGNORE_CASE)
 
 /** The one doubt about a possible match that leads the ebook sheet. */
-fun possibleMatchCaution(choice: EbookChoice): String =
-    if (choice.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "Couldn't confirm it's this book. Check the text after adding it."
-    else "Couldn't confirm the title and author. Check the text after adding it."
+const val POSSIBLE_MATCH_CAUTION = "Not sure it's the same book. Check the text after adding it."
+
+/** "Mara Ellison · Project Gutenberg": a possible match always says whose book it claims to be, so there's something to check. */
+fun possibleMatchSource(choice: EbookChoice, book: Audiobook): String =
+    listOf(ebookChoiceDetail(choice, book).ifBlank { "Author not listed" }, choice.source).filter(String::isNotBlank).joinToString(" · ")
 
 /** Where a choice is from, unless its note already says it comes with the recording. */
 fun ebookChoiceSource(choice: EbookChoice, recording: Boolean): String? =
@@ -180,7 +182,7 @@ fun ebookChoiceNotes(choice: EbookChoice, recording: Boolean): List<ChoiceNote> 
         ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author").takeIf { !choice.confirmed && !withRecording },
         when {
             withRecording -> ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")
-            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Fits this recording")
+            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Matches this recording")
             caution != null -> ChoiceNote(ChoiceNoteKind.CAUTION, if (recording) "May not follow the narration: ${caution.replaceFirstChar(Char::lowercase)}" else caution)
             else -> null
         },

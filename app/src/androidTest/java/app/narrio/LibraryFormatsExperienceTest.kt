@@ -154,7 +154,7 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Checking 2 sources").assertIsDisplayed()
         capture("find-ebook-searching-night")
         compose.waitUntil(10_000) { shown("Free ebook · Project Gutenberg") }
-        compose.onNodeWithText("Fits this recording").assertIsDisplayed()
+        compose.onNodeWithText("Matches this recording").assertIsDisplayed()
         // The simple layer keeps each source's own section and status in Advanced; the file choice stays visible.
         compose.onNodeWithTag("ebook-sources-summary").assertDoesNotExist()
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Add an ebook from your phone"))
@@ -315,7 +315,7 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithTag("ebook-section:gutenberg").assertDoesNotExist()
         // With no sure match, the possible one leads the card with the same action and its one doubt.
         sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
-        compose.onNodeWithText("Couldn't confirm the title and author. Check the text after adding it.").assertExists()
+        compose.onNodeWithText("Not sure it's the same book. Check the text after adding it.").assertExists()
         capture("ebook-chooser-possible-day")
         // Nothing else was found, so there's no list to open.
         compose.onNodeWithTag("ebook-other-choices-toggle").assertDoesNotExist()
