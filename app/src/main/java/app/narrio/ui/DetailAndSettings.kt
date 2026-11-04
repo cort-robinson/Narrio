@@ -111,21 +111,18 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.ManageSearch, "Where Narrio searches", "Sites for recordings, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
+                SettingsRow(Icons.Rounded.ManageSearch, "Search sites", "Where Narrio looks for recordings, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
             }
         }
-        // Listening's two everyday switches share one heading.
+        // The everyday switches and how the app looks share one heading, so no section holds a single row.
         item {
-            Text("Listening", style = MaterialTheme.typography.headlineSmall)
+            Text("Listening and reading", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights words as they're read. For streamed books, they're prepared while your phone charges on Wi-Fi.",
+            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books get highlights after charging on Wi-Fi.",
                 backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
-        }
-        item {
-            Text("Display", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
             AppearanceEntry(appearance, openAppearance)
         }

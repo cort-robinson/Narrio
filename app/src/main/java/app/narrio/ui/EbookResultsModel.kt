@@ -88,7 +88,7 @@ fun ebookNoMatchCopy(search: StreamedEbookSearch, tally: SearchTally): NoMatchCo
         !search.complete -> NoMatchCopy(NoMatchKind.SEARCHING, "Finding the best ebook",
             "Checking ${tally.active} ${plural(tally.active, "source")} for this title and author.")
         tally.possible > 0 && tally.found == 0 -> NoMatchCopy(NoMatchKind.POSSIBLE_ONLY, if (tally.possible == 1) "1 possible match" else "${tally.possible} possible matches",
-            if (tally.possible == 1) "Couldn't confirm it's this book. Check the text after adding it." else "Couldn't confirm one is this book. Check the text after adding one.")
+            if (tally.possible == 1) "Couldn't confirm it's this book. Open it to check before keeping it." else "Couldn't confirm one is this book. Open one to check before keeping it.")
         tally.failed == tally.active -> NoMatchCopy(NoMatchKind.ALL_FAILED, "Couldn't reach any source",
             if (tally.active == 1) "$searched didn't answer. Check your connection, then try again."
             else "None of your ${tally.active} ebook sources answered. Check your connection, then try again.")
@@ -150,7 +150,7 @@ fun ebookTitle(title: String, book: Audiobook): String = title.replace(FORMAT_TA
 private val FORMAT_TAG = Regex("""\s*[\[(](?:EPUB|PDF|TXT|MOBI|AZW3?|FB2)[\])]""", RegexOption.IGNORE_CASE)
 
 /** The one doubt about a possible match that leads the ebook sheet. */
-const val POSSIBLE_MATCH_CAUTION = "Not sure it's the same book. Check the text after adding it."
+const val POSSIBLE_MATCH_CAUTION = "Not sure it's the same book. Open it to check, then keep it or remove it."
 
 /** "Mara Ellison · Project Gutenberg": a possible match always says whose book it claims to be, so there's something to check. */
 fun possibleMatchSource(choice: EbookChoice, book: Audiobook): String =

@@ -54,13 +54,16 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val shelfCovers = remember(shelf) { shelf.associate { it.bookId to runCatching { it.book().coverUrl }.getOrDefault("") }.filterValues(String::isNotBlank) }
     // Short windows, such as a folding phone's cover screen, tighten the gaps so more books show.
     val short = LocalConfiguration.current.screenHeightDp < SHORT_WINDOW_DP
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = if (short) 8.dp else 20.dp, bottom = 28.dp),
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = if (short) 12.dp else 20.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (short) 16.dp else 24.dp)) {
-        // While searching, results start under the search field; the name returns when the search is cleared.
-        if (query.isBlank()) item(key = "heading") {
-            Row(Modifier.fillMaxWidth().animateItem(), verticalAlignment = Alignment.CenterVertically) {
-                NarrioMark(); Spacer(Modifier.width(10.dp))
-                Text("narrio", style = MaterialTheme.typography.headlineMedium)
+        // While searching, results start under the search field; the name returns when the search is cleared. The item
+        // itself stays, so the list keeps its top and the name is always back in view.
+        item(key = "heading") {
+            AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    NarrioMark(); Spacer(Modifier.width(10.dp))
+                    Text("narrio", style = MaterialTheme.typography.headlineMedium)
+                }
             }
         }
         item(key = "search") {
@@ -93,7 +96,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
         }
         // While a book plays the listener is already listening; the hint waits for a quieter moment.
-        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty()) }
+        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty(), compact = short) }
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {
@@ -123,14 +126,24 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
             items(catalog.books, key = { it.id }) { book ->
                 BookRow(shelfCovers[book.id]?.let { book.copy(coverUrl = it) } ?: book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading),
-                    extra = if (book.id in catalog.free) ({ FreeMark() }) else null,
-                    // The book in the mini-player is marked where it appears in the list.
-                    trailing = if (playing.book?.id == book.id) ({ NarrationPulse(playing.playing, Modifier.padding(end = 8.dp).semantics { contentDescription = "Now playing" }) }) else null)
+                    // The book in the mini-player says so in words where it appears in the list, as on the shelf.
+                    extra = when {
+                        playing.book?.id == book.id -> ({ Text(playingLine(playing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) })
+                        book.id in catalog.free -> ({ FreeMark() })
+                        else -> null
+                    })
             }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
     }
+}
+
+/** "Playing · 10 h 22 m left", or "Paused · …": the book in the mini-player, wherever it's listed. */
+internal fun playingLine(playing: app.narrio.playback.ListeningState): String {
+    val left = playing.bookTime?.remainingMs ?: (playing.durationMs - playing.positionMs).takeIf { playing.durationMs > 0 }
+    val state = if (playing.playing) "Playing" else "Paused"
+    return left?.let { "$state · ${timeLeftLabel(it)} left" } ?: state
 }
 
 /** Below this height, Discover and a book's page tighten their spacing and cover so actions stay in view. */
@@ -170,7 +183,7 @@ fun BookRow(book: Audiobook, open: () -> Unit, modifier: Modifier = Modifier, re
     val interaction = remember { MutableInteractionSource() }
     Row(modifier.fillMaxWidth().pressScale(interaction, .985f).clip(RoundedCornerShape(12.dp)).clickable(interaction, LocalIndication.current, onClick = open),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        BookCover(book, Modifier.size(76.dp), sharedKey = "cover-${book.id}")
+        BookCover(book, Modifier.size(76.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -219,15 +232,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("My shelf", Modifier.weight(1f), style = MaterialTheme.typography.displaySmall)
                 // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
-                if (shelf.isNotEmpty()) {
-                    var menu by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton({ menu = true }, Modifier.testTag("shelf-more")) { Icon(Icons.Rounded.MoreVert, "More shelf options") }
-                        DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem({ Text("Add an ebook from your phone") }, { menu = false; if (!importing.working) addEbook() },
-                                leadingIcon = { Icon(Icons.Rounded.UploadFile, null) })
-                        }
-                    }
+                if (shelf.isNotEmpty()) TextButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
+                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add ebook")
                 }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
@@ -259,8 +265,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             Column(Modifier.animateItem()) {
                 val here = playing.book?.id == entry.bookId
                 // The book in the mini-player shows its live place, so the row and the player never disagree.
-                val live = if (!here) null else (playing.bookTime?.remainingMs ?: (playing.durationMs - playing.positionMs).takeIf { playing.durationMs > 0 })
-                    ?.let { "${if (playing.playing) "Playing" else "Paused"} · ${timeLeftLabel(it)} left" }
+                val live = if (!here) null else playingLine(playing).takeIf { it.contains("left") }
                 ShelfRow(entry, book, bookFormats, here, live, !connected && entry.bookId in needsTorBox, { vm.continueBook(entry) }, { vm.open(book) },
                     { vm.setFinished(entry.bookId, it) }) { remove = book }
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }

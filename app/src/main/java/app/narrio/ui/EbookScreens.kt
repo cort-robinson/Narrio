@@ -134,6 +134,8 @@ class EbookActions(
     val searchWith: (String) -> Unit,
     /** Ebook website searches for the reader's own words; null keeps the book's own website links. */
     val linksFor: ((String) -> List<EbookSearchLink>)? = null,
+    /** Adds a possible match and opens it, where the reader asks whether to keep it; by default, as [addAndOpen]. */
+    val addAndCheck: ((BookTextSource) -> Unit)? = null,
 )
 
 /**
@@ -196,8 +198,11 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
         fun scrollTo(index: Int) { scope.launch { if (animate) listState.animateScrollToItem(index) else listState.scrollToItem(index) } }
         val revealChoices = { showChoices = true; scrollTo(bestIndex + 1) }
         // With no sure match, the likeliest possible one takes the card, with the same action; the rest wait below it.
-        val lead = choices.firstOrNull()?.takeIf { pinned.shown == null && streamed.complete }
+        // Only a search with no best match at all, so a best one still settling into the card never counts as missing.
+        val lead = choices.firstOrNull()?.takeIf { streamed.best == null && pinned.shown == null && streamed.complete }
         val listed = if (lead != null) choices.drop(1) else choices
+        // Without a sure match, looking further is the likely next step, so other sources open by themselves.
+        LaunchedEffect(lead?.edition?.id) { if (lead != null) advanced = true }
         LazyColumn(Modifier.fillMaxWidth().testTag("ebook-sheet")
             .pointerInput(book.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); interacted = true } },
             listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -248,19 +253,22 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                 Text(error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             } }
             item(key = "file") {
-                // Any EPUB or text file works, so the universal fallback stays on the simple layer.
-                TextButton(actions.chooseFile, Modifier.heightIn(min = 48.dp), enabled = !busy) {
-                    if (state.adding == EbookSearchState.FILE) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp)); Text(if (state.adding == EbookSearchState.FILE) "Adding your file…" else "Add an ebook from your phone")
+                // Any EPUB or text file works, so the universal fallback stays on the simple layer, as a row like the one below it.
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = !busy, role = Role.Button, onClick = actions.chooseFile)
+                    .heightIn(min = 56.dp).padding(vertical = 6.dp).semantics(mergeDescendants = true) { }.testTag("ebook-choose-file"),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                        if (state.adding == EbookSearchState.FILE) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        else Icon(Icons.Rounded.UploadFile, null, tint = muted)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(if (state.adding == EbookSearchState.FILE) "Adding your file…" else "Add an ebook from your phone", style = MaterialTheme.typography.titleSmall)
+                        Text("EPUB or text. Some store-bought ebooks can't be opened.", style = MaterialTheme.typography.bodySmall, color = muted)
+                    }
                 }
-                Text("EPUB or text. Some store-bought ebooks can't be opened.", style = MaterialTheme.typography.bodySmall, color = muted,
-                    modifier = Modifier.padding(start = 12.dp))
             }
             item(key = "advanced") {
-                Column {
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(bottom = 4.dp))
-                    SearchOtherSourcesRow("Find another edition", expanded = advanced, open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
-                }
+                SearchOtherSourcesRow("Find another edition", expanded = advanced, open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
             }
             if (advanced) {
                 item(key = "search-words") { EbookSearchWords(book, state.words, busy, search = { words -> actions.searchWith(customEbookWords(words, book)); scrollTo(bestIndex) }) }
@@ -374,8 +382,10 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Adding…") }
                 AddingStep(step, Modifier.padding(top = 8.dp))
             }
-            // Weaker than a confirmed match's filled button, as the doubt above it says.
-            possible != null -> FilledTonalButton({ actions.addAndOpen(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
+            // Weaker than a confirmed match's filled button: it opens the text to check, and the reader then asks to keep it.
+            possible != null -> FilledTonalButton({ (actions.addAndCheck ?: actions.addAndOpen)(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) {
+                SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, "Check this ebook")
+            }
             // The header already says it's searching; the action's place is held so nothing shifts when one is found.
             !search.complete && tally.active > 0 -> Spacer(button)
             else -> when (ebookNoMatchCopy(search, tally).kind) {
@@ -486,8 +496,8 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 @Composable
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox: Boolean = false) {
     // A book saved before choosing a recording or ebook says what it's waiting for.
-    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Connect TorBox to search for audio" else "Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium,
-        color = if (needsTorBox) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant); return }
+    // It's a status, so it's quiet; Connect TorBox is the book page's own action.
+    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Needs TorBox" else "Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
     // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
     if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

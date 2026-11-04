@@ -86,23 +86,6 @@ fun rememberSheetCloser(sheetState: SheetState, dismiss: () -> Unit): (() -> Uni
     return remember(sheetState, scope) { { after: () -> Unit -> after(); scope.launch { sheetState.hide() }.invokeOnCompletion { latest() } } }
 }
 
-/** Shared-element plumbing for compact navigation. Absent scopes leave covers static. */
-@OptIn(ExperimentalSharedTransitionApi::class)
-val LocalSharedTransition = staticCompositionLocalOf<SharedTransitionScope?> { null }
-val LocalNavigationScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
-
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-fun Modifier.sharedCover(key: String?): Modifier {
-    val shared = LocalSharedTransition.current
-    val scope = LocalNavigationScope.current
-    if (key == null || shared == null || scope == null) return this
-    return with(shared) {
-        this@sharedCover.sharedElement(rememberSharedContentState(key), scope,
-            boundsTransform = { _, _ -> spring(dampingRatio = .86f, stiffness = Spring.StiffnessMediumLow) })
-    }
-}
-
 /** A gentle press that makes rows and controls feel physical without moving their layout. */
 @Composable
 fun Modifier.pressScale(interaction: InteractionSource, pressed: Float = .97f): Modifier {

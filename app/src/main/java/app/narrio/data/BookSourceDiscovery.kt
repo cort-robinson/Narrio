@@ -431,8 +431,11 @@ object SourceQuality {
      * The book's description without the sentences about another edition's narration: those naming the catalog's
      * narrator, and those about narrators and performances.
      */
-    fun descriptionFor(recording: Audiobook, book: Audiobook): String {
-        if (!otherNarrator(recording, book)) return book.description
+    fun descriptionFor(recording: Audiobook, book: Audiobook): String =
+        if (!otherNarrator(recording, book)) book.description else withoutNarration(book)
+
+    /** [book]'s description without sentences about its catalog narrator or narration, for a reading by someone else. */
+    fun withoutNarration(book: Audiobook): String {
         val names = book.narrator.takeIf { book.narratorFromCatalog && !BookMetadata.unknown(it) }.orEmpty()
             .split(Regex("[,&]| and ")).mapNotNull { it.trim().split(' ').lastOrNull()?.takeIf { name -> name.length > 2 } }
         val narration = Regex("\\b(narrat\\w*|read by|reader|actress|actor|perform\\w*|voices?|audiobook|audio edition|listen\\w*)\\b", RegexOption.IGNORE_CASE)

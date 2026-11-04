@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -85,7 +86,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
         color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, interactionSource = interaction) {
         Column(if (aboveSystemBar) Modifier.navigationBarsIgnoringVisibilityPadding() else Modifier) {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                BookCover(book, Modifier.size(48.dp), sharedKey = "now-${book.id}")
+                BookCover(book, Modifier.size(48.dp))
                 Column(Modifier.weight(1f)) {
                     Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // The play/pause button already says whether it's playing; the line says where.
@@ -117,6 +118,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     var bookmarksOpen by remember { mutableStateOf(false) }
     var coloursOpen by remember { mutableStateOf(false) }
     val findingEbook = remember { mutableStateOf(false) }
+    val bookFormats by remember(book.id) { vm.readingLibrary.value.observeBook(book) }.collectAsStateWithLifecycle(null)
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -138,15 +140,13 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
         if (dense) Row(pullDown, verticalAlignment = Alignment.CenterVertically) {
             if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
             Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            ReadAlongEntry(vm, book, dense = true, finding = findingEbook)
             PlayerMenu(vm, { coloursOpen = true })
-        } else Column(pullDown) {
-            PlayerHeading(vm, compact, { coloursOpen = true }) { findingEbook.value = true }
-            ReadAlongEntry(vm, book, dense = false, modifier = Modifier.padding(start = if (compact) 12.dp else 0.dp, bottom = 4.dp), finding = findingEbook)
-        }
+        } else Column(pullDown) { PlayerHeading(vm, compact) { coloursOpen = true } }
+        ReadAlongEntry(vm, book, finding = findingEbook)
     }
     val controls: @Composable (Boolean) -> Unit = { dense ->
-        Transport(vm, state, { speedOpen = true }, { sleepOpen = true }, { partsOpen = true }, { bookmarksOpen = true }, dense)
+        Transport(vm, state, { speedOpen = true }, { sleepOpen = true }, { partsOpen = true }, { bookmarksOpen = true }, dense,
+            read = { if (bookFormats?.ebook == true) vm.readAlong() else findingEbook.value = true }, ebook = bookFormats?.ebook == true)
     }
     if (hingeY != null) {
         // Tabletop: artwork and words above the hinge, hands-on controls below it.
@@ -308,38 +308,34 @@ private fun ListeningCover(book: Audiobook, playing: Boolean, modifier: Modifier
     BookCover(book, modifier.graphicsLayer {
         scaleX = scale; scaleY = scale
         shadowElevation = lift.toPx(); shape = RoundedCornerShape(8.dp)
-    }, large = true, sharedKey = "now-${book.id}")
+    }, large = true)
 }
 
 @Composable
-private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: () -> Unit, findEbook: () -> Unit) {
+private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
         Text("Now playing", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
         // Bookmarks live in one place, the tool tray, whose sheet leads with Add bookmark.
-        PlayerMenu(vm, openColours, findEbook)
+        PlayerMenu(vm, openColours)
     }
 }
 
 /**
- * The room's less frequent actions: this book's colours, finding its ebook to read along, and Close player. Close
+ * The room's less frequent actions: this book's colours and Close player. Close
  * stops listening and clears Now playing; the shelf keeps the book and its place. It sits behind the menu so a
  * sleepy tap can't end the session (the mini-player keeps it as a TalkBack action).
  */
 @Composable
-private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit, findEbook: (() -> Unit)? = null) {
+private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     var open by remember { mutableStateOf(false) }
-    val state by vm.playback.collectAsStateWithLifecycle()
-    val formats by remember(state.book?.id) { state.book?.let { vm.readingLibrary.value.observeBook(it) } ?: kotlinx.coroutines.flow.flowOf(null) }.collectAsStateWithLifecycle(null)
     Box {
         IconButton({ open = true }, Modifier.testTag("player-menu")) { Icon(Icons.Rounded.MoreVert, "More options") }
         DropdownMenu(open, { open = false }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
             DropdownMenuItem({ Text("Colours for this book") }, { open = false; openColours() },
                 leadingIcon = { Icon(Icons.Rounded.Palette, null) }, modifier = Modifier.testTag("book-colours-open"))
-            if (findEbook != null && formats?.ebook == false) DropdownMenuItem({ Text("Find the ebook to read along") }, { open = false; findEbook() },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) }, modifier = Modifier.testTag("find-ebook-to-read-along"))
             DropdownMenuItem({ Text("Close player") }, { open = false; haptics.performHapticFeedback(HapticFeedbackType.Reject); vm.dismissPlayback() },
                 leadingIcon = { Icon(Icons.Rounded.Close, null) }, modifier = Modifier.testTag("close-player"))
         }
@@ -348,7 +344,8 @@ private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit, findEbook: 
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> Unit, sleep: () -> Unit, parts: () -> Unit, bookmarks: () -> Unit, dense: Boolean = false) {
+private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> Unit, sleep: () -> Unit, parts: () -> Unit, bookmarks: () -> Unit, dense: Boolean = false,
+                      read: (() -> Unit)? = null, ebook: Boolean = false) {
     val sync by vm.readingSync.collectAsStateWithLifecycle()
     val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
     var scrub by remember { mutableStateOf<Long?>(null) }
@@ -381,6 +378,8 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
             if (state.chapters.isNotEmpty() || (state.source?.parts?.size ?: 1) > 1)
                 ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel(if (state.chapters.isNotEmpty()) "Chapters" else "Parts") }
             ToolSlot(Icons.Rounded.Bookmarks, bookmarks) { FitLabel("Bookmarks") }
+            // Reading along starts here too, or finding the ebook to read along with.
+            if (read != null) ToolSlot(Icons.AutoMirrored.Rounded.MenuBook, read, modifier = Modifier.testTag("read-along")) { FitLabel(if (ebook) "Read along" else "Find ebook") }
         }
         AnimatedVisibility(state.error != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column { Spacer(Modifier.height(16.dp)); RecoveryState("Playback stopped", state.error.orEmpty()) { vm.graph.playback.service?.retry() } }
@@ -443,10 +442,11 @@ internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: (deltaMs
 }
 
 @Composable
-internal fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVector, open: () -> Unit, active: Boolean = false, label: @Composable () -> Unit) {
+internal fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVector, open: () -> Unit, active: Boolean = false, modifier: Modifier = Modifier,
+                                label: @Composable () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val tint by animateColorAsState(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, label = "tool")
-    Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 56.dp).pressScale(interaction, .94f).clip(RoundedCornerShape(14.dp))
+    Column(modifier.weight(1f).fillMaxHeight().heightIn(min = 56.dp).pressScale(interaction, .94f).clip(RoundedCornerShape(14.dp))
         .clickable(interaction, LocalIndication.current, role = Role.Button, onClick = open).padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
         Icon(icon, null, Modifier.size(22.dp), tint = tint)
@@ -477,6 +477,6 @@ internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}Ã
 @Composable
 internal fun ChoiceDialog(title: String, dismiss: () -> Unit, extra: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) },
-        // Choosing applies and closes; Done (or Back) leaves it as it is.
-        confirmButton = { Row { extra?.invoke(); TextButton(dismiss) { Text("Done") } } })
+        // Choosing applies and closes, so there's no button to confirm; Back or a tap outside leaves it as it is.
+        confirmButton = { extra?.invoke() })
 }

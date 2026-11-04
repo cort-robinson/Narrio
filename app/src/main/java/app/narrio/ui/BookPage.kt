@@ -104,7 +104,10 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val awaitingAudioSearch = current == null && formats.ebook && !formats.audio && search?.searched != true && search?.loading != true
     // The ebook search knows which recording and audio the listener hears, to hint at a matching edition.
     val narration = current?.let { NarrationContext(it.recording, it.source) }
-    val openEbooks = { ebookSheet = true; vm.openEbookSearch(book, narration) }
+    // The row answers the tap at once; the sheet, slower to build the first time, follows a frame later.
+    var ebookOpening by remember(book.id) { mutableStateOf(false) }
+    LaunchedEffect(ebookOpening) { if (ebookOpening) { withFrameNanos { }; withFrameNanos { }; ebookSheet = true; ebookOpening = false } }
+    val openEbooks = { ebookOpening = true; vm.openEbookSearch(book, narration) }
     val finished = (entry?.finishedAt ?: 0) > 0
     // A book without its own recording searches as it opens; one with a recording searches when the chooser opens.
     val searching = search?.searched == true || current == null && !awaitingAudioSearch
@@ -186,7 +189,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         item(key = "identity") {
             // Without TorBox only a free public reading can play, so the catalog's audiobook cover (often naming its own
             // narrator) would only be replaced; the page shows the book's drawn cover until the recording is known.
-            val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && streamed?.complete != true
+            // A finished search with a best match keeps the plain shape until that match is the page's recording, so
+            // the catalog cover never flashes in between.
+            val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && (streamed?.complete != true || streamed?.best != null)
             // While this book plays, its length gives way to the time left, matching the mini-player docked below.
             val left = playback.takeIf { it.book?.id == book.id }?.let { state -> state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 } }
             BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left,
@@ -206,7 +211,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                         openPlayer = { vm.playerOpen.value = true }, addOwnAudio = { openChooser(ChooserView.ADVANCED) },
                     ))
             }
-            val read: @Composable () -> Unit = { ReadSlot(book, formats, leading = readingFirst, read = { vm.read(book) }, change = openEbooks, listenable = current != null || best != null) }
+            val read: @Composable () -> Unit = { ReadSlot(book, formats, leading = readingFirst, read = { vm.read(book) }, change = openEbooks,
+                // Until the search says otherwise, the book is one to listen to, so the row doesn't change under the listener.
+                listenable = current != null || best != null || streamed?.complete != true, opening = ebookOpening) }
             if (readingFirst) read() else listen()
             // While it plays, the mini-player shows the live place; the saved one here would lag behind it.
             if (playback.book?.id != book.id) SharedPlaceCaption(formats, Modifier.padding(top = 10.dp))
@@ -232,7 +239,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             Text("About this book", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(12.dp))
             // A different narrator's recording drops the catalog edition's praise for its own reader.
-            val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) } ?: book.description
+            // While a free reading is still being found, praise for the catalog's narrator would only be dropped later.
+            val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) }
+                ?: if (!connected && book.provider == "catalog" && streamed?.complete != true) app.narrio.data.SourceQuality.withoutNarration(book) else book.description
             Text(about.ifBlank { "No description has been found for this book yet." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = TextOverflow.Ellipsis)
             if (about.length > 500) TextButton({ expandedDescription = !expandedDescription }, Modifier.offset(x = (-12).dp)) { Text(if (expandedDescription) "Read less" else "Read more") }
@@ -263,6 +272,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     }
     if (ebookSheet) EbookSheet(book, formats, ebookSearch, ebookProviders, connected, "Add and read", EbookActions(
         add = { vm.addEbook(book, it) }, addAndOpen = { vm.addEbook(book, it) { vm.read(book) } }, retry = vm::retryEbookSource,
+        addAndCheck = { vm.addEbookToCheck(book, it) { vm.read(book) } },
         searchAgain = { vm.findEbooks(book, force = true) },
         chooseFile = { vm.beginEbookImport(book); ebookFile.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },
@@ -297,10 +307,10 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
         if (time != null) Text(time, style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
-    // A short window, such as a folding phone's cover screen, keeps the cover to about a fifth of its height so the
-    // actions stay above the mini-player.
-    val height = LocalConfiguration.current.screenHeightDp
-    val coverSize = if (height < SHORT_WINDOW_DP) (height * .2f).dp.coerceIn(140.dp, 240.dp) else 240.dp
+    // A short window, such as a folding phone's cover screen, sets a smaller cover beside the title, so the actions and
+    // the description start above the mini-player.
+    val short = LocalConfiguration.current.screenHeightDp < SHORT_WINDOW_DP
+    val coverSize = if (short) 128.dp else 240.dp
     // The cover fades as it scrolls under the top bar, so no sliver of it is left showing there.
     val coverPx = with(LocalDensity.current) { coverSize.toPx() }
     val fading = Modifier.graphicsLayer { alpha = 1f - (scrolled() / coverPx).coerceIn(0f, 1f) }
@@ -308,10 +318,13 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
         // so the page's cover is too.
         if (maxWidth >= 560.dp) Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-            BookCover(cover, Modifier.size(260.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover)
+            BookCover(cover, Modifier.size(260.dp), large = true, blank = neutralCover)
+            Column(Modifier.weight(1f), content = identity)
+        } else if (short) Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(fading) { BookCover(cover, Modifier.size(coverSize), large = true, blank = neutralCover) }
             Column(Modifier.weight(1f), content = identity)
         } else Column {
-            Box(Modifier.fillMaxWidth().then(fading), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(coverSize), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
+            Box(Modifier.fillMaxWidth().then(fading), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(coverSize), large = true, blank = neutralCover) }
             Spacer(Modifier.height(24.dp))
             identity()
         }
@@ -386,11 +399,9 @@ private fun ListenSlot(
                     style = MaterialTheme.typography.bodySmall, color = muted)
             }
             streamed != null && tally != null && !streamed.complete && tally.active > 0 -> {
+                // The button says it's searching; the recording line's place is held so nothing moves when it arrives.
                 ModeButton({}, button, leading, enabled = false) { WorkingLabel("Finding audio…") }
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Working(Modifier.size(14.dp))
-                    Text("Looking for recordings of this book", style = MaterialTheme.typography.bodyMedium, color = muted, modifier = Modifier.testTag("recording-summary"))
-                }
+                Spacer(Modifier.fillMaxWidth().heightIn(min = 48.dp))
             }
             streamed != null && tally != null -> {
                 val copy = noMatchCopy(streamed, tally)
@@ -428,18 +439,22 @@ private fun RecordingLine(text: String, change: () -> Unit) {
 
 /** Read with one line for the active edition and Change, or Find ebook when the book has none. */
 @Composable
-private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, read: () -> Unit, change: () -> Unit, listenable: Boolean = true) {
+private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, read: () -> Unit, change: () -> Unit, listenable: Boolean = true, opening: Boolean = false) {
     val button = Modifier.fillMaxWidth().heightIn(min = 48.dp)
     // Without an ebook, finding one is a quiet row like Download for offline, so Listen stays the one big button.
     if (!formats.ebook) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = change).heightIn(min = 48.dp).padding(vertical = 6.dp)
             .semantics(mergeDescendants = true) { }.testTag("find-ebook-action"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = MaterialTheme.colorScheme.primary)
+            Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                if (opening) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = MaterialTheme.colorScheme.primary)
+            }
             Column(Modifier.weight(1f)) {
                 Text("Find ebook", style = MaterialTheme.typography.titleSmall)
                 // Reading along needs something to listen to; without a recording, the ebook is simply the book to read.
                 Text(if (listenable) "Read along as you listen" else "Read the book's text", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }

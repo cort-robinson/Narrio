@@ -22,6 +22,8 @@ data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: B
                         val free: Set<String> = emptySet())
 data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
 data class EbookWebsiteRequest(val book: Audiobook, val link: EbookSearchLink)
+/** A possible ebook match added to be checked: the reader asks whether to keep [edition] for [book]. */
+data class CheckingEdition(val book: Audiobook, val edition: EbookEdition)
 data class EbookWebsiteState(val request: EbookWebsiteRequest? = null, val working: Boolean = false, val step: String = "", val error: String? = null)
 /**
  * [recordings] are verified and confidently matched, best first; [possible] need the listener's review.
@@ -762,8 +764,25 @@ class NarrioViewModel @JvmOverloads constructor(
     }
 
     /** Adds a found ebook as the book's edition; [then] runs once it's added, such as opening it to read. */
-    fun addEbook(book: Audiobook, candidate: BookTextSource, then: () -> Unit = {}) =
-        editionWork(book, candidate.id, then) {
+    /** The possible match being checked in the reader, until the listener keeps or removes it. */
+    val checkingEdition = MutableStateFlow<CheckingEdition?>(null)
+
+    /** Adds a possible match and opens it with [open], where the reader asks whether it's the right book. */
+    fun addEbookToCheck(book: Audiobook, candidate: BookTextSource, open: () -> Unit) =
+        addEbook(book, candidate, toCheck = true, then = open)
+
+    fun keepCheckedEbook() { checkingEdition.value = null }
+
+    /** The checked ebook was the wrong book: it's removed, the reader closes, and Find ebook is there to try another. */
+    fun removeCheckedEbook() {
+        val checking = checkingEdition.value ?: return
+        checkingEdition.value = null
+        closeReader()
+        removeEbookEdition(checking.book, checking.edition)
+    }
+
+    fun addEbook(book: Audiobook, candidate: BookTextSource, toCheck: Boolean = false, then: () -> Unit = {}) =
+        editionWork(book, candidate.id, then, check = toCheck) {
             try { readingLibrary.value.addEdition(book, candidate) { step -> ebookSearch.update { if (it.bookId == book.id && it.adding == candidate.id) it.copy(step = step) else it } } }
             catch (check: BrowserCheckException) {
                 // The website asks the reader to verify; its own page then offers the download Narrio intercepts.
@@ -842,14 +861,14 @@ class NarrioViewModel @JvmOverloads constructor(
     }
     fun dismissEbookImport() { ebookImport.value = EbookImportState() }
 
-    private fun editionWork(book: Audiobook, adding: String, then: () -> Unit = {}, action: suspend () -> EbookEdition) = viewModelScope.launch {
+    private fun editionWork(book: Audiobook, adding: String, then: () -> Unit = {}, check: Boolean = false, action: suspend () -> EbookEdition) = viewModelScope.launch {
         if (ebookSearch.value.adding != null) return@launch
         if (ebookSearch.value.bookId != book.id) ebookSearch.value = EbookSearchState(book.id)
         ebookSearch.update { it.copy(adding = adding, added = null, error = null) }
         try {
             val edition = action()
             ebookSearch.update { if (it.bookId == book.id) it.copy(added = edition.id) else it }
-            messages.emit("Ebook added. Read opens it.")
+            if (check) checkingEdition.value = CheckingEdition(book, edition) else messages.emit("Ebook added. Read opens it.")
             then()
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { ebookSearch.update { if (it.bookId == book.id) it.copy(error = textError(error)) else it } }
@@ -865,12 +884,18 @@ class NarrioViewModel @JvmOverloads constructor(
             // Loading replaces the row's book, so the recording being got ready is pinned down first.
             graph.library.find(book.id)?.let { rememberOlderShelf(it) }
             val at = place?.invoke(resolved)
-            if (at == null || at.approximate) awaitService().load(book, resolved, near = at?.cursor)
-            else awaitService().load(book, resolved, partId = at.cursor.partId, positionMs = at.cursor.positionMs)
+            // The Listening room opens as the book loads, so Listen leads straight to it rather than through the
+            // mini-player; while another book still plays, it waits so that book never shows in its place.
+            val wasOpen = playerOpen.value
+            if (playback.value.book.let { it == null || it.id == book.id }) playerOpen.value = true
+            try {
+                if (at == null || at.approximate) awaitService().load(book, resolved, near = at?.cursor)
+                else awaitService().load(book, resolved, partId = at.cursor.partId, positionMs = at.cursor.positionMs)
+            } catch (failed: Exception) { if (playback.value.book?.id != book.id) playerOpen.value = wasOpen; throw failed }
+            playerOpen.value = true
             // Only the prepared recording itself completes its preparation; another one (or phone audio) leaves it pending.
             if (resolved.delivery != LocalAudio.DELIVERY && graph.preparations.played(book.id, resolved)) app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
             if (book.provider != "catalog") graph.listeningRecordings.played(book, resolved.id)
-            playerOpen.value = true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { messages.emit(friendly(error)) }
         finally { busy.value = false; starting.value = false }

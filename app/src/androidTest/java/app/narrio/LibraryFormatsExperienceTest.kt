@@ -312,17 +312,17 @@ class LibraryFormatsExperienceTest {
         val sheet = compose.onNodeWithTag("ebook-sheet")
         compose.onNodeWithTag("find-ebook-action").performClick()
         compose.waitUntil(10_000) { shown("Possible match") }
-        compose.onNodeWithTag("ebook-section:gutenberg").assertDoesNotExist()
         // With no sure match, the possible one leads the card with the same action and its one doubt.
         sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
-        compose.onNodeWithText("Not sure it's the same book. Check the text after adding it.").assertExists()
+        compose.onNodeWithText("Not sure it's the same book. Open it to check, then keep it or remove it.").assertExists()
         capture("ebook-chooser-possible-day")
         // Nothing else was found, so there's no list to open.
         compose.onNodeWithTag("ebook-other-choices-toggle").assertDoesNotExist()
         compose.onNodeWithTag("ebook-other-choices").assertDoesNotExist()
 
+        // Looking further is the likely next step, so other sources open by themselves.
         sheet.performScrollToNode(hasTestTag("ebook-advanced"))
-        compose.onNodeWithTag("ebook-advanced").performClick()
+        compose.onNodeWithTag("ebook-advanced").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Expanded"))
         sheet.performScrollToNode(hasTestTag("ebook-section:gutenberg"))
         sheet.performScrollToNode(hasTestTag("ebook-retry:addon:knaben-ebooks"))
         sheet.performScrollToNode(hasTestTag("ebook-search-words"))
@@ -389,6 +389,29 @@ class LibraryFormatsExperienceTest {
         compose.waitUntil(10_000) { fake.searchedNarrations.size == before + 2 }
         assertEquals(second.key, fake.searchedNarrations.last())
         assertEquals(second.key, vm.ebookSearch.value.narration)
+    }
+
+    /** A match no source confirms opens to be checked first; the reader then asks whether to keep it, and Remove takes it off. */
+    @Test fun aPossibleEbookOpensToBeCheckedAndCanBeRemoved() {
+        seed()
+        val possible = BookTextSource("gutenberg:78", "Lantern Keeper [EPUB]", "", "EPUB", "gutenberg", attribution = "Project Gutenberg · ebook 78")
+        compose.runOnIdle {
+            fake.found = { listOf(EbookGroup("gutenberg", "Project Gutenberg", SourceGroupStatus.DONE, possible = listOf(possible))) }
+            vm.selection.value = SelectionState(audioOnly)
+        }
+        compose.onNodeWithTag("find-ebook-action").performClick()
+        compose.waitUntil(10_000) { shown("Possible match") }
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("best-ebook-action"))
+        compose.onNodeWithTag("best-ebook-action").assertTextContains("Check this ebook").performClick()
+        compose.waitUntil(10_000) { vm.reader.value != null }
+        compose.runOnIdle { assertEquals(audioOnly.id, vm.checkingEdition.value?.book?.id) }
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("check-ebook").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Is this ${audioOnly.title}?").assertIsDisplayed()
+        compose.onNodeWithTag("check-ebook-remove").performClick()
+        compose.runOnIdle {
+            assertEquals(null, vm.reader.value)
+            assertEquals(null, vm.checkingEdition.value)
+        }
     }
 
     @Test fun addingAnEbookFileOpensItsBookOrExplainsTheFile() {

@@ -34,11 +34,11 @@ private fun CoverPlaceholderMark() =
     Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .35f))
 
 @Composable
-fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null, blank: Boolean = false) {
+fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, blank: Boolean = false) {
     // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
     if (blank) {
         // The page below already says what it's finding, so the shape holds only a quiet book mark.
-        Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        Box(modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
             contentAlignment = Alignment.Center) { CoverPlaceholderMark() }
         return
     }
@@ -52,7 +52,7 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         else -> Pair(Color(0xFF435C4A), Color(0xFFF0E4CC))
     }
     val curated = listOf("secret garden", "pride", "sherlock", "gatsby", "dracula", "alice").any { it in key }
-    BoxWithConstraints(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp))) {
+    BoxWithConstraints(modifier.clip(RoundedCornerShape(8.dp))) {
         val tiny = maxWidth < 100.dp
         var coverLoaded by remember(book.coverUrl) { mutableStateOf(book.coverUrl in loadedCovers) }
         // Drawn art stands in only for a book with no cover, or one that failed to load; a loading cover is a plain shape.
@@ -122,7 +122,7 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         }
         if (book.coverUrl.isNotBlank()) {
             // Thumbnails decode small; large covers show the cached thumbnail while their sharper decode
-            // arrives, so a shared-element flight from a row never draws a blank frame.
+            // arrives, so a cover the listener just saw in a row never draws a blank frame.
             val context = LocalContext.current
             val request = remember(book.coverUrl, large) {
                 ImageRequest.Builder(context).data(book.coverUrl).size(if (large) 720 else 240).memoryCacheKey(coverKey(book.coverUrl, large))

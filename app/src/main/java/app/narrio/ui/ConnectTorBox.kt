@@ -203,16 +203,17 @@ fun rememberTorBoxNudge(preferences: SharedPreferences) = remember(preferences) 
 /** Most chart books need TorBox to play; says so once at the top of browsing, pointing to free Classics and the way to connect. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier, marked: Boolean = false) {
+fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier, marked: Boolean = false, compact: Boolean = false) {
     Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
         .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("torbox-nudge")) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(if (marked) FREE_MARKED_AND_TORBOX else FREE_AND_TORBOX, style = MaterialTheme.typography.titleSmall)
+                // On a short screen it reads as a note, so more of the list fits beneath it.
+                Text(if (marked) FREE_MARKED_AND_TORBOX else FREE_AND_TORBOX, style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleSmall)
             }
             IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        FlowRow(Modifier.padding(top = 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        FlowRow(Modifier.padding(top = if (compact) 0.dp else 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             // Discover already opens on free Classics; connecting a paid account is the secondary step here.
             TextButton(connect, Modifier.offset(x = (-12).dp)) { Text("Connect TorBox") }
         }
