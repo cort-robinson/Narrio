@@ -141,7 +141,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     }
     val scroll = TopAppBarDefaults.pinnedScrollBehavior()
     // The bar names the book once its own title (the end of the first item) has scrolled under the bar.
-    val titleRoom = with(LocalDensity.current) { 120.dp.roundToPx() }
+    val titleRoom = with(LocalDensity.current) { 70.dp.roundToPx() }
     val titleGone by remember(listState) { derivedStateOf {
         listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.index > 0 || -it.offset > it.size - titleRoom } ?: false
     } }
@@ -190,7 +190,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // While this book plays, its length gives way to the time left, matching the mini-player docked below.
             val left = playback.takeIf { it.book?.id == book.id }?.let { state -> state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 } }
             BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left,
-                scrolled = { if (listState.firstVisibleItemIndex > 0) Int.MAX_VALUE else listState.firstVisibleItemScrollOffset })
+                scrolled = { if (listState.firstVisibleItemIndex > 0) Int.MAX_VALUE else listState.firstVisibleItemScrollOffset }, titleInBar = { titleGone })
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
@@ -274,7 +274,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null, scrolled: () -> Int = { 0 }) {
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null, scrolled: () -> Int = { 0 },
+                         titleInBar: () -> Boolean = { false }) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
     val cover = when {
@@ -282,7 +283,8 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         else -> book
     }
     val identity: @Composable ColumnScope.() -> Unit = {
-        Text(book.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
+        // Once the top bar names the book, the large title gives way, so no edge of it shows under the bar.
+        Text(book.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() }.graphicsLayer { alpha = if (titleInBar()) 0f else 1f })
         Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = muted)
         // A recording's narrator is said once, in the line under Listen beside Change.
         val line = when {
