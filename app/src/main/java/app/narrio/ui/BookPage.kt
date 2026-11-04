@@ -389,7 +389,7 @@ private fun ListenSlot(
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
                 // TorBox isn't the only way: the same row as the chooser's searches again with other words, or adds your own file.
-                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Find another recording, or add your own file", expanded = null, open = actions.addOwnAudio,
+                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Find a recording, or add your own file", expanded = null, open = actions.addOwnAudio,
                     modifier = Modifier.padding(top = 8.dp).testTag("add-own-audio"))
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }

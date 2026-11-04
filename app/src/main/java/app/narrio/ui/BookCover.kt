@@ -6,9 +6,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -35,10 +32,8 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
     // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
     if (blank) {
         Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-            // A gentle pulse says the cover is on its way rather than missing.
-            val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "cover pending").animateFloat(.3f, .7f,
-                androidx.compose.animation.core.infiniteRepeatable<Float>(tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulse")
-            Icon(Icons.Rounded.AutoStories, null, Modifier.size(48.dp).graphicsLayer { alpha = pulse }, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            // A small spinner says the cover is on its way rather than missing.
+            CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, strokeWidth = 2.5.dp)
         }
         return
     }
@@ -65,6 +60,10 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         var lastLoaded by remember { mutableStateOf<String?>(null) }
         val previous = lastLoaded?.takeIf { it != book.coverUrl && it in loadedCovers }
         val fallback = reveal < 1f && previous == null && drawn
+        // A large cover still on its way says so, rather than reading as a missing image.
+        if (large && !drawn && !coverLoaded && previous == null) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, strokeWidth = 2.5.dp)
+        }
         if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))

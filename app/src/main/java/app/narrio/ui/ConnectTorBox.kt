@@ -80,7 +80,7 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 
 /** What TorBox is, in one breath: it costs money, it's what most books need, and free recordings don't. */
 /** The one line Discover uses, on its hint and under the list, about what plays free and what needs TorBox. */
-internal const val FREE_AND_TORBOX = "Older books often play free. Newer ones need TorBox, a paid service."
+internal const val FREE_AND_TORBOX = "Older books often play free. Newer ones usually need TorBox, a paid service."
 
 internal const val TORBOX_PITCH = "TorBox is a paid service that can find and stream many more audiobooks. Free LibriVox recordings play without it."
 
