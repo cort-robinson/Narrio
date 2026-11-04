@@ -232,7 +232,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                      else "Find audiobook looks for a free public recording of this book. Connect TorBox for more.",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            OfflineRow(vm, book, offlineTarget, current, downloadsHere, wifiOnly, connected, busy, Modifier.padding(top = 12.dp))
+            // While a free recording is still being found, the Download row's place is held too, so the page settles once.
+            if (current == null && best == null && streamed?.complete == false) Spacer(Modifier.height(68.dp))
+            else OfflineRow(vm, book, offlineTarget, current, downloadsHere, wifiOnly, connected, busy, Modifier.padding(top = 12.dp))
         } }
         // Phone copies the offline row doesn't stand for (another recording or format) keep their own cards until removed.
         downloadsHere.filter { it !== offlineShown }.forEach { download -> item(key = "download:${download.source.id}") { OfflineStatus(vm, download, Modifier.animateItem()) } }
@@ -320,7 +322,7 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
     val coverSize = if (short) 128.dp else 240.dp
     // The cover fades as it scrolls under the top bar, so no sliver of it is left showing there.
     val coverPx = with(LocalDensity.current) { coverSize.toPx() }
-    val fading = Modifier.graphicsLayer { alpha = 1f - (scrolled() / coverPx).coerceIn(0f, 1f) }
+    val fading = Modifier.graphicsLayer { alpha = 1f - (scrolled() / (coverPx / 2)).coerceIn(0f, 1f) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
         // so the page's cover is too.

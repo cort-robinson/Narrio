@@ -34,7 +34,7 @@ fun bestEbookCopy(best: BestEbook, book: Audiobook, recording: Boolean = false):
     val caution = if (recording) cautionLabel(NarrationMatch.judge(book, best.edition, best.providerId, confirmed = true)) else null
     val detail = buildList {
         if (EbookMatchReason.WITH_RECORDING in reasons) add("Most likely the narrated edition")
-        if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Matches this recording")
+        if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Same text as this reading")
         caution?.let { add("May not follow the narration: ${it.replaceFirstChar(Char::lowercase)}") }
         // Only what helps reading along is said; a matching title or the book's own language goes without saying.
     }
@@ -182,7 +182,7 @@ fun ebookChoiceNotes(choice: EbookChoice, recording: Boolean): List<ChoiceNote> 
         ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author").takeIf { !choice.confirmed && !withRecording },
         when {
             withRecording -> ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")
-            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Matches this recording")
+            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Same text as this reading")
             caution != null -> ChoiceNote(ChoiceNoteKind.CAUTION, if (recording) "May not follow the narration: ${caution.replaceFirstChar(Char::lowercase)}" else caution)
             else -> null
         },

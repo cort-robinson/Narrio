@@ -35,8 +35,7 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
     val busy = state.phase in listOf(UpdatePhase.CHECKING, UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("App updates", style = MaterialTheme.typography.headlineSmall)
-        Text("${state.channel?.label ?: "Local build"} · $installedVersion", style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // The release channel and version live under About; here it's only whether Narrio is current.
         if (state.channel == null) {
             Text("Local and debug builds update through your development tools.", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -57,17 +56,25 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
             UpdatePhase.CONFIRMATION -> "Android needs your confirmation to finish the update."
             UpdatePhase.READY -> "${state.available?.version} is ready to install."
             UpdatePhase.IDLE -> state.available?.let { "${it.version} is available." }
-                ?: if (state.lastChecked > 0 && state.error == null) "You're up to date." else "Check for a newer version."
+                ?: if (state.error != null) null else if (state.lastChecked > 0) "You're up to date." else "Not checked yet."
         }
-        Text(status, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+        // After a failed check the error says what happened, so no second status line repeats it.
+        status?.let { Text(it, style = MaterialTheme.typography.titleSmall, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         if (state.phase == UpdatePhase.DOWNLOADING) LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
         if (state.phase == UpdatePhase.CHECKING || state.phase == UpdatePhase.INSTALLING) LinearProgressIndicator(Modifier.fillMaxWidth())
         state.error?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         if (state.waitingForPlayback) Text("Pause playback before installing. Your shelf and listening progress stay on this device.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // Android's install permission matters only when Narrio would install something: automatically, or an update
+        // that's waiting. Then it's one warning line with its fix, not a standing button beside "You're up to date".
+        val permissionMatters = state.permissionNeeded && (state.automatic || state.available != null)
+        if (permissionMatters) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Android needs your permission for Narrio to install updates.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error)
+            TextButton(allow, enabled = !busy) { Text("Allow app updates") }
+        }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (state.permissionNeeded) FilledTonalButton(allow, enabled = !busy) { Text("Allow app updates") }
             if (state.available != null && state.phase == UpdatePhase.IDLE) {
                 FilledTonalButton(download, enabled = !busy) { Text("Download update") }
             }
@@ -79,9 +86,6 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
             TextButton(check, enabled = !busy && state.phase != UpdatePhase.CONFIRMATION) { Text("Check for updates") }
         }
         if (state.available != null && state.phase == UpdatePhase.IDLE) Text("Downloading now can use mobile data.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (state.permissionNeeded) Text(
-            "Allow Narrio to install its own updates in Android Settings. Narrio stays on this release channel.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

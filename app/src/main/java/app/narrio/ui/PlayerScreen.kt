@@ -295,7 +295,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
 @Composable
 private fun TitleBlock(book: Audiobook, maxLines: Int, open: (() -> Unit)? = null) {
     // The title leads to the book's page, as a row does on the shelf.
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+    Column(Modifier.fillMaxWidth()
         .then(if (open != null) Modifier.clickable(onClickLabel = "Open the book's page", onClick = open).testTag("player-book-page") else Modifier)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(book.title, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.headlineMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
