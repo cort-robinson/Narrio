@@ -97,7 +97,6 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, openAddons: () -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
     val backgroundAlignment by vm.backgroundAlignment.collectAsStateWithLifecycle()
-    val readAlongSync by vm.readAlongSync.collectAsStateWithLifecycle()
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // TorBox leads: it gates every source beyond LibriVox. Where books come from and how the app looks follow as rows,
@@ -119,11 +118,9 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         item {
             Text("Read along", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
-            SettingSwitch("Prepare highlights ahead of time", "Runs in the background. Streamed books wait for Wi-Fi and charging.",
-                backgroundAlignment, vm::setBackgroundAlignment, Modifier.testTag("background-alignment"))
-            Spacer(Modifier.height(12.dp))
-            SettingSwitch("Adjust highlights while listening", "Keeps the words in step as you read along. Nothing leaves this phone.",
-                readAlongSync, vm::setReadAlongSync, Modifier.testTag("read-along-sync"))
+            // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
+            SettingSwitch("Read-along highlights", "Gets the highlight ready in the background and keeps it in step as you listen. For streamed books, it's prepared on Wi-Fi while charging.",
+                backgroundAlignment, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         item { UpdateSettings(vm.graph.updates) }
         item {

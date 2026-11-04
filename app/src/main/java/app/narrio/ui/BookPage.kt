@@ -220,8 +220,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) }?.ifBlank { null } ?: book.description
             Text(about.ifBlank { "No description has been found for this book yet." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = TextOverflow.Ellipsis)
-            if (about.length > 500) TextButton({ expandedDescription = !expandedDescription }) { Text(if (expandedDescription) "Read less" else "Read more") }
-            if (book.metadataSource.isNotBlank() && book.metadataUrl.isNotBlank()) TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(book.metadataUrl))) }) { Text("Details from ${book.metadataSource}") }
+            if (about.length > 500) TextButton({ expandedDescription = !expandedDescription }, Modifier.offset(x = (-12).dp)) { Text(if (expandedDescription) "Read less" else "Read more") }
+            if (book.metadataSource.isNotBlank() && book.metadataUrl.isNotBlank()) TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(book.metadataUrl))) }, Modifier.offset(x = (-12).dp)) { Text("Details from ${book.metadataSource}") }
         } }
         // Change beside the recording line opens the chooser; without one, this row is the way to every match and Advanced.
         if (current == null && best == null) item(key = "more") {
@@ -260,7 +260,6 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
     val cover = when {
-        neutralCover -> book.copy(coverUrl = "")
         recording != null -> book.copy(coverUrl = app.narrio.data.SourceQuality.coverFor(recording, book))
         else -> book
     }
@@ -280,10 +279,10 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column.
         if (maxWidth >= 560.dp) Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-            BookCover(cover, Modifier.width(210.dp).height(306.dp), large = true, sharedKey = "cover-${book.id}")
+            BookCover(cover, Modifier.width(210.dp).height(306.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover)
             Column(Modifier.weight(1f), content = identity)
         } else Column {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.width(190.dp).height(278.dp), large = true, sharedKey = "cover-${book.id}") }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.width(190.dp).height(278.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
             Spacer(Modifier.height(24.dp))
             identity()
         }
@@ -397,7 +396,18 @@ private fun RecordingLine(text: String, change: () -> Unit) {
 @Composable
 private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, read: () -> Unit, change: () -> Unit) {
     val button = Modifier.fillMaxWidth().heightIn(min = 48.dp)
-    if (!formats.ebook) { OutlinedButton(change, button.testTag("find-ebook-action")) { SlotLabel(Icons.Rounded.Search, "Find ebook") }; return }
+    // Without an ebook, finding one is a quiet row like Download for offline, so Listen stays the one big button.
+    if (!formats.ebook) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = change).heightIn(min = 48.dp).padding(vertical = 6.dp)
+            .semantics(mergeDescendants = true) { }.testTag("find-ebook-action"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f)) {
+                Text("Find ebook", style = MaterialTheme.typography.titleSmall)
+                Text("Read along as you listen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        return
+    }
     ModeButton(read, button.testTag("read-action"), leading) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, "Read") }
     val edition = formats.activeEdition ?: return
     val pairing = pairingCopy(formats)

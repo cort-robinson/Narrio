@@ -28,7 +28,9 @@ import app.narrio.domain.Audiobook
 private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>())
 
 @Composable
-fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null) {
+fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null, blank: Boolean = false) {
+    // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
+    if (blank) { Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest)); return }
     val key = book.title.lowercase()
     val palette = when {
         "pride" in key -> Pair(Color(0xFF694851), Color(0xFFEAD7B4))
@@ -39,15 +41,19 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         else -> Pair(Color(0xFF435C4A), Color(0xFFF0E4CC))
     }
     val curated = listOf("secret garden", "pride", "sherlock", "gatsby", "dracula", "alice").any { it in key }
-    BoxWithConstraints(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(palette.first)) {
+    BoxWithConstraints(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp))) {
         val tiny = maxWidth < 100.dp
         var coverLoaded by remember(book.coverUrl) { mutableStateOf(book.coverUrl in loadedCovers) }
+        // Drawn art stands in only for a book with no cover, or one that failed to load; a loading cover is a plain shape.
+        var failed by remember(book.coverUrl) { mutableStateOf(false) }
+        val drawn = book.coverUrl.isBlank() || failed
+        Box(Modifier.matchParentSize().background(if (drawn) palette.first else MaterialTheme.colorScheme.surfaceContainerHighest))
         val reveal by animateFloatAsState(if (coverLoaded) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate), label = "cover")
         // A cover that changes in place (a recording's own art replacing the catalog's) keeps the last art showing
         // until the new one arrives, rather than flashing the drawn fallback in between.
         var lastLoaded by remember { mutableStateOf<String?>(null) }
         val previous = lastLoaded?.takeIf { it != book.coverUrl && it in loadedCovers }
-        val fallback = reveal < 1f && previous == null
+        val fallback = reveal < 1f && previous == null && drawn
         if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))
@@ -108,7 +114,7 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                     .apply { if (large) placeholderMemoryCacheKey(coverKey(book.coverUrl, false)) }.build()
             }
             val painter = rememberAsyncImagePainter(request,
-                onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false })
+                onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false; failed = true })
             // Square audiobook art in a book-shaped frame: small covers fill the margins with the art's own softened
             // light from a tiny upscaled decode; large ones use a flat matte.
             if (coverLoaded) {

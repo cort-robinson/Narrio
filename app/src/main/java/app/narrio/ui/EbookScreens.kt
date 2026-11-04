@@ -199,7 +199,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             .pointerInput(book.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); interacted = true } },
             listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item(key = "intro") {
-                Text(if (formats.ebook) "Choose an edition" else "Find an ebook", style = MaterialTheme.typography.headlineMedium)
+                Text(if (formats.ebook) "Choose an edition" else "Find ebook", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(if (narrated) "Add the book's text to read along as you listen."
                      else "Pick the edition you want to read. It's saved on this phone with the book.", style = MaterialTheme.typography.bodyMedium, color = muted)
@@ -255,7 +255,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "advanced") {
                 Column {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(bottom = 4.dp))
-                    ExpandRow("Advanced options", advanced, { advanced = !advanced }, Modifier.testTag("ebook-advanced"))
+                    ExpandRow("Search other sources", advanced, { advanced = !advanced }, Modifier.testTag("ebook-advanced"))
                 }
             }
             if (advanced) {

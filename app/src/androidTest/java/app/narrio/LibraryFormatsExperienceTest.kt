@@ -149,7 +149,7 @@ class LibraryFormatsExperienceTest {
             ) }
         }
         compose.onNodeWithTag("find-ebook-action").performClick()
-        compose.onNodeWithText("Find an ebook").assertIsDisplayed()
+        compose.onNode(hasText("Find ebook") and hasAnyAncestor(hasTestTag("ebook-sheet"))).assertIsDisplayed()
         compose.onNodeWithText("Finding an ebook…").assertIsDisplayed()
         compose.onNodeWithText("Checking 2 sources").assertIsDisplayed()
         capture("find-ebook-searching-night")

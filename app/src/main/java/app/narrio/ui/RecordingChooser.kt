@@ -76,7 +76,10 @@ fun RecordingChooser(
     val hidden = hiddenMatches(current?.recording, search)
     // A single extra match isn't worth a toggle; it simply shows.
     val listAll = showAll || hidden == 1
+    // The listener's own and the best match lead; named readings come before ones that name no one.
+    val leading = listOfNotNull(current?.recording, pinned.shown?.recording.takeIf { current == null })
     val shown = chooserRows(current?.recording, search, listAll).let { rows -> if (picked != null && rows.none { sameRecording(it, picked) }) rows + picked else rows }.distinctBy { it.id }
+        .sortedBy { row -> when { leading.any { sameRecording(it, row) } -> 0; recordingNarrator(row).isNotBlank() || SourceQuality.DRAMATIZED in SourceQuality.edition(row).kind -> 1; else -> 2 } }
     // Format and delivery are automatic; Advanced overrides them for this pick.
     var format by remember(picked?.let(::recordingKey)) { mutableStateOf<String?>(null) }
     var delivery by remember(picked?.let(::recordingKey)) { mutableStateOf<String?>(null) }
@@ -129,7 +132,8 @@ fun RecordingChooser(
                         },
                         status = readiness(recording, connected, phone).takeIf { shared == null }, ready = phone || SourceQuality.ready(recording), enabled = !busy,
                         bytes = downloadBytes(recording, current?.source?.format?.takeIf { mine } ?: defaultFormat(recording, vm.savedFormat(book.id))),
-                        release = recording.releaseTitle.ifBlank { recording.title }.takeIf { showAll && !mine }) { pick(recording) }
+                        // Every match can share a narrator, and an unnamed one has nothing else to go by: their release names tell them apart.
+                        release = recording.releaseTitle.ifBlank { recording.title }.takeIf { (showAll || recordingNarrator(recording).isBlank()) && !mine }) { pick(recording) }
                 }
                 item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
@@ -141,8 +145,8 @@ fun RecordingChooser(
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Column(Modifier.weight(1f)) {
-                            Text("Advanced options", style = MaterialTheme.typography.titleSmall)
-                            Text("Every recording found, with its files", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Search other sources", style = MaterialTheme.typography.titleSmall)
+                            Text("Every recording found, your own search words, and files", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -166,7 +170,7 @@ private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolea
             // An unnamed reading is named by what sets it apart: a full cast says so instead of "Narrator not listed".
             val kind = recordingKind(recording, book)
             val dramatized = SourceQuality.DRAMATIZED in kind
-            val narrator = recordingNarrator(recording).ifBlank { if (dramatized) "Full cast (dramatized)" else "Unknown narrator" }
+            val narrator = recordingNarrator(recording).ifBlank { if (dramatized) "Full cast (dramatized)" else "Narrator not listed" }
             Text(narrator, style = MaterialTheme.typography.titleSmall)
             // How long it is tells readings apart better than file size; the size shows when the length isn't known.
             val facts = kind.filterNot { dramatized && narrator.startsWith("Full cast") && it == SourceQuality.DRAMATIZED } + listOfNotNull(recording.durationMs.takeIf { it > 0 }?.let(::durationLabel) ?: bytes.takeIf { it > 0 }?.let(::sizeLabel))
