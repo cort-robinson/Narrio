@@ -114,15 +114,15 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         item {
             Text("Downloads", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
-            SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Downloads wait for Wi-Fi." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
+            SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
         }
         item {
             Text("Read along", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
-            SettingSwitch("Prepare read along in the background", "Lines up downloaded audio with its ebook so the highlight is ready. Streamed books wait for Wi-Fi and charging.",
+            SettingSwitch("Prepare read along automatically", "Gets the highlight ready ahead of time. Streamed books wait for Wi-Fi and charging.",
                 backgroundAlignment, vm::setBackgroundAlignment, Modifier.testTag("background-alignment"))
             Spacer(Modifier.height(12.dp))
-            SettingSwitch("Keep the highlight in step", "While you read along, listens to the narration on this phone. Nothing is uploaded.",
+            SettingSwitch("Keep text synced with narration", "Matches the highlight to the audio as it plays. Nothing leaves this phone.",
                 readAlongSync, vm::setReadAlongSync, Modifier.testTag("read-along-sync"))
         }
         item { UpdateSettings(vm.graph.updates) }

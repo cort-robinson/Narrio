@@ -66,7 +66,7 @@ class SleepTimerVisualQa {
                 compose.onNodeWithText("At the end of this audio part").performClick()
                 compose.onNodeWithText("End of part").performScrollTo().performClick()
                 capture("sleep-dialog-running-$name")
-                compose.onNodeWithText("Done").performClick()
+                compose.onNodeWithText("Close").performClick()
                 compose.onNodeWithContentDescription("More options").performClick()
                 capture("menu-$name")
                 back()

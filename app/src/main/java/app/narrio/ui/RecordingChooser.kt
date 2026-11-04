@@ -73,8 +73,10 @@ fun RecordingChooser(
     val automatic = (current?.recording ?: chosen ?: pinned.shown?.recording)?.let { wanted -> everything.firstOrNull { sameRecording(it, wanted) } ?: wanted } ?: everything.firstOrNull()
     val picked = pickedKey?.let { key -> everything.firstOrNull { recordingKey(it) == key } } ?: automatic
     // The pick always shows, even when it isn't one of the distinct versions.
-    val shown = chooserRows(current?.recording, search, showAll).let { rows -> if (picked != null && rows.none { sameRecording(it, picked) }) rows + picked else rows }.distinctBy { it.id }
     val hidden = hiddenMatches(current?.recording, search)
+    // A single extra match isn't worth a toggle; it simply shows.
+    val listAll = showAll || hidden == 1
+    val shown = chooserRows(current?.recording, search, listAll).let { rows -> if (picked != null && rows.none { sameRecording(it, picked) }) rows + picked else rows }.distinctBy { it.id }
     // Format and delivery are automatic; Advanced overrides them for this pick.
     var format by remember(picked?.let(::recordingKey)) { mutableStateOf<String?>(null) }
     var delivery by remember(picked?.let(::recordingKey)) { mutableStateOf<String?>(null) }
@@ -129,7 +131,7 @@ fun RecordingChooser(
                         bytes = downloadBytes(recording, current?.source?.format?.takeIf { mine } ?: defaultFormat(recording, vm.savedFormat(book.id))),
                         release = recording.releaseTitle.ifBlank { recording.title }.takeIf { showAll && !mine }) { pick(recording) }
                 }
-                item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden, showAll, { showAll = !showAll }) }
+                item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
                     ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close)
                 }
@@ -139,8 +141,8 @@ fun RecordingChooser(
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Column(Modifier.weight(1f)) {
-                            Text("Can't find the right one? Advanced", style = MaterialTheme.typography.titleSmall)
-                            Text("Every source's results, release names, formats, and files", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Advanced options", style = MaterialTheme.typography.titleSmall)
+                            Text("Can't find the right one? See every source's results and files.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -162,8 +164,8 @@ private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolea
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             tag?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
             Text(recordingNarrator(recording).ifBlank { "Narrator not listed" }, style = MaterialTheme.typography.titleSmall)
-            // The size is the download Listen would save, so it matches Download for offline.
-            val facts = recordingKind(recording, book) + listOfNotNull(bytes.takeIf { it > 0 }?.let(::sizeLabel))
+            // How long it is tells readings apart better than file size; the size shows when the length isn't known.
+            val facts = recordingKind(recording, book) + listOfNotNull(recording.durationMs.takeIf { it > 0 }?.let(::durationLabel) ?: bytes.takeIf { it > 0 }?.let(::sizeLabel))
             if (facts.isNotEmpty()) Text(facts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = muted)
             // Every match can share a narrator and format; their release names tell them apart.
             release?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }

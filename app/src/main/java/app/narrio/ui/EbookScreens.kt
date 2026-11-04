@@ -201,7 +201,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "intro") {
                 Text(if (formats.ebook) "Choose an edition" else "Find an ebook", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(if (narrated) "The edition likeliest to match the recording comes first, so reading and listening can share one place."
+                Text(if (narrated) "The best match for this recording comes first, so reading and listening share one place."
                      else "Pick the edition you want to read. It's saved on this phone with the book.", style = MaterialTheme.typography.bodyMedium, color = muted)
             }
             if (formats.editions.isNotEmpty()) {
@@ -255,7 +255,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "advanced") {
                 Column {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(bottom = 4.dp))
-                    ExpandRow("Advanced", advanced, { advanced = !advanced }, Modifier.testTag("ebook-advanced"), lead = "Can't find the right one?")
+                    ExpandRow("Advanced options", advanced, { advanced = !advanced }, Modifier.testTag("ebook-advanced"))
                 }
             }
             if (advanced) {
@@ -321,12 +321,9 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 else Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(if (shown == null && searching) "Finding an ebook…" else "Best match", style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                AnimatedVisibility(searching, enter = fadeIn(), exit = fadeOut()) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (shown != null) Working(Modifier.size(14.dp))
-                        Text(if (shown == null) "Checking ${tally.active} ${plural(tally.active, "source")}" else "Checking ${tally.active - tally.answered} more",
-                            style = MaterialTheme.typography.labelMedium, color = muted)
-                    }
+                // Once there's a best match, the remaining sources finish quietly.
+                AnimatedVisibility(searching && shown == null, enter = fadeIn(), exit = fadeOut()) {
+                    Text("Checking ${tally.active} ${plural(tally.active, "source")}", style = MaterialTheme.typography.labelMedium, color = muted)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -334,14 +331,13 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         when {
             shown != null -> AnimatedContent(shown, transitionSpec = { fadeIn(tween(Motion.MEDIUM, 90, Motion.EmphasizedDecelerate)).togetherWith(fadeOut(tween(90))) },
                 contentKey = { it.edition.id }, label = "best ebook") { best ->
+                // The edition itself leads; then what it is and where it's from in one line, and only a reason that helps read along.
                 Column {
                     val copy = bestEbookCopy(best, search.book, narrated)
-                    Text(copy.headline, style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("best-ebook-reasons"))
+                    Text(best.edition.title.ifBlank { search.book.title }, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(listOf(copy.headline, providers[best.providerId]?.name ?: best.edition.attribution).filter(String::isNotBlank).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp).testTag("best-ebook-reasons"))
                     if (copy.detail.isNotBlank()) Text(copy.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
-                    Text(best.edition.title, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
-                    val also = ebookAlsoFoundBy(search, best.edition.id)
-                    Text(listOfNotNull("From ${providers[best.providerId]?.name ?: best.edition.attribution}", also.takeIf { it.isNotEmpty() }?.let { "also found by ${it.joinToString()}" }).joinToString(" · "),
-                        style = MaterialTheme.typography.labelSmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
             }
             !search.complete && tally.active > 0 -> CardSkeleton()
@@ -370,11 +366,12 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             }
         }
         // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
-        if (shown == null && (search.complete && others == 0 || !search.complete)) Spacer(Modifier.height(if (search.complete) 14.dp else 48.dp))
+        // Other choices appear once the search has settled, so the count never ticks up under the listener.
+        if (!search.complete || others == 0) Spacer(Modifier.height(if (search.complete) 14.dp else 48.dp))
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
-                Text(if (search.complete) "Other choices · $others" else "Other choices · $others so far")
+                Text("Other choices · $others")
                 Icon(Icons.Rounded.ExpandMore, null, Modifier.padding(start = 4.dp).size(18.dp).rotate(turn))
             }
         }

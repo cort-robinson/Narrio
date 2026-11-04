@@ -79,7 +79,7 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 }
 
 /** What TorBox is, in one breath: it costs money, it's what most books need, and free recordings don't. */
-internal const val TORBOX_PITCH = "TorBox is a paid service that finds and streams most audiobooks. Copy the API key from your TorBox account and paste it here. Free LibriVox recordings play without it."
+internal const val TORBOX_PITCH = "TorBox is a paid service that can find and stream many more audiobooks. Copy the API key from your TorBox account and paste it here. Free LibriVox recordings play without it."
 
 internal fun connectError(error: Exception) = if (error is ProviderException) error.message.orEmpty() else "Couldn't save the key on this phone. Try again."
 
@@ -208,8 +208,9 @@ fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier
             IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         FlowRow(Modifier.padding(top = 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            FilledTonalButton(connect) { Text("Connect TorBox") }
-            browseFree?.let { TextButton(it) { Text("Browse free classics") } }
+            // Listening now comes first; connecting a paid account is the second step.
+            browseFree?.let { FilledTonalButton(it) { Text("Browse free classics") } }
+            if (browseFree == null) FilledTonalButton(connect) { Text("Connect TorBox") } else TextButton(connect) { Text("Connect TorBox") }
         }
     }
 }

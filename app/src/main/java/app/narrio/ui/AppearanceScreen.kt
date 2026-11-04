@@ -52,7 +52,7 @@ fun AppearanceEntry(settings: AppearanceSettings, open: () -> Unit) {
         Icon(Icons.Rounded.Palette, null, tint = MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f)) {
             Text("Appearance", style = MaterialTheme.typography.titleMedium)
-            Text("${settings.paletteName} · ${settings.mode.label}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${settings.mode.label} · ${settings.paletteName} colours", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Icon(Icons.Rounded.ChevronRight, null)
     }

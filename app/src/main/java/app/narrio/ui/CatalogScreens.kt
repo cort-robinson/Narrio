@@ -78,7 +78,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
-        if (query.isBlank() && torBoxNudge.visible(connected)) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(),
+        // While a book plays the listener is already listening; the hint waits for a quieter moment.
+        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(),
             browseFree = { vm.search(cat = "Classics") }.takeIf { category != "Classics" }) }
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
@@ -100,7 +101,11 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(catalog.books, key = { it.id }) { book -> BookRow(book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading)) }
+            items(catalog.books, key = { it.id }) { book ->
+                BookRow(book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading),
+                    // The book in the mini-player is marked where it appears in the list.
+                    trailing = if (playing.book?.id == book.id) ({ NarrationPulse(playing.playing, Modifier.padding(end = 8.dp).semantics { contentDescription = "Now playing" }) }) else null)
+            }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
@@ -165,6 +170,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val items = rememberShelfItems(shelf, formats)
     // A large shelf always shows its search; a smaller one opens it from the search button. A leftover query stays visible.
     val alwaysSearchable = shelf.size > SHELF_SEARCH_AT
+    // A shelf of a couple of books needs no filters, search, or sort; they appear once there's something to organize.
+    val organizable = shelf.size >= SHELF_ORGANIZE_AT || filter != ShelfFilter.ALL || typed.isNotEmpty()
     val searchable = alwaysSearchable || typed.isNotEmpty() || searchOpen
     val query = if (searchable) typed.trim() else ""
     val visible = remember(items, filter, query, sort) { sortShelf(items.filter { filter.matches(it.formats) && matchesShelfQuery(it.book, query) }, sort) }
@@ -178,10 +185,10 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 Text("My shelf", style = MaterialTheme.typography.displaySmall)
                 TextButton(addEbook, enabled = !importing.working) { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add ebook") }
             }
-            if (shelf.isNotEmpty()) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
+            if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
             if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),
                 close = if (alwaysSearchable) null else ({ vm.setShelfQuery(""); searchOpen = false }), focus = searchOpen)
-            if (shelf.isNotEmpty()) ShelfSortBar(visible.size, shelf.size, sort, vm::setShelfSort, Modifier.padding(top = 8.dp),
+            if (organizable) ShelfSortBar(visible.size, shelf.size, sort, vm::setShelfSort, Modifier.padding(top = 8.dp),
                 search = if (searchable) null else ({ searchOpen = true }))
         }
         if (importing.working || importing.error != null) item(key = "import") { EbookImportStatus(importing, addEbook, vm::dismissEbookImport, Modifier.animateItem()) }
@@ -205,7 +212,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         val row: @Composable LazyItemScope.(ShelfItem) -> Unit = { (entry, book, bookFormats) ->
             Column(Modifier.animateItem()) {
-                ShelfRow(entry, book, bookFormats, playing.book?.id == entry.bookId && playing.playing, { vm.continueBook(entry) }, { vm.open(book) },
+                ShelfRow(entry, book, bookFormats, playing.book?.id == entry.bookId && playing.playing, { vm.continueBook(entry) }, { vm.graph.playback.service?.toggle() }, { vm.open(book) },
                     { vm.setFinished(entry.bookId, it) }) { remove = book }
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Spacer(Modifier.height(20.dp))
@@ -224,20 +231,22 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
+private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, resume: () -> Unit, pause: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
     val finished = entry.finishedAt > 0
     val mode = formats.leadingMode
     var menu by remember { mutableStateOf(false) }
-    BookRow(book, details, recording = formats.audio, extra = { FormatMarks(formats, Modifier.padding(top = 2.dp)) }) {
+    // A shelf row is the book, its formats, and its place; the recording's details live on the book's page.
+    BookRow(book, details, recording = false, extra = { FormatMarks(formats, Modifier.padding(top = 2.dp)) }) {
         // Continue and the overflow sit together at the row's edge, so a shelf entry is one line of controls.
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
                 mode == PositionOrigin.READING -> IconButton(resume) {
                     Icon(Icons.AutoMirrored.Rounded.MenuBook, "${if (formats.lastMode == PositionOrigin.READING) "Continue reading" else "Read"} ${book.title}", tint = MaterialTheme.colorScheme.primary)
                 }
-                entry.sourceJson.isNotBlank() -> IconButton(resume) {
+                // The book playing now pauses from here, like the mini-player.
+                entry.sourceJson.isNotBlank() -> IconButton(if (nowPlaying) pause else resume) {
                     Crossfade(nowPlaying, label = "now playing") { live ->
-                        if (live) NarrationPulse(true, Modifier.semantics { contentDescription = "Now playing ${book.title}" })
+                        if (live) Icon(Icons.Rounded.Pause, "Pause ${book.title}", tint = MaterialTheme.colorScheme.primary)
                         else Icon(Icons.Rounded.PlayArrow, "Resume ${book.title}", tint = MaterialTheme.colorScheme.primary)
                     }
                 }

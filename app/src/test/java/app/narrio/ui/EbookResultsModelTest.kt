@@ -15,8 +15,8 @@ class EbookResultsModelTest {
         val copy = bestEbookCopy(BestEbook(ebook("c", "archive"), listOf(EbookMatchReason.WITH_RECORDING, EbookMatchReason.STRONG_MATCH,
             EbookMatchReason.EPUB, EbookMatchReason.LANGUAGE_MATCH), DeviceSourceProviderSettings.RECORDING_FILES), book)
         assertEquals("Comes with this recording · EPUB", copy.headline)
-        assertEquals("Most likely the narrated edition · Matches this title and author · English", copy.detail)
-        assertEquals("Free public-domain ebook · EPUB", bestEbookCopy(BestEbook(ebook("g"), listOf(EbookMatchReason.PUBLIC_DOMAIN), "gutenberg"), book).headline)
+        assertEquals("Most likely the narrated edition", copy.detail)
+        assertEquals("Free ebook · EPUB", bestEbookCopy(BestEbook(ebook("g"), listOf(EbookMatchReason.PUBLIC_DOMAIN), "gutenberg"), book).headline)
     }
 
     /** Other choices: one flat list without the best match, sure matches first, then the likeliest fit with the narration. */

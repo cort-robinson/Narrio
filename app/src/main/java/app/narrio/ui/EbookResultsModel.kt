@@ -28,7 +28,7 @@ fun bestEbookCopy(best: BestEbook, book: Audiobook, recording: Boolean = false):
         EbookMatchReason.WITH_RECORDING in reasons -> "Comes with this recording"
         EbookMatchReason.IN_YOUR_TORBOX in reasons -> "In your TorBox"
         EbookMatchReason.CACHED_IN_TORBOX in reasons -> "Ready in TorBox"
-        EbookMatchReason.PUBLIC_DOMAIN in reasons -> "Free public-domain ebook"
+        EbookMatchReason.PUBLIC_DOMAIN in reasons -> "Free ebook"
         else -> null
     }
     val caution = if (recording) cautionLabel(NarrationMatch.judge(book, best.edition, best.providerId, confirmed = true)) else null
@@ -36,8 +36,7 @@ fun bestEbookCopy(best: BestEbook, book: Audiobook, recording: Boolean = false):
         if (EbookMatchReason.WITH_RECORDING in reasons) add("Most likely the narrated edition")
         if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Likely matches the narration")
         caution?.let { add("May not follow the narration: ${it.replaceFirstChar(Char::lowercase)}") }
-        if (EbookMatchReason.STRONG_MATCH in reasons) add("Matches this title and author")
-        if (EbookMatchReason.LANGUAGE_MATCH in reasons && !BookMetadata.unknown(book.language)) add(book.language)
+        // Only what helps reading along is said; a matching title or the book's own language goes without saying.
     }
     return BestMatchCopy(listOfNotNull(availability, best.edition.format.ifBlank { null }).joinToString(" · "), detail.joinToString(" · "))
 }

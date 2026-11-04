@@ -208,7 +208,7 @@ class SourceSearchExperienceTest {
         val empty = Controlled(answers = arrayOf({ emptyList() })).also { it.answer() }
         val offline = fixture(mapOf("archive" to empty), connected = false)
         compose.waitUntil(10_000) { offline.sourceSearch.value.streamed?.complete == true }
-        compose.onNodeWithText("No free recording of this book").assertIsDisplayed()
+        compose.onNodeWithText("No free recording found").assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").assertIsDisplayed()
         top(); capture("sources-disconnected-night")
         openAdvanced()

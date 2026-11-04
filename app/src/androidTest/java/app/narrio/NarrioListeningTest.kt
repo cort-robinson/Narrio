@@ -27,7 +27,7 @@ class NarrioListeningTest {
         graph.preferences.edit().putBoolean("notificationAsked", true).commit()
         compose.runOnIdle { vm.open(NarrioViewModel.curated.first()) }
         compose.waitUntil(30_000) { vm.selection.value.book?.sources?.isNotEmpty() == true && !vm.selection.value.loading }
-        compose.onNodeWithText("Read by Ashleighjane").assertExists()
+        compose.onNodeWithTag("recording-summary").assertTextContains("Ashleighjane", substring = true)
     }
 
     /** Plays the open recording in [format], chosen in the recording chooser's Advanced view. */
@@ -63,7 +63,8 @@ class NarrioListeningTest {
         assertFalse(graph.playback.state.value.sleep.active)
         compose.runOnIdle { graph.playback.service!!.part(1, 120_000) }
         compose.waitUntil(30_000) { graph.playback.state.value.partIndex == 1 && graph.playback.state.value.positionMs >= 120_000 && graph.playback.state.value.playing }
-        compose.onNodeWithContentDescription("Bookmark this moment").performClick()
+        compose.onNodeWithText("Bookmarks").performClick()
+        compose.onNodeWithText("Add bookmark").performClick()
         val bookId = graph.playback.state.value.book!!.id
         compose.waitUntil(5000) { runBlocking { graph.library.bookmarks(bookId).first().isNotEmpty() } }
         val bookmark = runBlocking { graph.library.bookmarks(bookId).first().first() }

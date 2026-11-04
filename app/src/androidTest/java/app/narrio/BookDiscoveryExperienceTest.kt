@@ -218,7 +218,7 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { assertEquals(fast, vm.sourceSearch.value.choice); vm.chooseVersion(fast) }
         compose.runOnIdle { vm.sourceSearch.value = vm.sourceSearch.value.withSnapshot(snapshot(better, true)) }
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
-        compose.onNodeWithText("Read by Fixture Reader", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("recording-summary").assertTextContains("Fixture Reader", substring = true)
         compose.runOnIdle {
             assertEquals(fast, vm.sourceSearch.value.choice)
             assertEquals(better, vm.sourceSearch.value.streamed!!.best!!.recording)
@@ -313,7 +313,7 @@ class BookDiscoveryExperienceTest {
         show(SourceSearchState(book = book).withSnapshot(StreamedSourceSearch(book, listOf(
             SourceGroup("archive", "Internet Archive / LibriVox", SourceGroupStatus.DONE),
             SourceGroup("torbox-search", "TorBox search", SourceGroupStatus.SKIPPED, message = "Connect TorBox")), complete = true)))
-        compose.onNodeWithText("No free recording of this book").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("No free recording found").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").performScrollTo().assertIsDisplayed()
         // Searching again can't find more without TorBox, so it isn't offered.
         compose.onAllNodesWithText("Search again").assertCountEquals(0)

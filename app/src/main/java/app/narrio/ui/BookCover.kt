@@ -45,7 +45,11 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         val tiny = maxWidth < 100.dp
         var coverLoaded by remember(book.coverUrl) { mutableStateOf(book.coverUrl in loadedCovers) }
         val reveal by animateFloatAsState(if (coverLoaded) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate), label = "cover")
-        val fallback = reveal < 1f
+        // A cover that changes in place (a recording's own art replacing the catalog's) keeps the last art showing
+        // until the new one arrives, rather than flashing the drawn fallback in between.
+        var lastLoaded by remember { mutableStateOf<String?>(null) }
+        val previous = lastLoaded?.takeIf { it != book.coverUrl && it in loadedCovers }
+        val fallback = reveal < 1f && previous == null
         if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))
@@ -92,6 +96,11 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
             Text(book.author.removePrefix("Sir "), color = if ("secret garden" in key || !curated) Color(0xFFF4E4C9) else palette.second,
                 style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
+        if (previous != null && reveal < 1f) {
+            val context = LocalContext.current
+            val old = remember(previous, large) { ImageRequest.Builder(context).data(previous).size(if (large) 720 else 240).memoryCacheKey(coverKey(previous, large)).build() }
+            Image(rememberAsyncImagePainter(old), null, Modifier.matchParentSize().graphicsLayer { alpha = 1f - reveal }, contentScale = ContentScale.Fit)
+        }
         if (book.coverUrl.isNotBlank()) {
             // Thumbnails decode small; large covers show the cached thumbnail while their sharper decode
             // arrives, so a shared-element flight from a row never draws a blank frame.
@@ -101,7 +110,7 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                     .apply { if (large) placeholderMemoryCacheKey(coverKey(book.coverUrl, false)) }.build()
             }
             val painter = rememberAsyncImagePainter(request,
-                onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true }, onError = { coverLoaded = false })
+                onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false })
             // Square audiobook art in a book-shaped frame: its own softened light fills the margins. Large covers
             // blur the art on Android 12+; elsewhere a tiny upscaled decode gives the same soft light cheaply.
             if (coverLoaded) {

@@ -153,8 +153,8 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Finding an ebook…").assertIsDisplayed()
         compose.onNodeWithText("Checking 2 sources").assertIsDisplayed()
         capture("find-ebook-searching-night")
-        compose.waitUntil(10_000) { shown("Free public-domain ebook · EPUB") }
-        compose.onNodeWithText("Likely matches the narration · Matches this title and author · English").assertIsDisplayed()
+        compose.waitUntil(10_000) { shown("Free ebook · EPUB · Project Gutenberg") }
+        compose.onNodeWithText("Likely matches the narration").assertIsDisplayed()
         // The simple layer keeps each source's own section and status in Advanced; the file choice stays visible.
         compose.onNodeWithTag("ebook-sources-summary").assertDoesNotExist()
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Choose an EPUB or text file"))
@@ -337,7 +337,7 @@ class LibraryFormatsExperienceTest {
         capture("ebook-chooser-advanced-day")
         compose.onNodeWithTag("ebook-search-words-field").performTextReplacement(words)
         compose.onNodeWithTag("ebook-search-words-action").performClick()
-        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == words && shown("Free public-domain ebook · EPUB") }
+        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == words && shown("Free ebook · EPUB · Project Gutenberg") }
         assertEquals(words, vm.ebookWords(audioOnly.id))
         sheet.performScrollToNode(hasTestTag("ebook-custom-words"))
         compose.onNodeWithText("Searching for “$words”").assertIsDisplayed()

@@ -141,7 +141,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         },
         navigationIcon = { if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") } },
         actions = {
-            TextButton({ vm.save(book) }, Modifier.padding(end = if (saved) 0.dp else 8.dp), enabled = !saved) {
+            // Saved reads as a state, not a greyed-out button.
+            TextButton({ vm.save(book) }, Modifier.padding(end = if (saved) 0.dp else 8.dp), enabled = !saved,
+                colors = ButtonDefaults.textButtonColors(disabledContentColor = MaterialTheme.colorScheme.secondary)) {
                 AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(if (done) Icons.Rounded.LibraryAddCheck else Icons.Rounded.LibraryAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text(if (done) "Saved" else "Save")
@@ -181,12 +183,13 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                         review = { openChooser(ChooserView.ALL) }, findAudiobook = { vm.findSources(book.catalogIdentity(), force = true) },
                         searchAgain = { vm.findSources(book.catalogIdentity(), force = true) }, connectTorBox = vm::requestTorBoxConnect, sourceSettings = vm::openSourceSettings,
                         listenAgain = { vm.listenAgain(book.id) }, unfinish = { vm.setFinished(book.id, false) },
-                        pause = { vm.graph.playback.service?.toggle() },
+                        openPlayer = { vm.playerOpen.value = true },
                     ))
             }
             val read: @Composable () -> Unit = { ReadSlot(book, formats, leading = readingFirst, read = { vm.read(book) }, change = openEbooks) }
             if (readingFirst) read() else listen()
-            SharedPlaceCaption(formats, Modifier.padding(top = 10.dp))
+            // While it plays, the mini-player shows the live place; the saved one here would lag behind it.
+            if (playback.book?.id != book.id) SharedPlaceCaption(formats, Modifier.padding(top = 10.dp))
             Spacer(Modifier.height(16.dp))
             if (readingFirst) listen() else read()
             if (awaitingAudioSearch) {
@@ -255,10 +258,8 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?) {
     val identity: @Composable ColumnScope.() -> Unit = {
         Text(book.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = muted)
-        val narrator = recording?.let(::recordingNarrator).orEmpty()
-        // An unknown narrator is said once, in the line under Listen.
+        // A recording's narrator is said once, in the line under Listen beside Change.
         val line = when {
-            narrator.isNotBlank() -> "Read by $narrator"
             recording != null -> ""
             book.narratorFromCatalog && book.narrator.isNotBlank() -> "Read by ${book.narrator} in the catalog edition"
             else -> ""
@@ -293,7 +294,8 @@ class ListenActions(
     /** A finished book: back to its start, or back among the books being listened to. */
     val listenAgain: () -> Unit = {},
     val unfinish: () -> Unit = {},
-    val pause: () -> Unit = {},
+    /** The book already playing: its button opens the Listening room. */
+    val openPlayer: () -> Unit = {},
 )
 
 /**
@@ -315,8 +317,8 @@ private fun ListenSlot(
                 val copy = current.offline != null
                 when {
                     starting -> ModeButton({}, button, leading, enabled = false) { WorkingLabel("Starting…") }
-                    // The book already playing offers Pause, not a Resume that would do nothing.
-                    playingHere -> ModeButton(actions.pause, button, leading) { SlotLabel(Icons.Rounded.Pause, "Pause") }
+                    // The book already playing opens its Listening room; the mini-player below keeps Pause.
+                    playingHere -> ModeButton(actions.openPlayer, button, leading) { SlotLabel(Icons.Rounded.GraphicEq, "Open player") }
                     current.preparing && current.source == null && preparation?.ready != true -> ModeButton({}, button, leading, enabled = false) { WorkingLabel("Getting ready in TorBox…") }
                     !copy && needsTorBox(current.recording) && !connected ->
                         ModeButton(actions.connectTorBox, button, leading) { SlotLabel(Icons.Rounded.Link, if (current.started) "Connect TorBox to resume" else "Connect TorBox to listen") }
@@ -353,16 +355,17 @@ private fun ListenSlot(
             }
             streamed != null && tally != null -> {
                 val copy = noMatchCopy(streamed, tally)
+                // Why first, then what to do about it.
+                Column(Modifier.padding(bottom = 12.dp).semantics(mergeDescendants = true) { }) {
+                    Text(copy.title, style = MaterialTheme.typography.titleSmall)
+                    Text(copy.message, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
+                }
                 when (copy.kind) {
                     NoMatchKind.POSSIBLE_ONLY -> ModeButton(actions.review, button, leading) { SlotLabel(Icons.Rounded.Search, "Review possible matches") }
                     NoMatchKind.ALL_FAILED -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Try again") }
                     NoMatchKind.NEEDS_TORBOX -> ModeButton(actions.connectTorBox, button, leading) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
                     NoMatchKind.ALL_OFF -> ModeButton(actions.sourceSettings, button, leading) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
-                }
-                Column(Modifier.padding(top = 10.dp).semantics(mergeDescendants = true) { }) {
-                    Text(copy.title, style = MaterialTheme.typography.titleSmall)
-                    Text(copy.message, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
@@ -463,7 +466,7 @@ private fun OfflineRow(vm: NarrioViewModel, book: Audiobook, target: Audiobook?,
                 Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.primary)
                 Column(Modifier.weight(1f)) {
                     Text(listOfNotNull("Download for offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
-                    Text(if (wifiOnly) "Waits for Wi-Fi. Change this in Settings." else "Can use mobile data.", style = MaterialTheme.typography.bodySmall, color = muted)
+                    Text(if (wifiOnly) "Downloads only on Wi-Fi" else "Can use mobile data", style = MaterialTheme.typography.bodySmall, color = muted)
                 }
             }
         }

@@ -136,7 +136,6 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
             Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
             ReadAlongEntry(vm, book, dense = true, finding = findingEbook)
-            BookmarkNow(vm)
             PlayerMenu(vm, { coloursOpen = true })
         } else Column(pullDown) {
             PlayerHeading(vm, compact, { coloursOpen = true }) { findingEbook.value = true }
@@ -314,7 +313,7 @@ private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: ()
         if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
         Text("Now playing", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
-        BookmarkNow(vm)
+        // Bookmarks live in one place, the tool tray, whose sheet leads with Add bookmark.
         PlayerMenu(vm, openColours, findEbook)
     }
 }
@@ -322,7 +321,7 @@ private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: ()
 /**
  * The room's less frequent actions: this book's colours, finding its ebook to read along, and Close player. Close
  * stops listening and clears Now playing; the shelf keeps the book and its place. It sits behind the menu so a
- * sleepy tap meant for Bookmark can't end the session (the mini-player keeps it as a TalkBack action).
+ * sleepy tap can't end the session (the mini-player keeps it as a TalkBack action).
  */
 @Composable
 private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit, findEbook: (() -> Unit)? = null) {
@@ -343,18 +342,6 @@ private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit, findEbook: 
     }
 }
 
-/** Bookmarking gives a small pop and a confirming tick: the moment has been kept. */
-@Composable
-private fun BookmarkNow(vm: NarrioViewModel) {
-    val haptics = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
-    val pop = remember { Animatable(1f) }
-    IconButton({
-        haptics.performHapticFeedback(HapticFeedbackType.Confirm); vm.bookmark()
-        scope.launch { pop.snapTo(1.35f); pop.animateTo(1f, spring(dampingRatio = .4f, stiffness = Spring.StiffnessMedium)) }
-    }) { Icon(Icons.Rounded.BookmarkAdd, "Bookmark this moment", Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }, tint = MaterialTheme.colorScheme.primary) }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> Unit, sleep: () -> Unit, parts: () -> Unit, bookmarks: () -> Unit, dense: Boolean = false) {
@@ -370,7 +357,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))}" else "Loading length", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))}" else "−:––", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TimeLeftLine(state, Modifier.padding(top = if (dense) 0.dp else 4.dp), dense)
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))
@@ -486,5 +473,5 @@ internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}�
 @Composable
 internal fun ChoiceDialog(title: String, dismiss: () -> Unit, extra: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) },
-        confirmButton = { TextButton(dismiss) { Text("Done") } }, dismissButton = extra)
+        confirmButton = { TextButton(dismiss) { Text("Close") } }, dismissButton = extra)
 }
