@@ -219,7 +219,7 @@ class BookSourceDiscoveryTest {
 
     @Test fun anotherReadingNeverWearsTheCatalogNarratorsCoverOrPraise() {
         val catalog = book.copy(narrator = "Kate Beckinsale", narratorFromCatalog = true,
-            description = "A witty classic. English actress Kate Beckinsale is the perfect reader. Read it again.")
+            description = "A witty classic. English actress Kate Beckinsale is the perfect reader. Her performance brings it to life. Read it again.")
         val public = Audiobook("archive:pp", "Pride and Prejudice", "Jane Austen", narrator = "Karen Savage", coverUrl = "https://archive/cover.jpg")
         val described = SourceQuality.describe(public, catalog)
         assertEquals("https://archive/cover.jpg", described.coverUrl)

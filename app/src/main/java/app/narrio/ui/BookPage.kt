@@ -224,7 +224,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             Text("About this book", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(12.dp))
             // A different narrator's recording drops the catalog edition's praise for its own reader.
-            val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) }?.ifBlank { null } ?: book.description
+            val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) } ?: book.description
             Text(about.ifBlank { "No description has been found for this book yet." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = TextOverflow.Ellipsis)
             if (about.length > 500) TextButton({ expandedDescription = !expandedDescription }, Modifier.offset(x = (-12).dp)) { Text(if (expandedDescription) "Read less" else "Read more") }

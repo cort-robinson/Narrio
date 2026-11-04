@@ -236,8 +236,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             item(key = "finished-header") { FinishedHeader(finished.size, finishedOpen, finishedCollapsible, { showFinished = !showFinished }, Modifier.animateItem()) }
             if (finishedOpen) items(finished, key = { it.entry.bookId }, itemContent = row)
         }
-        // Adding an ebook file belongs with the shelf's ebooks; an empty shelf offers it outright.
-        if (shelf.isNotEmpty() && filter == ShelfFilter.EBOOKS && visible.isNotEmpty()) item(key = "add-file") {
+        // Adding an ebook file belongs with the shelf's ebooks; a shelf too small for filters always offers it, as an empty one does.
+        if (shelf.isNotEmpty() && (filter == ShelfFilter.EBOOKS && visible.isNotEmpty() || !organizable)) item(key = "add-file") {
             SettingsRow(Icons.Rounded.UploadFile, "Add your own ebook", "An EPUB or text file from your phone", { if (!importing.working) addEbook() }, Modifier.animateItem())
         }
     }
