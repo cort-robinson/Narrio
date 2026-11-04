@@ -79,6 +79,9 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 }
 
 /** What TorBox is, in one breath: it costs money, it's what most books need, and free recordings don't. */
+/** The one line Discover uses, on its hint and under the list, about what plays free and what needs TorBox. */
+internal const val FREE_AND_TORBOX = "Classics are usually free. Most new audiobooks need TorBox, a paid service."
+
 internal const val TORBOX_PITCH = "TorBox is a paid service that can find and stream many more audiobooks. Free LibriVox recordings play without it."
 
 internal fun connectError(error: Exception) = if (error is ProviderException) error.message.orEmpty() else "Couldn't save the key on this phone. Try again."
@@ -127,8 +130,9 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Two numbered steps: get the key, then paste it.
-        TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
-            Text("1. Sign in or create a TorBox account, then copy your API key"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+        Text("1. Sign in to TorBox, or create a paid account. Your API key is under Settings → API; copy it.", style = MaterialTheme.typography.labelLarge)
+        OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
+            Text("Open TorBox settings"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
         Text("2. Paste it below", style = MaterialTheme.typography.labelLarge)
         OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Your API key") }, singleLine = true,
@@ -201,13 +205,13 @@ fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier
         .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("torbox-nudge")) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Free classics play right away. Find them under Classics.", style = MaterialTheme.typography.titleSmall)
-                Text("Most new audiobooks need TorBox, a paid service.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(FREE_AND_TORBOX, style = MaterialTheme.typography.titleSmall)
             }
             IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         FlowRow(Modifier.padding(top = 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            FilledTonalButton(connect) { Text("Connect TorBox") }
+            // Discover already opens on free Classics; connecting a paid account is the secondary step here.
+            TextButton(connect, Modifier.offset(x = (-12).dp)) { Text("Connect TorBox") }
         }
     }
 }

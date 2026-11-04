@@ -125,7 +125,12 @@ class NarrioViewModel @JvmOverloads constructor(
     val catalog = MutableStateFlow(CatalogState())
     val selection = MutableStateFlow(SelectionState())
     val query = MutableStateFlow("")
-    val category = MutableStateFlow("All")
+    /**
+     * Where Discover opens: without TorBox, Classics, whose free public recordings play at once, so a first tap isn't a
+     * dead end; with it, everything.
+     */
+    val homeCategory = if (graph.credentials.read() != null) "All" else "Classics"
+    val category = MutableStateFlow(homeCategory)
     val destination = MutableStateFlow(0)
     val playerOpen = MutableStateFlow(false)
     val preparation = MutableStateFlow<Preparation?>(null)

@@ -259,7 +259,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "advanced") {
                 Column {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(bottom = 4.dp))
-                    SearchOtherSourcesRow("Your own search words, and each source's results", expanded = advanced, open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
+                    SearchOtherSourcesRow("Search for another edition", expanded = advanced, open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
                 }
             }
             if (advanced) {

@@ -47,7 +47,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val recent by vm.recentSearches.collectAsStateWithLifecycle()
     var searchFocused by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
-    val browse = query.isBlank() && category == "All"
+    val browse = query.isBlank() && (category == "All" || category == vm.homeCategory)
     // A book already on the shelf wears the cover it has there (its recording's own), so it looks the same everywhere.
     val shelfCovers = remember(shelf) { shelf.associate { it.bookId to runCatching { it.book().coverUrl }.getOrDefault("") }.filterValues(String::isNotBlank) }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -99,7 +99,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     Text(browseTitle(category), style = MaterialTheme.typography.headlineSmall)
                     // Once the TorBox hint is gone, the list itself still says what most of it needs.
                     if (!connected && category != "Classics" && !(torBoxNudge.visible(connected) && playing.book == null))
-                        Text("Most need TorBox. Classics are often free.", Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(FREE_AND_TORBOX, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (query.isNotBlank()) item(key = "results-title") {
