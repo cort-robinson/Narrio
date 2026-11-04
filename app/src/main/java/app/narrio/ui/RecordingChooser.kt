@@ -127,7 +127,7 @@ fun RecordingChooser(
                         tag = when {
                             mine -> listOfNotNull("Listening now", current.fraction?.takeIf { current.started }?.let { "${(it * 100).toInt().coerceIn(1, 99)}%" }).joinToString(" · ")
                             search?.possible?.any { it.id == recording.id } == true -> "Might be this book"
-                            current == null && recording.id == pinned.shown?.recording?.id -> "Best match"
+                            current == null && recording.id == pinned.shown?.recording?.id -> "Suggested"
                             else -> null
                         },
                         status = readiness(recording, connected, phone).takeIf { shared == null }, ready = phone || SourceQuality.ready(recording), enabled = !busy,

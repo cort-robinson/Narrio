@@ -273,7 +273,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithTag("book-details").performScrollToIndex(0)
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:${chosen.id}").assertIsDisplayed().assertIsSelected()
-        compose.onNodeWithText("Best match").assertIsDisplayed()
+        compose.onNodeWithText("Suggested").assertIsDisplayed()
         compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true).assertIsEnabled()
         // Advanced keeps the per-source sections, the release, its files, and how it plays.
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))

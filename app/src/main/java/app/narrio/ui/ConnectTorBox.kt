@@ -126,11 +126,11 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun change(value: String) { key = value.filterNot(Char::isWhitespace); edited() }
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Getting the key comes first; pasting it follows, and the field says how.
+        // Two numbered steps: get the key, then paste it.
         TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
-            Text("Get your key from TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+            Text("1. Copy your API key from TorBox settings"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Paste your TorBox key") }, singleLine = true,
+        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("2. Paste your key here") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -140,8 +140,7 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
                     Icon(Icons.Rounded.ContentPaste, "Paste your key")
                 } else IconButton({ shown = !shown }) { Icon(if (shown) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (shown) "Hide API key" else "Show API key") }
             },
-            supportingText = state.error?.let { error -> { Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("torbox-error")) } }
-                ?: { Text("Copy it from your TorBox account, then come back and paste it here.") },
+            supportingText = state.error?.let { error -> { Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("torbox-error")) } },
             shape = RoundedCornerShape(12.dp))
         Button(::submit, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("torbox-connect"), enabled = key.isNotBlank() && !state.connecting) {
             if (state.connecting) { CircularProgressIndicator(Modifier.size(18.dp), LocalContentColor.current, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
@@ -211,7 +210,7 @@ fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier
         }
         FlowRow(Modifier.padding(top = 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             // Listening now comes first; connecting a paid account is the second step.
-            browseFree?.let { FilledTonalButton(it) { Text("Show free classics") } }
+            browseFree?.let { FilledTonalButton(it) { Text("Show Classics") } }
             if (browseFree == null) FilledTonalButton(connect) { Text("Connect TorBox") } else TextButton(connect) { Text("Connect TorBox") }
         }
     }

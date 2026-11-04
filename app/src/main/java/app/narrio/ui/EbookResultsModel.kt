@@ -87,8 +87,8 @@ fun ebookNoMatchCopy(search: StreamedEbookSearch, tally: SearchTally): NoMatchCo
         tally.active == 0 -> NoMatchCopy(NoMatchKind.ALL_OFF, "No ebook source is searching", "Turn one on in Settings → Sources & add-ons, or add your own file below.")
         !search.complete -> NoMatchCopy(NoMatchKind.SEARCHING, "Finding the best ebook",
             "Checking ${tally.active} ${plural(tally.active, "source")} for this title and author.")
-        tally.possible > 0 && tally.found == 0 -> NoMatchCopy(NoMatchKind.POSSIBLE_ONLY, "No sure match",
-            "Nothing named this title and author closely enough to choose for you. Check the possible ${plural(tally.possible, "match", "matches")} below before adding one.")
+        tally.possible > 0 && tally.found == 0 -> NoMatchCopy(NoMatchKind.POSSIBLE_ONLY, "Couldn't confirm a match",
+            if (tally.possible == 1) "We found a possible match but couldn't confirm it's this book. Check it below." else "We found possible matches but couldn't confirm one is this book. Check them below.")
         tally.failed == tally.active -> NoMatchCopy(NoMatchKind.ALL_FAILED, "Couldn't reach any source",
             if (tally.active == 1) "$searched didn't answer. Check your connection, then try again."
             else "None of your ${tally.active} ebook sources answered. Check your connection, then try again.")

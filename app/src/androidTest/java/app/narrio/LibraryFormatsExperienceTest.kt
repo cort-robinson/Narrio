@@ -311,10 +311,9 @@ class LibraryFormatsExperienceTest {
         }
         val sheet = compose.onNodeWithTag("ebook-sheet")
         compose.onNodeWithTag("find-ebook-action").performClick()
-        compose.waitUntil(10_000) { shown("No sure match") }
+        compose.waitUntil(10_000) { shown("Couldn't confirm a match") }
         compose.onNodeWithTag("ebook-section:gutenberg").assertDoesNotExist()
-        // Possible matches wait in Other choices for the reader's check.
-        compose.onNodeWithText("Review possible matches").performClick()
+        // Possible matches show at once, below the card, for the reader's check.
         sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
         compose.onNodeWithText("Check the title and author").assertExists()
         capture("ebook-chooser-possible-day")
@@ -322,7 +321,7 @@ class LibraryFormatsExperienceTest {
         val toggle = compose.onNodeWithTag("ebook-other-choices-toggle")
         fun state(value: String) = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, value)
         sheet.performScrollToNode(hasTestTag("ebook-other-choices-toggle"))
-        toggle.assert(state("Expanded")).assertTextContains("1 other edition", substring = true).performClick()
+        toggle.assert(state("Expanded")).assertTextContains("1 possible match", substring = true).performClick()
         toggle.assert(state("Collapsed"))
         compose.onNodeWithTag("ebook-choice:${possible.id}").assertDoesNotExist()
         toggle.performClick()
@@ -355,7 +354,7 @@ class LibraryFormatsExperienceTest {
         assertEquals(words, fake.searchedWords.last())
         sheet.performScrollToNode(hasTestTag("ebook-custom-words"))
         compose.onNodeWithText("Use book details").performClick()
-        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == "" && shown("No sure match") }
+        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == "" && shown("Couldn't confirm a match") }
         assertEquals("", vm.ebookWords(audioOnly.id))
         compose.onNodeWithTag("ebook-custom-words").assertDoesNotExist()
 

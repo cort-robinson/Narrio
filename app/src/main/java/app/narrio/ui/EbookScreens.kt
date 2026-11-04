@@ -195,6 +195,10 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
         val bestIndex = 1 + (if (formats.editions.isNotEmpty()) 1 + formats.editions.size else 0) + (if (state.words.isNotBlank()) 1 else 0)
         fun scrollTo(index: Int) { scope.launch { if (animate) listState.animateScrollToItem(index) else listState.scrollToItem(index) } }
         val revealChoices = { showChoices = true; scrollTo(bestIndex + 1) }
+        // Only possible matches: they show at once, so "check it below" has something below to check.
+        LaunchedEffect(streamed.complete, streamed.book.id) {
+            if (streamed.complete && ebookNoMatchCopy(streamed, tally).kind == NoMatchKind.POSSIBLE_ONLY) showChoices = true
+        }
         LazyColumn(Modifier.fillMaxWidth().testTag("ebook-sheet")
             .pointerInput(book.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); interacted = true } },
             listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -232,7 +236,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             }
             if (showChoices) {
                 item(key = "choices-heading") {
-                    Text(if (choices.isEmpty()) "No other editions yet." else "Other editions", style = MaterialTheme.typography.titleSmall,
+                    Text(if (choices.isEmpty()) "No other editions yet." else if (pinned.shown == null) "Possible matches" else "Other editions", style = MaterialTheme.typography.titleSmall,
                         color = if (choices.isEmpty()) muted else MaterialTheme.colorScheme.onSurface, modifier = Modifier.semantics { heading() }.testTag("ebook-other-choices"))
                 }
                 items(choices, key = { "choice:${it.edition.id}" }) { choice ->
@@ -315,11 +319,11 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         }
         if (shown != null || !search.complete) {
             Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                // One spinner says the search is on; "Best match" waits until there is one.
+                // One spinner says the search is on; "Suggested" waits until there is one.
                 val searching = !search.complete && tally.active > 0
                 if (shown == null && searching) Working(Modifier.size(16.dp))
                 else Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(if (shown == null && searching) "Finding an ebook…" else "Best match", style = MaterialTheme.typography.labelLarge,
+                Text(if (shown == null && searching) "Finding an ebook…" else "Suggested", style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
                 // Once there's a best match, the remaining sources finish quietly.
                 AnimatedVisibility(searching && shown == null, enter = fadeIn(), exit = fadeOut()) {
@@ -358,7 +362,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             // The header already says it's searching; the action's place is held so nothing shifts when one is found.
             !search.complete && tally.active > 0 -> Spacer(button)
             else -> when (ebookNoMatchCopy(search, tally).kind) {
-                NoMatchKind.POSSIBLE_ONLY -> FilledTonalButton(reviewPossible, button) { SlotLabel(Icons.Rounded.Search, "Review possible matches") }
+                // The possible matches are already listed below the card.
+                NoMatchKind.POSSIBLE_ONLY -> Unit
                 NoMatchKind.ALL_FAILED -> FilledTonalButton(actions.searchAgain, button) { SlotLabel(Icons.Rounded.Refresh, "Try again") }
                 NoMatchKind.NEEDS_TORBOX -> FilledTonalButton(actions.connectTorBox, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
                 NoMatchKind.ALL_OFF -> FilledTonalButton(actions.sourceSettings, button) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
@@ -372,7 +377,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
                 // Named for what they are, so they aren't mistaken for Search other sources below.
-                Text("$others other ${if (others == 1) "edition" else "editions"}")
+                Text(if (shown == null) "$others possible ${if (others == 1) "match" else "matches"}" else "$others other ${if (others == 1) "edition" else "editions"}")
                 Icon(Icons.Rounded.ExpandMore, null, Modifier.padding(start = 4.dp).size(18.dp).rotate(turn))
             }
         }

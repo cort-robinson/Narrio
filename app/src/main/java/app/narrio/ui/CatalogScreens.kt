@@ -237,9 +237,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         // Adding a file is occasional, so it's a quiet last line rather than a header action; an empty shelf offers it outright.
         if (shelf.isNotEmpty()) item(key = "add-file") {
-            TextButton(addEbook, Modifier.offset(x = (-12).dp).animateItem(), enabled = !importing.working) {
-                Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add an ebook from your phone")
-            }
+            SettingsRow(Icons.Rounded.UploadFile, "Add your own ebook", "An EPUB or text file from your phone", { if (!importing.working) addEbook() }, Modifier.animateItem())
         }
     }
     remove?.let { book -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove from your shelf?") },
