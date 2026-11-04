@@ -56,8 +56,9 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val short = LocalConfiguration.current.screenHeightDp < SHORT_WINDOW_DP
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = if (short) 8.dp else 20.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (short) 16.dp else 24.dp)) {
-        item(key = "heading") {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // On a short window, results start under the search field; the name returns when the search is cleared.
+        if (!(short && query.isNotBlank())) item(key = "heading") {
+            Row(Modifier.fillMaxWidth().animateItem(), verticalAlignment = Alignment.CenterVertically) {
                 NarrioMark(); Spacer(Modifier.width(10.dp))
                 Text("narrio", style = MaterialTheme.typography.headlineMedium)
             }
@@ -261,9 +262,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         // Adding an ebook file belongs with the shelf's ebooks; a shelf too small for filters always offers it, as an empty one does.
         if (shelf.isNotEmpty() && (filter == ShelfFilter.EBOOKS && visible.isNotEmpty() || !organizable)) item(key = "add-file") {
-            // A footer action, set apart so the list holds only books.
+            // A footer action under the last row's divider, so the list holds only books.
             Column(Modifier.animateItem()) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 TextButton({ if (!importing.working) addEbook() }, Modifier.padding(top = 8.dp).heightIn(min = 48.dp).testTag("shelf-add-ebook")) {
                     Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add an ebook from your phone")
                 }

@@ -157,8 +157,8 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Fits this recording").assertIsDisplayed()
         // The simple layer keeps each source's own section and status in Advanced; the file choice stays visible.
         compose.onNodeWithTag("ebook-sources-summary").assertDoesNotExist()
-        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Choose a file from your phone"))
-        compose.onNodeWithText("Choose a file from your phone").assertExists()
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Add an ebook from your phone"))
+        compose.onNodeWithText("Add an ebook from your phone").assertExists()
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-advanced"))
         compose.onNodeWithTag("ebook-advanced").performClick()
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-sources-summary"))
@@ -311,13 +311,13 @@ class LibraryFormatsExperienceTest {
         }
         val sheet = compose.onNodeWithTag("ebook-sheet")
         compose.onNodeWithTag("find-ebook-action").performClick()
-        compose.waitUntil(10_000) { shown("1 possible match") }
+        compose.waitUntil(10_000) { shown("Possible match") }
         compose.onNodeWithTag("ebook-section:gutenberg").assertDoesNotExist()
-        // Possible matches show at once, below the card, for the reader's check.
+        // With no sure match, the possible one leads the card with the same action and its one doubt.
         sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
-        compose.onNodeWithText("Check the title and author").assertExists()
+        compose.onNodeWithText("Couldn't confirm the title and author. Check the text after adding it.").assertExists()
         capture("ebook-chooser-possible-day")
-        // With only possible matches, the card names them and they follow it directly: no toggle or second heading.
+        // Nothing else was found, so there's no list to open.
         compose.onNodeWithTag("ebook-other-choices-toggle").assertDoesNotExist()
         compose.onNodeWithTag("ebook-other-choices").assertDoesNotExist()
 
@@ -334,9 +334,9 @@ class LibraryFormatsExperienceTest {
         assertEquals(words, vm.ebookWords(audioOnly.id))
         sheet.performScrollToNode(hasTestTag("ebook-custom-words"))
         compose.onNodeWithText("Searching for “$words”").assertIsDisplayed()
-        // Other choices stay open from reviewing possible matches, now listing what the reader's words found.
+        // Other choices list what the reader's words found.
         sheet.performScrollToNode(hasTestTag("ebook-other-choices-toggle"))
-        compose.onNodeWithTag("ebook-other-choices-toggle").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Expanded"))
+        compose.onNodeWithTag("ebook-other-choices-toggle").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Collapsed")).performClick()
         sheet.performScrollToNode(hasTestTag("ebook-choice:${sample.id}"))
         compose.onNodeWithText("May not follow the narration: abridged or a sample").assertExists()
         theme(ThemeMode.NIGHT)
@@ -348,7 +348,7 @@ class LibraryFormatsExperienceTest {
         assertEquals(words, fake.searchedWords.last())
         sheet.performScrollToNode(hasTestTag("ebook-custom-words"))
         compose.onNodeWithText("Use book details").performClick()
-        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == "" && shown("1 possible match") }
+        compose.waitUntil(10_000) { fake.searchedWords.lastOrNull() == "" && shown("Possible match") }
         assertEquals("", vm.ebookWords(audioOnly.id))
         compose.onNodeWithTag("ebook-custom-words").assertDoesNotExist()
 

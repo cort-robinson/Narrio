@@ -37,6 +37,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextOverflow
@@ -138,8 +139,11 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         if (preparation?.let { !it.ready && it.problem.isEmpty() } == true && connected) while (isActive) { delay(15_000); vm.refreshPreparation(book) }
     }
     val scroll = TopAppBarDefaults.pinnedScrollBehavior()
-    // The bar names the book only once its own title has scrolled away.
-    val titleGone by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    // The bar names the book once its own title (the end of the first item) has scrolled under the bar.
+    val titleRoom = with(LocalDensity.current) { 120.dp.roundToPx() }
+    val titleGone by remember(listState) { derivedStateOf {
+        listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { it.index > 0 || -it.offset > it.size - titleRoom } ?: false
+    } }
     Column(modifier.fillMaxSize()) {
     TopAppBar(title = {
             AnimatedVisibility(titleGone, enter = fadeIn(), exit = fadeOut()) { Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -289,10 +293,10 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
         if (time != null) Text(time, style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
-    // A short window, such as a folding phone's cover screen, keeps the cover to about a quarter of its height so the
+    // A short window, such as a folding phone's cover screen, keeps the cover to about a fifth of its height so the
     // actions stay above the mini-player.
     val height = LocalConfiguration.current.screenHeightDp
-    val coverSize = if (height < SHORT_WINDOW_DP) (height * .24f).dp.coerceIn(140.dp, 240.dp) else 240.dp
+    val coverSize = if (height < SHORT_WINDOW_DP) (height * .2f).dp.coerceIn(140.dp, 240.dp) else 240.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
         // so the page's cover is too.

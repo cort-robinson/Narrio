@@ -142,6 +142,11 @@ fun ebookChoiceTitle(choice: EbookChoice, book: Audiobook): String {
     return if (title.isBlank() || choice.providerId == DeviceSourceProviderSettings.RECORDING_FILES && fileName) book.title else title
 }
 
+/** The one doubt about a possible match that leads the ebook sheet. */
+fun possibleMatchCaution(choice: EbookChoice): String =
+    if (choice.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "Couldn't confirm it's this book. Check the text after adding it."
+    else "Couldn't confirm the title and author. Check the text after adding it."
+
 /** Where a choice is from, unless its note already says it comes with the recording. */
 fun ebookChoiceSource(choice: EbookChoice, recording: Boolean): String? =
     choice.source.takeUnless { ebookChoiceNotes(choice, recording).any { it.kind == ChoiceNoteKind.LIKELY && shipped(choice) } }

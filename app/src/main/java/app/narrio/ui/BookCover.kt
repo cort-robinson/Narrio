@@ -26,6 +26,7 @@ import app.narrio.domain.Audiobook
 
 /** Covers already decoded this session render immediately, so shared transitions never flash a fallback. */
 private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>())
+private const val SLOW_COVER_MS = 2_500L
 
 @Composable
 fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null, blank: Boolean = false) {
@@ -59,8 +60,10 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         // A replacement that fails stops the bridge, so the old art never stands in for the new book indefinitely.
         val previous = lastLoaded?.takeIf { !failed && it != book.coverUrl && it in loadedCovers }
         val fallback = reveal < 1f && previous == null && drawn
-        // A large cover still on its way says so, rather than reading as a missing image.
-        if (large && !drawn && !coverLoaded && previous == null) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+        // A large cover that is slow to arrive says so, rather than reading as a missing image; a quick one stays a plain shape.
+        var slow by remember(book.coverUrl) { mutableStateOf(false) }
+        LaunchedEffect(book.coverUrl) { kotlinx.coroutines.delay(SLOW_COVER_MS); slow = true }
+        if (large && slow && !drawn && !coverLoaded && previous == null) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, strokeWidth = 2.5.dp)
         }
         if (fallback && "secret garden" in key) {
