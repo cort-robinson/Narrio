@@ -201,7 +201,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "intro") {
                 Text(if (formats.ebook) "Choose an edition" else "Find an ebook", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(if (narrated) "The best match for this recording comes first, so reading and listening share one place."
+                Text(if (narrated) "Add the book's text to read along as you listen. The best match for this recording comes first."
                      else "Pick the edition you want to read. It's saved on this phone with the book.", style = MaterialTheme.typography.bodyMedium, color = muted)
             }
             if (formats.editions.isNotEmpty()) {
@@ -464,6 +464,8 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier) {
     // A book saved before choosing a recording or ebook says what it's waiting for.
     if (!formats.audio && !formats.ebook) { Text("Saved · No recording yet", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
+    if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (formats.audio) FormatMark(Icons.Rounded.Headphones, "Audiobook")
         if (formats.ebook) FormatMark(Icons.AutoMirrored.Rounded.MenuBook, "Ebook")

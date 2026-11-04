@@ -19,7 +19,7 @@ enum class ThemeMode(val label: String) {
 
 @Serializable
 enum class ThemePalette(val label: String, val description: String, val seasonal: Boolean = false) {
-    LISTENING_ROOM("Listening room", "Copper & sage"),
+    LISTENING_ROOM("Copper", "Copper & sage, Narrio's own"),
     OCEAN("Ocean", "Sea glass & blue ink"),
     FOREST("Forest", "Fern & golden light"),
     ROSEWOOD("Rosewood", "Rose & plum"),

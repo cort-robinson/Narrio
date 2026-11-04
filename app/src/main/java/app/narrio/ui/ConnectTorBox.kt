@@ -79,7 +79,7 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 }
 
 /** What TorBox is, in one breath: it costs money, it's what most books need, and free recordings don't. */
-internal const val TORBOX_PITCH = "TorBox is a paid service that can find and stream many more audiobooks. Copy the API key from your TorBox account and paste it here. Free LibriVox recordings play without it."
+internal const val TORBOX_PITCH = "TorBox is a paid service that can find and stream many more audiobooks. Free LibriVox recordings play without it."
 
 internal fun connectError(error: Exception) = if (error is ProviderException) error.message.orEmpty() else "Couldn't save the key on this phone. Try again."
 
@@ -126,6 +126,10 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun change(value: String) { key = value.filterNot(Char::isWhitespace); edited() }
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Getting the key comes first; pasting it follows.
+        TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
+            Text("Get your key from TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+        }
         OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("TorBox API key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
@@ -141,9 +145,6 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
         Button(::submit, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("torbox-connect"), enabled = key.isNotBlank() && !state.connecting) {
             if (state.connecting) { CircularProgressIndicator(Modifier.size(18.dp), LocalContentColor.current, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
             Text(if (state.connecting) "Connecting…" else "Connect TorBox", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        }
-        TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
-            Text("Get your key from TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
         Text("Your key stays on this phone, encrypted. It's never backed up or shared.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

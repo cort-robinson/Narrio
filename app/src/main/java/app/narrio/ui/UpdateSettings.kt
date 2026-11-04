@@ -19,6 +19,8 @@ import app.narrio.updates.*
 fun UpdateSettings(updates: AppUpdates) {
     val state by updates.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Local and debug builds have no update channel; their version shows under About instead.
+    if (state.channel == null) return
     UpdateSettingsContent(state, BuildConfig.VERSION_NAME, updates::setAutomatic, updates::checkNow,
         updates::downloadNow, { updates.installNow(context) }, {
             context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")))

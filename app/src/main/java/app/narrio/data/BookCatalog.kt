@@ -69,7 +69,7 @@ class BookCatalog(
             }
         }
         val (found, covered) = unbranded(candidates)
-        val all = collapse(found, now())
+        val all = collapse(found, now()).let { if (terms.isBlank()) it else rankTyped(it, terms) }
         val books = all.filter { it.description.isNotBlank() && it.coverUrl.isNotBlank() }.ifEmpty { all }
         if (books.isEmpty() && (failed || appleFailed)) throw ProviderException("Book metadata is unavailable. Try again shortly, or listen from your saved shelf.")
         if (books.isNotEmpty() || !(failed || appleFailed)) synchronized(cache) {
@@ -126,6 +126,18 @@ class BookCatalog(
         }
 
         private fun identity(book: BookDetails) = BookIdentity.key(book.title, book.authors.joinToString(", "))
+
+        /**
+         * A typed search lists the book itself first: titles that are the query, then the rest by the same author
+         * (other editions of it), then everything else in the catalog's own order. "Pride and Prejudice" leads with
+         * Austen's novel and her annotated edition, before novels that borrow its name.
+         */
+        internal fun rankTyped(books: List<Audiobook>, query: String): List<Audiobook> {
+            val wanted = BookIdentity.normalize(query)
+            val exact = books.filter { BookIdentity.normalize(it.title) == wanted || BookIdentity.normalize("${it.title} ${it.author}") == wanted }
+            val authors = exact.map { BookIdentity.authors(it.author) }.toSet()
+            return books.sortedBy { book -> when { book in exact -> 0; BookIdentity.authors(book.author) in authors -> 1; else -> 2 } }
+        }
 
         internal fun collapse(candidates: List<BookDetails>, updatedAt: Long): List<Audiobook> = candidates
             .filter { it.title.isNotBlank() && it.authors.isNotEmpty() }

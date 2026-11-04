@@ -163,9 +163,13 @@ private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolea
         RadioButton(selected, null, Modifier.padding(horizontal = 12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             tag?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
-            Text(recordingNarrator(recording).ifBlank { "Narrator not listed" }, style = MaterialTheme.typography.titleSmall)
+            // An unnamed reading is named by what sets it apart: a full cast says so instead of "Narrator not listed".
+            val kind = recordingKind(recording, book)
+            val dramatized = SourceQuality.DRAMATIZED in kind
+            val narrator = recordingNarrator(recording).ifBlank { if (dramatized) "Full cast (dramatized)" else "Narrator not listed" }
+            Text(narrator, style = MaterialTheme.typography.titleSmall)
             // How long it is tells readings apart better than file size; the size shows when the length isn't known.
-            val facts = recordingKind(recording, book) + listOfNotNull(recording.durationMs.takeIf { it > 0 }?.let(::durationLabel) ?: bytes.takeIf { it > 0 }?.let(::sizeLabel))
+            val facts = kind.filterNot { dramatized && narrator.startsWith("Full cast") && it == SourceQuality.DRAMATIZED } + listOfNotNull(recording.durationMs.takeIf { it > 0 }?.let(::durationLabel) ?: bytes.takeIf { it > 0 }?.let(::sizeLabel))
             if (facts.isNotEmpty()) Text(facts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = muted)
             // Every match can share a narrator and format; their release names tell them apart.
             release?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
@@ -209,7 +213,7 @@ private fun SearchProgress(streamed: StreamedSourceSearch?, tally: SearchTally?,
 }
 
 /**
- * The pick's one action: Resume or Listen, Get it ready (one tap), or Connect TorBox; Download for offline; and, when leaving a recording with a saved place, what happens to
+ * The pick's one action: Resume or Listen, Get it ready (one tap), or Connect TorBox; and, when leaving a recording with a saved place, what happens to
  * each place. A format the listener picked explicitly is never swapped for another: when it can't play now, the
  * action gets it ready instead.
  */
@@ -229,7 +233,6 @@ private fun ChooserActions(
     val preparedThis = pendingThis != null && (entry?.state == "ready" || preparation?.ready == true && entry?.state == "preparing")
     val formats = readyFormats(pendingThis?.takeIf { preparedThis } ?: picked, phoneFormats)
     val automatic = current?.source?.format?.takeIf { mine } ?: defaultFormat(picked, vm.savedFormat(book.id), phoneFormats)
-    val shownFormat = format ?: automatic
     // Only a change from the automatic format is passed on, so the listener's own recording resumes its own audio.
     val override = format?.takeIf { it != automatic }
     // An explicit format plays only when that format is ready (or on the phone); it never falls back to another.
@@ -263,12 +266,7 @@ private fun ChooserActions(
                 Icon(Icons.Rounded.OfflinePin, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
                 Text("On this phone · plays without internet", style = MaterialTheme.typography.bodySmall, color = muted)
             }
-            ready && (connected || !needsTorBox(picked)) -> {
-                val bytes = current?.source?.takeIf { mine && override == null }?.parts?.sumOf { it.sizeBytes }?.takeIf { it > 0 } ?: downloadBytes(picked, shownFormat)
-                OutlinedButton({ close { vm.downloadRecording(picked, override, delivery) } }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("chooser-download"), enabled = !busy) {
-                    SlotLabel(Icons.Rounded.Download, listOfNotNull("Download for offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "))
-                }
-            }
         }
+        // Downloading for offline lives on the book's page, under Listen; the chooser only picks the recording.
     }
 }

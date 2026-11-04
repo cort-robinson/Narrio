@@ -119,16 +119,17 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         item {
             Text("Read along", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
-            SettingSwitch("Prepare read along automatically", "Gets the highlight ready ahead of time. Streamed books wait for Wi-Fi and charging.",
+            SettingSwitch("Prepare highlights ahead of time", "Lines up each book's text and audio in the background. Streamed books wait for Wi-Fi and charging.",
                 backgroundAlignment, vm::setBackgroundAlignment, Modifier.testTag("background-alignment"))
             Spacer(Modifier.height(12.dp))
-            SettingSwitch("Keep text synced with narration", "Matches the highlight to the audio as it plays. Nothing leaves this phone.",
+            SettingSwitch("Adjust highlights while listening", "Keeps the highlighted words in step as you read along. Nothing leaves this phone.",
                 readAlongSync, vm::setReadAlongSync, Modifier.testTag("read-along-sync"))
         }
         item { UpdateSettings(vm.graph.updates) }
         item {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
             Text("About Narrio", style = MaterialTheme.typography.headlineSmall)
+            Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 4.dp))
             Spacer(Modifier.height(12.dp))
             Text("Free LibriVox recordings play right away. With TorBox connected, Narrio also finds recordings of most other books. Your shelf, progress, and bookmarks stay on this phone.",
                 style = MaterialTheme.typography.bodyMedium, color = muted)

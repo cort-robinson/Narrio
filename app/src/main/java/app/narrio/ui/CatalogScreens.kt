@@ -48,6 +48,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     var searchFocused by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val browse = query.isBlank() && category == "All"
+    // A book already on the shelf wears the cover it has there (its recording's own), so it looks the same everywhere.
+    val shelfCovers = remember(shelf) { shelf.associate { it.bookId to runCatching { it.book().coverUrl }.getOrDefault("") }.filterValues(String::isNotBlank) }
     LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
         item(key = "heading") {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -102,7 +104,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 }
             }
             items(catalog.books, key = { it.id }) { book ->
-                BookRow(book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading),
+                BookRow(shelfCovers[book.id]?.let { book.copy(coverUrl = it) } ?: book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading),
                     // The book in the mini-player is marked where it appears in the list.
                     trailing = if (playing.book?.id == book.id) ({ NarrationPulse(playing.playing, Modifier.padding(end = 8.dp).semantics { contentDescription = "Now playing" }) }) else null)
             }
@@ -236,7 +238,12 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
     val mode = formats.leadingMode
     var menu by remember { mutableStateOf(false) }
     // A shelf row is the book, its formats, and its place; the recording's details live on the book's page.
-    BookRow(book, details, recording = false, extra = { FormatMarks(formats, Modifier.padding(top = 2.dp)) }) {
+    // Formats and the place sit in the text column beside the cover.
+    BookRow(book, details, recording = false, extra = {
+        FormatMarks(formats, Modifier.padding(top = 2.dp))
+        if (finished) FinishedMark(Modifier.padding(top = 6.dp))
+        else placeSummary(formats)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp)) }
+    }) {
         // Continue and the overflow sit together at the row's edge, so a shelf entry is one line of controls.
         Row(verticalAlignment = Alignment.CenterVertically) {
             when {
@@ -260,13 +267,6 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
                 }
             }
         }
-    }
-    if (finished) {
-        Spacer(Modifier.height(12.dp))
-        FinishedMark()
-    } else placeSummary(formats)?.let { place ->
-        Spacer(Modifier.height(12.dp))
-        ShelfProgress(place)
     }
     shelfPreparationLabel(entry.state)?.let { label ->
         Spacer(Modifier.height(12.dp))

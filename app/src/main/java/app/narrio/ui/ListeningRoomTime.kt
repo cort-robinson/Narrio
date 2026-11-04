@@ -37,7 +37,7 @@ internal fun sleepChoices(state: ListeningState): List<SleepChoice> = buildList 
     listOf(15, 30, 45, 60, 90).forEach { add(SleepChoice("In $it minutes", SleepMode.MINUTES, it)) }
     if (state.chapters.isNotEmpty() || state.sleep.mode == SleepMode.END_OF_CHAPTER) add(SleepChoice("At the end of this chapter", SleepMode.END_OF_CHAPTER))
     if ((state.source?.parts?.size ?: 0) > 1 || state.sleep.mode == SleepMode.END_OF_PART) add(SleepChoice("At the end of this audio part", SleepMode.END_OF_PART))
-    add(SleepChoice("Turn timer off", SleepMode.OFF))
+    add(SleepChoice("Off", SleepMode.OFF))
 }
 
 /** Whole minutes left on the timer, rounded up so it never reads 0 while running; null when unknown. */
@@ -86,7 +86,8 @@ internal fun SleepTimerDialog(state: ListeningState, choose: (SleepChoice) -> Un
         Column(Modifier.selectableGroup()) {
             sleepChoices(state).forEach { choice -> OptionRow(choice.label, choice.selected(state.sleep)) { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); choose(choice) } }
         }
-        if (shake != null) {
+        // Shaking only extends a running timer, so its switch shows only while one runs.
+        if (shake != null && state.sleep.active) {
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(shake, role = Role.Switch, onValueChange = setShake).padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
