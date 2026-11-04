@@ -289,10 +289,10 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
         if (time != null) Text(time, style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
-    // A short window, such as a folding phone's cover screen, keeps the cover to about a third of its height so the
+    // A short window, such as a folding phone's cover screen, keeps the cover to about a quarter of its height so the
     // actions stay above the mini-player.
     val height = LocalConfiguration.current.screenHeightDp
-    val coverSize = if (height < SHORT_WINDOW_DP) (height * .3f).dp.coerceIn(140.dp, 240.dp) else 240.dp
+    val coverSize = if (height < SHORT_WINDOW_DP) (height * .24f).dp.coerceIn(140.dp, 240.dp) else 240.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
         // so the page's cover is too.
