@@ -106,20 +106,18 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         item(key = "torbox") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.Hub, "Sources & add-ons", "Where Narrio finds audiobooks, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
+                SettingsRow(Icons.Rounded.Hub, "Sources", "Where Narrio finds audiobooks, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
                 AppearanceEntry(appearance, openAppearance)
             }
         }
+        // Listening's two everyday switches share one heading.
         item {
-            Text("Downloads", style = MaterialTheme.typography.headlineSmall)
+            Text("Listening", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
-        }
-        item {
-            Text("Read along", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Gets the highlight ready in the background and keeps it in step as you listen. For streamed books, it's prepared on Wi-Fi while charging.",
+            SettingSwitch("Read-along highlights", "Highlights the words as they're read. Streamed books are prepared on Wi-Fi while charging.",
                 backgroundAlignment, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         item { UpdateSettings(vm.graph.updates) }

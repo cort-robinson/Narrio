@@ -128,7 +128,7 @@ fun recordingKind(recording: Audiobook, book: Audiobook): List<String> {
 
 /** The one line under Listen: "Ray Porter · Unabridged · Ready now". */
 fun recordingLine(recording: Audiobook, book: Audiobook, connected: Boolean, onPhone: Boolean = false): String =
-    (listOf(recordingNarrator(recording).ifBlank { "Narrator not confirmed" }) + recordingKind(recording, book) + readiness(recording, connected, onPhone)).joinToString(" · ")
+    (listOf(recordingNarrator(recording).takeIf(String::isNotBlank)?.let { "Read by $it" } ?: "Narrator not confirmed") + recordingKind(recording, book) + readiness(recording, connected, onPhone)).joinToString(" · ")
 
 /** True when this recording plays through TorBox, so it needs a connected account. */
 fun needsTorBox(recording: Audiobook): Boolean = recording.provider != "archive" && !onThisPhone(recording)

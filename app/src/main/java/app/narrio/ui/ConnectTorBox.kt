@@ -211,7 +211,7 @@ fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier
         }
         FlowRow(Modifier.padding(top = 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             // Listening now comes first; connecting a paid account is the second step.
-            browseFree?.let { FilledTonalButton(it) { Text("Browse free classics") } }
+            browseFree?.let { FilledTonalButton(it) { Text("Show free classics") } }
             if (browseFree == null) FilledTonalButton(connect) { Text("Connect TorBox") } else TextButton(connect) { Text("Connect TorBox") }
         }
     }

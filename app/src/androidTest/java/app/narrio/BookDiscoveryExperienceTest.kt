@@ -262,7 +262,7 @@ class BookDiscoveryExperienceTest {
         val chosen = recording("fixture-recording", "Project Hail Mary (version 2)", "Fixture Reader")
         compose.runOnIdle { vm.sourceSearch.value = snapshot(book, listOf(chosen)) }
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Fixture Reader · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Fixture Reader · Free public recording")
         // About this book follows; with a recording to play, Change is the one way into the chooser.
         reveal(hasText(book.description)); compose.onNodeWithText(book.description).assertIsDisplayed()
         compose.onNodeWithTag("change-recording").assertExists()
@@ -291,7 +291,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithTag("recording:${other.id}").performClick()
         compose.runOnIdle { assertEquals(other.id, vm.sourceSearch.value.choice?.id) }
         // The page behind the sheet follows the pick.
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Second Reader · Free public recording").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Read by Second Reader · Free public recording").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun uncertainMatchesWaitForTheListenerToChooseFromSearchResults() {
@@ -352,7 +352,7 @@ class BookDiscoveryExperienceTest {
     private fun shelfBookResumesAndChanges(fixture: NarrioViewModel, mine: Audiobook, calls: AtomicInteger, appearance: AppearanceSettings) {
         // Its own recording leads with the time left; nothing is searched until the listener asks.
         compose.onNodeWithTag("listen-action").assertTextContains("Resume · 7 h 30 m left").assertIsEnabled()
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Free public recording")
         assertEquals(0, calls.get())
         capture("shelf-book-resume-night")
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
@@ -375,7 +375,7 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { assertEquals("lookup-fixture", fixture.sourceSearch.value.choice?.id) }
         // Picking isn't listening: the page still resumes the listener's recording.
         compose.onNodeWithTag("listen-action").assertTextContains("Resume · 7 h 30 m left")
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Free public recording")
     }
 
     @Test fun aDownloadedRecordingPlaysOffline() {

@@ -188,10 +188,10 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                         review = { openChooser(ChooserView.ALL) }, findAudiobook = { vm.findSources(book.catalogIdentity(), force = true) },
                         searchAgain = { vm.findSources(book.catalogIdentity(), force = true) }, connectTorBox = vm::requestTorBoxConnect, sourceSettings = vm::openSourceSettings,
                         listenAgain = { vm.listenAgain(book.id) }, unfinish = { vm.setFinished(book.id, false) },
-                        openPlayer = { vm.playerOpen.value = true },
+                        openPlayer = { vm.playerOpen.value = true }, addOwnAudio = { openChooser(ChooserView.ADVANCED) },
                     ))
             }
-            val read: @Composable () -> Unit = { ReadSlot(book, formats, leading = readingFirst, read = { vm.read(book) }, change = openEbooks) }
+            val read: @Composable () -> Unit = { ReadSlot(book, formats, leading = readingFirst, read = { vm.read(book) }, change = openEbooks, listenable = current != null || best != null) }
             if (readingFirst) read() else listen()
             // While it plays, the mini-player shows the live place; the saved one here would lag behind it.
             if (playback.book?.id != book.id) SharedPlaceCaption(formats, Modifier.padding(top = 10.dp))
@@ -277,12 +277,13 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         if (length != null) Text(durationLabel(length), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        // Wide panes put the book beside its identity instead of stretching a phone column.
+        // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
+        // so the page's cover is too.
         if (maxWidth >= 560.dp) Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-            BookCover(cover, Modifier.width(210.dp).height(306.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover)
+            BookCover(cover, Modifier.size(260.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover)
             Column(Modifier.weight(1f), content = identity)
         } else Column {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.width(190.dp).height(278.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(240.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
             Spacer(Modifier.height(24.dp))
             identity()
         }
@@ -304,6 +305,8 @@ class ListenActions(
     val unfinish: () -> Unit = {},
     /** The book already playing: its button opens the Listening room. */
     val openPlayer: () -> Unit = {},
+    /** Audio files the listener already has, added from the phone in the chooser's Advanced view. */
+    val addOwnAudio: () -> Unit = {},
 )
 
 /**
@@ -375,6 +378,8 @@ private fun ListenSlot(
                     NoMatchKind.ALL_OFF -> ModeButton(actions.sourceSettings, button, leading) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
+                // TorBox isn't the only way: audio files already on the phone play without it.
+                if (copy.kind == NoMatchKind.NEEDS_TORBOX) TextButton(actions.addOwnAudio, Modifier.offset(x = (-12).dp).testTag("add-own-audio")) { Text("Have the audio file? Add it") }
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
         }
@@ -394,7 +399,7 @@ private fun RecordingLine(text: String, change: () -> Unit) {
 
 /** Read with one line for the active edition and Change, or Find ebook when the book has none. */
 @Composable
-private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, read: () -> Unit, change: () -> Unit) {
+private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, read: () -> Unit, change: () -> Unit, listenable: Boolean = true) {
     val button = Modifier.fillMaxWidth().heightIn(min = 48.dp)
     // Without an ebook, finding one is a quiet row like Download for offline, so Listen stays the one big button.
     if (!formats.ebook) {
@@ -403,7 +408,8 @@ private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, re
             Icon(Icons.AutoMirrored.Rounded.MenuBook, null, tint = MaterialTheme.colorScheme.primary)
             Column(Modifier.weight(1f)) {
                 Text("Find ebook", style = MaterialTheme.typography.titleSmall)
-                Text("Read along as you listen", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // Reading along needs something to listen to; without a recording, the ebook is simply the book to read.
+                Text(if (listenable) "Read along as you listen" else "Read the book's text", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         return

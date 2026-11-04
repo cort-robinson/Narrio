@@ -45,11 +45,11 @@ class ListeningRoomTimeTest {
         val state = ListeningState(source = m4b, positionMs = 36_000_000 - 34_860_000, durationMs = 36_000_000, chapters = chapters)
         assertEquals("Ch 2 · 9 h 41 m left in book", timeLeft(state)!!.text)
         val faster = timeLeft(state.copy(speed = 1.25f))!!
-        assertEquals("Ch 2 · 9 h 41 m left in book (7 h 45 m at 1.25×)", faster.text)
-        assertEquals("Chapter 2, 9 hours 41 minutes left in book, 7 hours 45 minutes at 1.25 times speed", faster.spoken)
+        assertEquals("Ch 2 · 9 h 41 m left in book (7 h 44 m at 1.25×)", faster.text)
+        assertEquals("Chapter 2, 9 hours 41 minutes left in book, 7 hours 44 minutes at 1.25 times speed", faster.spoken)
         // Without chapters, a single file's countdown under the slider is all there is to say at 1×.
         assertNull(timeLeft(state.copy(chapters = emptyList())))
-        assertEquals("9 h 41 m left in book (4 h 51 m at 2×)", timeLeft(state.copy(chapters = emptyList(), speed = 2f))!!.text)
+        assertEquals("9 h 41 m left in book (4 h 50 m at 2×)", timeLeft(state.copy(chapters = emptyList(), speed = 2f))!!.text)
     }
 
     @Test fun previousFromAPartsStartUsesThatEarlierPartsOwnChapters() {

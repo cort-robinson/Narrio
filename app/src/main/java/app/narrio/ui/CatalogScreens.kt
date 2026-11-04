@@ -186,7 +186,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         item(key = "heading") {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.Center, itemVerticalAlignment = Alignment.CenterVertically) {
                 Text("My shelf", style = MaterialTheme.typography.displaySmall)
-                TextButton(addEbook, enabled = !importing.working) { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add from file") }
+                TextButton(addEbook, enabled = !importing.working) { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add ebook file") }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
             if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),

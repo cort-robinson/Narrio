@@ -154,9 +154,9 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             Column(Modifier.fillMaxWidth().height(hingeY.dp.coerceAtLeast(0.dp)).clipToBounds().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 heading(false)
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
-                    val coverHeight = minOf(maxHeight, maxWidth * .55f * 1.45f).coerceAtLeast(1.dp)
+                    val coverHeight = minOf(maxHeight, maxWidth * .55f).coerceAtLeast(1.dp)
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                        ListeningCover(book, state.playing || state.buffering, Modifier.width(coverHeight / 1.45f).height(coverHeight))
+                        ListeningCover(book, state.playing || state.buffering, Modifier.size(coverHeight))
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                             Text(book.title, style = MaterialTheme.typography.headlineLarge)
                             Spacer(Modifier.height(12.dp))
@@ -249,8 +249,8 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
         val wide = width >= 560.dp && width > height * 1.15f
         when {
             wide -> Row(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                val coverHeight = minOf(height - 16.dp, width * .4f * 1.45f).coerceAtLeast(120.dp)
-                ListeningCover(book, state.playing || state.buffering, pullDown.width(coverHeight / 1.45f).height(coverHeight))
+                val coverHeight = minOf(height - 16.dp, width * .4f).coerceAtLeast(120.dp)
+                ListeningCover(book, state.playing || state.buffering, pullDown.size(coverHeight))
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
                     TitleBlock(book, 2)
                     Spacer(Modifier.height(20.dp))
@@ -260,7 +260,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
             height < 480.dp -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp)) {
                 // A short, narrow pane (a landscape phone's split view): the book becomes a byline beside its cover.
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ListeningCover(book, state.playing || state.buffering, pullDown.width(64.dp).height(93.dp))
+                    ListeningCover(book, state.playing || state.buffering, pullDown.size(72.dp))
                     TitleBlock(book, 1)
                 }
                 Spacer(Modifier.height(12.dp))
@@ -271,12 +271,13 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 // Only when even a small cover cannot fit (short windows, very large text) does the stage scroll.
                 val density = LocalDensity.current
                 var controlsHeight by remember { mutableStateOf(430.dp) }
-                val cap = minOf(width * .82f * 1.45f, 470.dp)
+                // Audiobook art is square, and so is the room's cover.
+                val cap = minOf(width * .82f, 360.dp)
                 val space = height - controlsHeight - 40.dp
                 val coverHeight = minOf(space, cap).coerceAtLeast(if (compact) 150.dp else 180.dp)
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                     Box(Modifier.fillMaxWidth().then(pullDown).padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                        ListeningCover(book, state.playing || state.buffering, Modifier.width(coverHeight / 1.45f).height(coverHeight))
+                        ListeningCover(book, state.playing || state.buffering, Modifier.size(coverHeight))
                     }
                     Column(Modifier.onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }) {
                         TitleBlock(book, 2)

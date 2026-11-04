@@ -133,7 +133,7 @@ fun RecordingChooser(
                         status = readiness(recording, connected, phone).takeIf { shared == null }, ready = phone || SourceQuality.ready(recording), enabled = !busy,
                         bytes = downloadBytes(recording, current?.source?.format?.takeIf { mine } ?: defaultFormat(recording, vm.savedFormat(book.id))),
                         // Every match can share a narrator, and an unnamed one has nothing else to go by: their release names tell them apart.
-                        release = recording.releaseTitle.ifBlank { recording.title }.takeIf { (showAll || recordingNarrator(recording).isBlank()) && !mine }) { pick(recording) }
+                        release = releaseNote(recording, book).takeIf { (showAll || recordingNarrator(recording).isBlank()) && !mine }) { pick(recording) }
                 }
                 item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
@@ -146,7 +146,7 @@ fun RecordingChooser(
                         Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Column(Modifier.weight(1f)) {
                             Text("Search other sources", style = MaterialTheme.typography.titleSmall)
-                            Text("Every recording found, your own search words, and files", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Not the one you want? Search more, or add your own file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -184,6 +184,16 @@ private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolea
             }
         }
     }
+}
+
+/**
+ * What a release's name adds beyond the book's title: "Pride and Prejudice (version 6 dramatic reading)" becomes
+ * "Version 6 dramatic reading"; a name that is only the title adds nothing and is null.
+ */
+internal fun releaseNote(recording: Audiobook, book: Audiobook): String? {
+    val name = recording.releaseTitle.ifBlank { recording.title }.trim()
+    val rest = if (name.startsWith(book.title, ignoreCase = true)) name.substring(book.title.length) else name
+    return rest.trim(' ', '(', ')', '[', ']', '-', ':', ',', '·').replaceFirstChar(Char::uppercase).takeIf(String::isNotBlank)
 }
 
 /** The status every row shares, said once for the list: "All are free public recordings." Null keeps it per row. */

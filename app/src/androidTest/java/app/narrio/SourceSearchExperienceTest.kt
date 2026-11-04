@@ -160,7 +160,7 @@ class SourceSearchExperienceTest {
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("better-match").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertEquals(cached.id, fixture.sourceSearch.value.choice?.id) }
         compose.onNodeWithTag("recording:${cached.id}").assertIsSelected()
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Unabridged · Ready now")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Unabridged · Ready now")
 
         // A failed source retries on its own in Advanced; the rest keep their results.
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))

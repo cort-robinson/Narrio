@@ -115,16 +115,12 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
             }
             val painter = rememberAsyncImagePainter(request,
                 onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false; failed = true })
-            // Square audiobook art in a book-shaped frame: small covers fill the margins with the art's own softened
-            // light from a tiny upscaled decode; large ones use a flat matte.
+            // Art whose shape differs from its frame (square art in a book-shaped row, a portrait ebook cover in the
+            // square player) fills the margins with its own softened light from a tiny upscaled decode.
             if (coverLoaded) {
-                // Large covers sit on a flat matte like a mounted print; a blur of square art reads as smudged at this size.
-                if (large) Box(Modifier.matchParentSize().graphicsLayer { alpha = reveal }.background(MaterialTheme.colorScheme.surfaceContainerHighest))
-                else {
-                    val glow = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(16).memoryCacheKey("${book.coverUrl}#glow").build() }
-                    Image(rememberAsyncImagePainter(glow), null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Crop)
-                }
-                if (!large) Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
+                val glow = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(16).memoryCacheKey("${book.coverUrl}#glow").build() }
+                Image(rememberAsyncImagePainter(glow), null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Crop)
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
             }
             // Rows and the mini-player already read the title beside the art; only standalone covers describe it.
             Image(painter, if (large) "Cover of ${book.title}" else null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Fit)

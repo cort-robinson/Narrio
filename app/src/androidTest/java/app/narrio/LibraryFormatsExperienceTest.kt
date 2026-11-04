@@ -132,7 +132,7 @@ class LibraryFormatsExperienceTest {
         // Audio only: Resume on the book's own recording leads; Find ebook replaces Read.
         compose.runOnIdle { vm.selection.value = SelectionState(audioOnly) }
         compose.onNodeWithTag("listen-action").assertIsEnabled().assertTextContains("Resume · 1 h 35 m left")
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ruth Golding · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ruth Golding · Free public recording")
         compose.onNodeWithTag("find-ebook-action").assertIsDisplayed()
         compose.onNodeWithText("Listening · Part 3 of 12 · 20%").assertIsDisplayed()
         compose.onNodeWithText("Save").assertDoesNotExist()
