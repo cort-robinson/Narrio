@@ -119,7 +119,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights words as they're read. Prepared on Wi-Fi while charging.",
+            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books get it after preparing on Wi-Fi while charging.",
                 backgroundAlignment, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         item { AppearanceEntry(appearance, openAppearance) }
@@ -144,11 +144,10 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     }
 }
 
-/** A row into a settings page, styled like Appearance: icon, title, one line saying what's inside, and a chevron. */
+/** A row into a settings page, flat like the switches: icon, title, one line saying what's inside, and a chevron. */
 @Composable
 internal fun SettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String, open: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-        .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = open).padding(16.dp),
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = open).padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f)) {

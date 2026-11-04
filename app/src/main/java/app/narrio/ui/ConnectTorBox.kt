@@ -128,9 +128,10 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Two numbered steps: get the key, then paste it.
         TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
-            Text("1. Copy your API key from TorBox settings"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+            Text("1. Sign in or create a TorBox account, then copy your API key"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("2. Paste your key here") }, singleLine = true,
+        Text("2. Paste it below", style = MaterialTheme.typography.labelLarge)
+        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Your API key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -146,7 +147,7 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
             if (state.connecting) { CircularProgressIndicator(Modifier.size(18.dp), LocalContentColor.current, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
             Text(if (state.connecting) "Connecting…" else "Connect", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
-        Text("Your key stays on this phone, encrypted. It's never backed up or shared.",
+        Text("Stored encrypted on this phone and used only to connect to TorBox.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -155,16 +156,16 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
 @Composable
 fun TorBoxSettings(vm: NarrioViewModel, connected: Boolean) {
     var confirm by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp).testTag(if (connected) "torbox-connected" else "torbox-settings"),
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).testTag(if (connected) "torbox-connected" else "torbox-settings"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(if (connected) Icons.Rounded.CheckCircle else Icons.Rounded.Link, null, tint = if (connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
             Text("TorBox", style = MaterialTheme.typography.titleMedium)
-            Text(if (connected) "Connected on this phone" else "Not connected · Needed for most audiobooks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (connected) "Connected on this phone" else "Paid service · Finds and streams more audiobooks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (connected) TextButton({ confirm = true }, Modifier.heightIn(min = 48.dp)) { Text("Disconnect") }
-        else FilledTonalButton(vm::requestTorBoxConnect, Modifier.heightIn(min = 48.dp).testTag("torbox-settings-connect")) { Text("Connect") }
+        // The same filled Connect TorBox as on a book that needs it.
+        else Button(vm::requestTorBoxConnect, Modifier.heightIn(min = 48.dp).testTag("torbox-settings-connect")) { Text("Connect") }
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Disconnect TorBox?") },
         text = { Text("Your API key is removed from this phone and unfinished TorBox downloads pause. Downloaded audio, your shelf, and progress stay.") },
@@ -192,26 +193,21 @@ class TorBoxNudgeState(private val preferences: SharedPreferences) {
 @Composable
 fun rememberTorBoxNudge(preferences: SharedPreferences) = remember(preferences) { TorBoxNudgeState(preferences) }
 
-/**
- * Most chart books need TorBox to play; says so once at the top of browsing, with the way to connect and, for a
- * listener without it, the way to something that plays now: free classics.
- */
+/** Most chart books need TorBox to play; says so once at the top of browsing, pointing to free Classics and the way to connect. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier, browseFree: (() -> Unit)? = null) {
+fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
         .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("torbox-nudge")) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Free classics play right away.", style = MaterialTheme.typography.titleSmall)
+                Text("Free classics play right away. Find them under Classics.", style = MaterialTheme.typography.titleSmall)
                 Text("Most new audiobooks need TorBox, a paid service.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         FlowRow(Modifier.padding(top = 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            // Listening now comes first; connecting a paid account is the second step.
-            browseFree?.let { FilledTonalButton(it) { Text("Show Classics") } }
-            if (browseFree == null) FilledTonalButton(connect) { Text("Connect TorBox") } else TextButton(connect) { Text("Connect TorBox") }
+            FilledTonalButton(connect) { Text("Connect TorBox") }
         }
     }
 }

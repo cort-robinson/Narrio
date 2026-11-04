@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -140,16 +141,8 @@ fun RecordingChooser(
                     ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close)
                 }
                 item(key = "advanced") {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClickLabel = "Open advanced sources") { advanced = true }
-                        .heightIn(min = 56.dp).padding(vertical = 8.dp).semantics(mergeDescendants = true) { }.testTag("advanced-entry"),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Column(Modifier.weight(1f)) {
-                            Text("Search other sources", style = MaterialTheme.typography.titleSmall)
-                            Text("Not the one you want? Search more, or add your own file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    SearchOtherSourcesRow("Not the one you want? Search more, or add your own file.", expanded = null, open = { advanced = true },
+                        modifier = Modifier.padding(top = 8.dp).testTag("advanced-entry"))
                 }
             }
         }
@@ -194,6 +187,27 @@ internal fun releaseNote(recording: Audiobook, book: Audiobook): String? {
     val name = recording.releaseTitle.ifBlank { recording.title }.trim()
     val rest = if (name.startsWith(book.title, ignoreCase = true)) name.substring(book.title.length) else name
     return rest.trim(' ', '(', ')', '[', ']', '-', ':', ',', '·').replaceFirstChar(Char::uppercase).takeIf(String::isNotBlank)
+}
+
+/**
+ * "Search other sources", the same row in the recording chooser (where it opens Advanced, [expanded] null) and the
+ * ebook sheet (where it unfolds in place).
+ */
+@Composable
+internal fun SearchOtherSourcesRow(detail: String, expanded: Boolean?, open: () -> Unit, modifier: Modifier = Modifier) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val turn by androidx.compose.animation.core.animateFloatAsState(if (expanded == true) 180f else 0f, label = "sources")
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClickLabel = "Search other sources", onClick = open)
+        .heightIn(min = 56.dp).padding(vertical = 8.dp).semantics(mergeDescendants = true) { if (expanded != null) stateDescription = if (expanded) "Expanded" else "Collapsed" },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(Icons.Rounded.ManageSearch, null, tint = muted)
+        Column(Modifier.weight(1f)) {
+            Text("Search other sources", style = MaterialTheme.typography.titleSmall)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = muted)
+        }
+        if (expanded == null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = muted)
+        else Icon(Icons.Rounded.ExpandMore, null, Modifier.graphicsLayer { rotationZ = turn }, tint = muted)
+    }
 }
 
 /** The status every row shares, said once for the list: "All are free public recordings." Null keeps it per row. */

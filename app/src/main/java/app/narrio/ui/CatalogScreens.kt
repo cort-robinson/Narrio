@@ -82,8 +82,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
         }
         // While a book plays the listener is already listening; the hint waits for a quieter moment.
-        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(),
-            browseFree = { vm.search(cat = "Classics") }.takeIf { category != "Classics" }) }
+        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem()) }
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {
@@ -235,8 +234,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             item(key = "finished-header") { FinishedHeader(finished.size, finishedOpen, finishedCollapsible, { showFinished = !showFinished }, Modifier.animateItem()) }
             if (finishedOpen) items(finished, key = { it.entry.bookId }, itemContent = row)
         }
-        // Adding a file is occasional, so it's a quiet last line rather than a header action; an empty shelf offers it outright.
-        if (shelf.isNotEmpty()) item(key = "add-file") {
+        // Adding an ebook file belongs with the shelf's ebooks; an empty shelf offers it outright.
+        if (shelf.isNotEmpty() && filter == ShelfFilter.EBOOKS && visible.isNotEmpty()) item(key = "add-file") {
             SettingsRow(Icons.Rounded.UploadFile, "Add your own ebook", "An EPUB or text file from your phone", { if (!importing.working) addEbook() }, Modifier.animateItem())
         }
     }
