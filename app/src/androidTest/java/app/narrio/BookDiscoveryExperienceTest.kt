@@ -263,9 +263,10 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { vm.sourceSearch.value = snapshot(book, listOf(chosen)) }
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
         compose.onNodeWithTag("recording-summary").assertTextEquals("Fixture Reader · Free public recording")
-        // About this book comes before the sources, which the page sums up in one row.
+        // About this book follows; with a recording to play, Change is the one way into the chooser.
         reveal(hasText(book.description)); compose.onNodeWithText(book.description).assertIsDisplayed()
-        reveal(hasTestTag("recordings-row")); compose.onNodeWithTag("recordings-row").assertTextContains("1 found")
+        compose.onNodeWithTag("change-recording").assertExists()
+        compose.onNodeWithTag("recordings-row").assertDoesNotExist()
         compose.onNodeWithTag("listening-sources").assertDoesNotExist()
 
         // One chooser: distinct versions, the best match tagged, and Listen in one tap.
@@ -312,9 +313,10 @@ class BookDiscoveryExperienceTest {
         show(SourceSearchState(book = book).withSnapshot(StreamedSourceSearch(book, listOf(
             SourceGroup("archive", "Internet Archive / LibriVox", SourceGroupStatus.DONE),
             SourceGroup("torbox-search", "TorBox search", SourceGroupStatus.SKIPPED, message = "Connect TorBox")), complete = true)))
-        compose.onNodeWithText("No free public recording found").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("No free recording of this book").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Search again").performScrollTo().assertIsEnabled()
+        // Searching again can't find more without TorBox, so it isn't offered.
+        compose.onAllNodesWithText("Search again").assertCountEquals(0)
     }
 
     /** A book on the shelf with its own recording and a place a quarter of the way in, as listening leaves it. */

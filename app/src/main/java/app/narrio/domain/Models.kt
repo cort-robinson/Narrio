@@ -102,7 +102,8 @@ fun formatTime(ms: Long): String {
     val s = ms.coerceAtLeast(0) / 1000
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 }
-fun durationLabel(ms: Long): String = if (ms > 0) "${ms / 3_600_000}h ${(ms / 60_000) % 60}m" else "Length on playback"
+/** A book's length in the same words as its time left ("10 h 24 m"), so the two never disagree. */
+fun durationLabel(ms: Long): String = if (ms > 0) timeLeftLabel(ms) else "Length on playback"
 fun sizeLabel(bytes: Long): String = when { bytes >= 1_000_000_000 -> "%.1f GB".format(bytes / 1_000_000_000.0); bytes >= 1_000_000 -> "%.0f MB".format(bytes / 1_000_000.0); else -> "%.0f KB".format(bytes / 1000.0) }
 fun providerLabel(book: Audiobook) = when (book.provider) { "catalog" -> book.metadataSource.ifBlank { "Book catalog" }; "torbox" -> "My TorBox"; "knaben" -> book.sourceAddonName.ifBlank { "Indexed release" }; "local" -> "On this phone"; else -> "LibriVox" }
 /** Where a source's audio plays from. */

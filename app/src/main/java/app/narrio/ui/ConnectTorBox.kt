@@ -78,6 +78,9 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
     }
 }
 
+/** What TorBox is, in one breath: it costs money, it's what most books need, and free recordings don't. */
+internal const val TORBOX_PITCH = "TorBox is a paid service that finds and streams most audiobooks. Copy the API key from your TorBox account and paste it here. Free LibriVox recordings play without it."
+
 internal fun connectError(error: Exception) = if (error is ProviderException) error.message.orEmpty() else "Couldn't save the key on this phone. Try again."
 
 /**
@@ -101,7 +104,7 @@ fun ConnectTorBoxSheet(vm: NarrioViewModel) {
         } }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Connect TorBox", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
-            Text("TorBox finds and streams audiobooks for you, including most popular books. Free LibriVox recordings play without it.",
+            Text(TORBOX_PITCH,
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TorBoxConnectForm(state, vm::connect, vm::clearTorBoxError)
         }
@@ -109,7 +112,7 @@ fun ConnectTorBoxSheet(vm: NarrioViewModel) {
 }
 
 /**
- * The API key field shared by the sheet and Settings: paste fills it, Done connects, and a failed attempt says why
+ * The Connect TorBox sheet's API key field: paste fills it, Done connects, and a failed attempt says why
  * right under the key. The key is never saved in UI state; only the encrypted credential outlives the field.
  */
 @Composable
@@ -140,33 +143,27 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
             Text(if (state.connecting) "Connecting…" else "Connect TorBox", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
         TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
-            Text("Find my API key"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+            Text("Get your key from TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        Text("Your plan needs API access. The key is protected by Android Keystore and never synced, backed up, or included in logs.",
+        Text("Your key stays on this phone, encrypted. It's never backed up or shared.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
-/** Settings' TorBox section: the key form until connected, then one compact row. Disconnecting asks first. */
+/** Settings' TorBox row: what it's for and Connect (the same sheet as everywhere) until connected, then Disconnect. Disconnecting asks first. */
 @Composable
 fun TorBoxSettings(vm: NarrioViewModel, connected: Boolean) {
-    val state by vm.torBox.collectAsStateWithLifecycle()
     var confirm by remember { mutableStateOf(false) }
-    if (connected) Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp).testTag("torbox-connected"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(Icons.Rounded.CheckCircle, null, tint = MaterialTheme.colorScheme.secondary)
-        Column(Modifier.weight(1f)) {
-            Text("TorBox", style = MaterialTheme.typography.titleSmall)
-            Text("Connected on this phone", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
+        .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp).testTag(if (connected) "torbox-connected" else "torbox-settings"),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Icon(if (connected) Icons.Rounded.CheckCircle else Icons.Rounded.Link, null, tint = if (connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            Text("TorBox", style = MaterialTheme.typography.titleMedium)
+            Text(if (connected) "Connected on this phone" else "Not connected · Needed for most audiobooks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        TextButton({ confirm = true }, Modifier.heightIn(min = 48.dp)) { Text("Disconnect") }
-    } else Column {
-        Text("TorBox", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(8.dp))
-        Text("Connect TorBox to listen beyond free LibriVox recordings: it finds, prepares, and streams audiobooks, and lets you browse the audio in your account.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.height(16.dp))
-        TorBoxConnectForm(state, vm::connect, vm::clearTorBoxError)
+        if (connected) TextButton({ confirm = true }, Modifier.heightIn(min = 48.dp)) { Text("Disconnect") }
+        else FilledTonalButton(vm::requestTorBoxConnect, Modifier.heightIn(min = 48.dp).testTag("torbox-settings-connect")) { Text("Connect") }
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Disconnect TorBox?") },
         text = { Text("Your API key is removed from this phone and unfinished TorBox downloads pause. Downloaded audio, your shelf, and progress stay.") },
@@ -194,22 +191,25 @@ class TorBoxNudgeState(private val preferences: SharedPreferences) {
 @Composable
 fun rememberTorBoxNudge(preferences: SharedPreferences) = remember(preferences) { TorBoxNudgeState(preferences) }
 
-/** Most chart books need TorBox to play; says so once at the top of browsing, with the way to connect. */
+/**
+ * Most chart books need TorBox to play; says so once at the top of browsing, with the way to connect and, for a
+ * listener without it, the way to something that plays now: free classics.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier, browseFree: (() -> Unit)? = null) {
     Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-        .padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 6.dp).testTag("torbox-nudge")) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Icon(Icons.Rounded.Link, null, Modifier.padding(top = 2.dp).size(20.dp), tint = MaterialTheme.colorScheme.secondary)
-            Column(Modifier.weight(1f).padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Most of these books need TorBox to listen.", style = MaterialTheme.typography.titleSmall)
-                Text("Free LibriVox recordings work without it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("torbox-nudge")) {
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Most popular audiobooks need TorBox, a paid service.", style = MaterialTheme.typography.titleSmall)
+                Text("Free classics from LibriVox play right away.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        FlowRow(Modifier.padding(top = 8.dp, start = 32.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        FlowRow(Modifier.padding(top = 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             FilledTonalButton(connect) { Text("Connect TorBox") }
-            TextButton(dismiss) { Text("Not now") }
+            browseFree?.let { TextButton(it) { Text("Browse free classics") } }
         }
     }
 }

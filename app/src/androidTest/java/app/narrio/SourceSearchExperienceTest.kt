@@ -114,7 +114,8 @@ class SourceSearchExperienceTest {
     private fun revealAdvanced(matcher: SemanticsMatcher) = advanced().performScrollToNode(matcher)
     /** Opens the recording chooser from the page's summary row, then its Advanced view. */
     private fun openAdvanced() {
-        reveal(hasTestTag("recordings-row")); compose.onNodeWithTag("recordings-row").performClick()
+        val entry = if (compose.onAllNodesWithTag("change-recording").fetchSemanticsNodes().isNotEmpty()) "change-recording" else "recordings-row"
+        reveal(hasTestTag(entry)); compose.onNodeWithTag(entry).performClick()
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
         compose.onNodeWithTag("advanced-entry").performClick()
         advanced().assertExists()
@@ -207,7 +208,7 @@ class SourceSearchExperienceTest {
         val empty = Controlled(answers = arrayOf({ emptyList() })).also { it.answer() }
         val offline = fixture(mapOf("archive" to empty), connected = false)
         compose.waitUntil(10_000) { offline.sourceSearch.value.streamed?.complete == true }
-        compose.onNodeWithText("No free public recording found").assertIsDisplayed()
+        compose.onNodeWithText("No free recording of this book").assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").assertIsDisplayed()
         top(); capture("sources-disconnected-night")
         openAdvanced()
@@ -220,7 +221,7 @@ class SourceSearchExperienceTest {
         val original = settings.providers.value.map { it.id to it.enabled }
         try {
             compose.runOnIdle { originalAppearance = vm.appearance.value; vm.connected.value = false; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.DAY)); vm.navigate(2) }
-            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
+            compose.onNodeWithTag("sources-entry").performScrollTo().performClick()
             compose.onNodeWithText("TorBox isn't connected").assertIsDisplayed()
             compose.onNodeWithTag("addon-options").performScrollToNode(hasTestTag("source-row:torbox-library"))
             capture("source-settings-day")

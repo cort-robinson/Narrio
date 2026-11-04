@@ -91,11 +91,12 @@ class AdvancedSourcingExperienceTest {
     private fun reveal(matcher: SemanticsMatcher) = advanced().performScrollToNode(matcher)
     private fun has(tag: String) = compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
-    /** The book page's Recordings & sources row opens the chooser. */
+    /** Change beside the recording line opens the chooser; a page without a recording has the Recordings & sources row. */
     private fun openChooser() {
         compose.waitUntil(5_000) { has("book-details") }
-        compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("recordings-row"))
-        compose.onNodeWithTag("recordings-row").performClick()
+        val entry = if (has("change-recording")) "change-recording" else "recordings-row"
+        compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag(entry))
+        compose.onNodeWithTag(entry).performClick()
         compose.waitUntil(5_000) { has("recording-chooser") }
     }
     /** The chooser's last row opens Advanced. */

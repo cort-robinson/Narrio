@@ -165,8 +165,8 @@ class ConnectTorBoxTest {
 
         // Its back arrow returns to Settings, which opens on TorBox; Add-ons' own Connect TorBox opens the sheet.
         compose.onNodeWithContentDescription("Back to settings").performClick()
-        compose.onNodeWithTag("torbox-key").assertIsDisplayed()
-        compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").assertIsDisplayed()
+        compose.onNodeWithTag("torbox-settings").assertIsDisplayed()
+        compose.onNodeWithTag("sources-entry").assertIsDisplayed()
         compose.runOnIdle { fixture.connected.value = true }
         compose.onNodeWithTag("torbox-connected").assertIsDisplayed()
         compose.onNodeWithText("Disconnect").performClick()
@@ -182,7 +182,7 @@ class ConnectTorBoxTest {
             vm.connected.value = false; vm.navigate(0); vm.search("")
         }
         compose.onNodeWithTag("torbox-nudge").assertIsDisplayed()
-        compose.onNodeWithText("Most of these books need TorBox to listen.").assertIsDisplayed()
+        compose.onNodeWithText("Most popular audiobooks need TorBox, a paid service.").assertIsDisplayed()
         compose.runOnIdle { vm.connected.value = true }
         compose.onNodeWithTag("torbox-nudge").assertDoesNotExist()
         compose.runOnIdle { vm.connected.value = false }
@@ -198,7 +198,7 @@ class ConnectTorBoxTest {
         compose.runOnIdle { vm.search("hail mary") }
         compose.onNodeWithTag("torbox-nudge").assertDoesNotExist()
         compose.runOnIdle { vm.search("") }
-        compose.onNodeWithText("Not now").performClick()
+        compose.onNodeWithContentDescription("Not now").performClick()
         compose.onNodeWithTag("torbox-nudge").assertDoesNotExist()
         compose.runOnIdle { assertTrue(vm.graph.preferences.getLong(TorBoxNudge.KEY, 0) > 0) }
         compose.activityRule.scenario.recreate()

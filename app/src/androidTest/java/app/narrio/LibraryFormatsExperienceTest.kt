@@ -99,14 +99,14 @@ class LibraryFormatsExperienceTest {
         visible("Ebooks", ebookOnly.title, both.title)
         theme(ThemeMode.DAY)
         capture("shelf-ebooks-day")
-        visible("Both", both.title)
+        visible("Audio + ebook", both.title)
         visible("Audiobooks", audioOnly.title, both.title)
         visible("All", audioOnly.title, ebookOnly.title, both.title)
 
         // A filter with nothing in it explains how to fill it and offers the way back.
         compose.runOnIdle { fake.formats.value = formats - both.id + (both.id to formats.getValue(both.id).copy(editions = emptyList())) }
-        compose.onNodeWithText("Both").performClick()
-        compose.onNodeWithText("No books with both formats yet").assertIsDisplayed()
+        compose.onNodeWithText("Audio + ebook").performClick()
+        compose.onNodeWithText("No books with audio and an ebook yet").assertIsDisplayed()
         capture("shelf-both-empty-day")
         compose.onNodeWithText("Show all", substring = true).performClick()
         compose.runOnIdle { fake.formats.value = formats }

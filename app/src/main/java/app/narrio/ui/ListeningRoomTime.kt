@@ -112,7 +112,7 @@ internal data class TimeLeft(val text: String, val spoken: String)
 /**
  * Time left in the whole book when every part's length is known, otherwise in this part; never a guess. The chapter
  * number appears for single-file books, whose chapters number the whole book. At other speeds it adds the listening
- * time at that speed.
+ * time at that speed. A single file without chapters at 1× has nothing to add to the slider's countdown.
  */
 internal fun timeLeft(state: ListeningState): TimeLeft? {
     val book = state.bookTime
@@ -123,6 +123,8 @@ internal fun timeLeft(state: ListeningState): TimeLeft? {
     }
     val chapter = chapterIndexAt(state.chapters, state.positionMs).takeIf { it >= 0 && book != null && state.source?.parts?.size == 1 }?.let { it + 1 }
     val faster = state.speed != 1f && state.speed > 0f
+    // One file without chapters at normal speed: the slider's own countdown already says exactly this.
+    if (chapter == null && !faster && (state.source?.parts?.size ?: 1) == 1) return null
     val text = listOfNotNull(chapter?.let { "Ch $it" }, "${timeLeftLabel(remaining)} left in $where").joinToString(" · ") +
         if (faster) " (${timeLeftLabel(atSpeed(remaining, state.speed))} at ${speedLabel(state.speed)})" else ""
     val spoken = listOfNotNull(chapter?.let { "Chapter $it" }, "${spokenTimeLeft(remaining)} left in $where",
@@ -148,9 +150,12 @@ internal fun ChapterTitleRow(vm: NarrioViewModel, state: ListeningState, dense: 
     val parts = state.source?.parts?.size ?: 1
     val chapters = state.chapters.isNotEmpty()
     val noun = if (chapters) "chapter" else "part"
+    val title = state.placeTitle
+    // A single file without chapters has no place to name; the book's own title above says it all.
+    if (title == null && subtitle == null && !chapters && parts <= 1) return
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(state.chapter?.title ?: state.part?.title ?: "Ready to listen", Modifier.testTag("listening-title"), style = MaterialTheme.typography.titleSmall,
+            if (title != null) Text(title, Modifier.testTag("listening-title"), style = MaterialTheme.typography.titleSmall,
                 maxLines = if (dense) 1 else 2, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) Text(subtitle, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

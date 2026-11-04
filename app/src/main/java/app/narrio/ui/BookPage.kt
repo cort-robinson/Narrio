@@ -75,6 +75,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val installedAddons by vm.graph.addons.installed.collectAsStateWithLifecycle()
     val ebookSearchLinks = remember(book.title, book.author, installedAddons) { vm.graph.addons.ebookSearchLinks(book) }
     val loadedFormats by vm.detailFormats.collectAsStateWithLifecycle()
+    val playback by vm.playback.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // The chooser opens on its simple list, every match ("Review possible matches"), or Advanced.
     var chooser by remember(book.id) { mutableStateOf<ChooserView?>(null) }
@@ -175,11 +176,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             val listen: @Composable () -> Unit = {
                 ListenSlot(book, current, best, streamed, tally, connected, busy, starting, preparation, leading = !readingFirst, awaitingAudioSearch, onPhone,
                     announcement = streamed?.takeIf { current == null && tally != null }?.let { searchAnnouncement(it, pinned.shown, tally!!, book) },
-                    finished = finished, actions = ListenActions(
+                    finished = finished, playingHere = playback.book?.id == book.id && (playback.playing || playback.buffering), actions = ListenActions(
                         listen = { vm.listenTo(it) }, getReady = { vm.getReady(it) }, change = { openChooser(ChooserView.LIST) },
                         review = { openChooser(ChooserView.ALL) }, findAudiobook = { vm.findSources(book.catalogIdentity(), force = true) },
                         searchAgain = { vm.findSources(book.catalogIdentity(), force = true) }, connectTorBox = vm::requestTorBoxConnect, sourceSettings = vm::openSourceSettings,
                         listenAgain = { vm.listenAgain(book.id) }, unfinish = { vm.setFinished(book.id, false) },
+                        pause = { vm.graph.playback.service?.toggle() },
                     ))
             }
             val read: @Composable () -> Unit = { ReadSlot(book, formats, leading = readingFirst, read = { vm.read(book) }, change = openEbooks) }
@@ -206,16 +208,18 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             Spacer(Modifier.height(24.dp))
             Text("About this book", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(12.dp))
-            Text(book.description.ifBlank { "No description has been found for this book yet." }, style = MaterialTheme.typography.bodyMedium,
+            // A different narrator's recording drops the catalog edition's praise for its own reader.
+            val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) }?.ifBlank { null } ?: book.description
+            Text(about.ifBlank { "No description has been found for this book yet." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = TextOverflow.Ellipsis)
-            if (book.description.length > 500) TextButton({ expandedDescription = !expandedDescription }) { Text(if (expandedDescription) "Read less" else "Read more") }
+            if (about.length > 500) TextButton({ expandedDescription = !expandedDescription }) { Text(if (expandedDescription) "Read less" else "Read more") }
             if (book.metadataSource.isNotBlank() && book.metadataUrl.isNotBlank()) TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(book.metadataUrl))) }) { Text("Details from ${book.metadataSource}") }
         } }
-        item(key = "more") {
+        // Change beside the recording line opens the chooser; without one, this row is the way to every match and Advanced.
+        if (current == null && best == null) item(key = "more") {
             Column(Modifier.fillMaxWidth()) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 SummaryRow(Icons.Rounded.Headphones, "Recordings & sources", recordingsCount(search, streamed, tally, current), Modifier.testTag("recordings-row")) { openChooser(ChooserView.LIST) }
-                SummaryRow(Icons.AutoMirrored.Rounded.MenuBook, "Ebook editions", ebookCount(ebookSearch.takeIf { it.bookId == book.id }, formats), Modifier.testTag("ebooks-row"), openEbooks)
             }
         }
     }
@@ -246,6 +250,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 @Composable
 private fun BookIdentity(book: Audiobook, recording: Audiobook?) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    // An audiobook cover naming another narrator gives way to the recording's own cover.
+    val cover = recording?.let { book.copy(coverUrl = app.narrio.data.SourceQuality.coverFor(it, book)) } ?: book
     val identity: @Composable ColumnScope.() -> Unit = {
         Text(book.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = muted)
@@ -264,10 +270,10 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column.
         if (maxWidth >= 560.dp) Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
-            BookCover(book, Modifier.width(210.dp).height(306.dp), large = true, sharedKey = "cover-${book.id}")
+            BookCover(cover, Modifier.width(210.dp).height(306.dp), large = true, sharedKey = "cover-${book.id}")
             Column(Modifier.weight(1f), content = identity)
         } else Column {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(book, Modifier.width(190.dp).height(278.dp), large = true, sharedKey = "cover-${book.id}") }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.width(190.dp).height(278.dp), large = true, sharedKey = "cover-${book.id}") }
             Spacer(Modifier.height(24.dp))
             identity()
         }
@@ -287,6 +293,7 @@ class ListenActions(
     /** A finished book: back to its start, or back among the books being listened to. */
     val listenAgain: () -> Unit = {},
     val unfinish: () -> Unit = {},
+    val pause: () -> Unit = {},
 )
 
 /**
@@ -297,7 +304,7 @@ class ListenActions(
 private fun ListenSlot(
     book: Audiobook, current: CurrentRecording?, best: Audiobook?, streamed: StreamedSourceSearch?, tally: SearchTally?, connected: Boolean, busy: Boolean,
     starting: Boolean, preparation: Preparation?, leading: Boolean, awaitingAudioSearch: Boolean, onPhone: (Audiobook) -> Boolean, announcement: String?, actions: ListenActions,
-    finished: Boolean = false,
+    finished: Boolean = false, playingHere: Boolean = false,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val button = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("listen-action")
@@ -308,6 +315,8 @@ private fun ListenSlot(
                 val copy = current.offline != null
                 when {
                     starting -> ModeButton({}, button, leading, enabled = false) { WorkingLabel("Starting…") }
+                    // The book already playing offers Pause, not a Resume that would do nothing.
+                    playingHere -> ModeButton(actions.pause, button, leading) { SlotLabel(Icons.Rounded.Pause, "Pause") }
                     current.preparing && current.source == null && preparation?.ready != true -> ModeButton({}, button, leading, enabled = false) { WorkingLabel("Getting ready in TorBox…") }
                     !copy && needsTorBox(current.recording) && !connected ->
                         ModeButton(actions.connectTorBox, button, leading) { SlotLabel(Icons.Rounded.Link, if (current.started) "Connect TorBox to resume" else "Connect TorBox to listen") }
@@ -355,7 +364,6 @@ private fun ListenSlot(
                     Text(copy.title, style = MaterialTheme.typography.titleSmall)
                     Text(copy.message, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
-                if (copy.kind == NoMatchKind.NEEDS_TORBOX && tally.active > 0) TextButton(actions.searchAgain) { Text("Search again") }
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
         }
@@ -521,11 +529,4 @@ private fun recordingsCount(search: SourceSearchState?, streamed: StreamedSource
     if (streamed == null || tally == null || search?.searched != true && current != null) return if (current != null) "Yours · find others" else "Find recordings"
     val count = tally.found + tally.possible
     return if (!streamed.complete) "Searching · $count so far" else "$count found"
-}
-
-private fun ebookCount(search: EbookSearchState?, formats: BookFormats): String = when {
-    search?.searched == true && search.searching -> "Searching"
-    search?.searched == true && search.streamed != null -> "${search.results.size} found"
-    formats.editions.isNotEmpty() -> "${formats.editions.size} on this phone"
-    else -> "Find an ebook"
 }

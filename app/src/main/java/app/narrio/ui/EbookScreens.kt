@@ -315,11 +315,15 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         }
         if (shown != null || !search.complete) {
             Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                Text("Best match", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                AnimatedVisibility(!search.complete && tally.active > 0, enter = fadeIn(), exit = fadeOut()) {
+                // One spinner says the search is on; "Best match" waits until there is one.
+                val searching = !search.complete && tally.active > 0
+                if (shown == null && searching) Working(Modifier.size(16.dp))
+                else Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                Text(if (shown == null && searching) "Finding an ebook…" else "Best match", style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                AnimatedVisibility(searching, enter = fadeIn(), exit = fadeOut()) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Working(Modifier.size(14.dp))
+                        if (shown != null) Working(Modifier.size(14.dp))
                         Text(if (shown == null) "Checking ${tally.active} ${plural(tally.active, "source")}" else "Checking ${tally.active - tally.answered} more",
                             style = MaterialTheme.typography.labelMedium, color = muted)
                     }
@@ -355,7 +359,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 AddingStep(step, Modifier.padding(top = 8.dp))
             }
             shown != null -> Button({ actions.addAndOpen(shown.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
-            !search.complete && tally.active > 0 -> Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Finding an ebook…") }
+            // The header already says it's searching; the action's place is held so nothing shifts when one is found.
+            !search.complete && tally.active > 0 -> Spacer(button)
             else -> when (ebookNoMatchCopy(search, tally).kind) {
                 NoMatchKind.POSSIBLE_ONLY -> FilledTonalButton(reviewPossible, button) { SlotLabel(Icons.Rounded.Search, "Review possible matches") }
                 NoMatchKind.ALL_FAILED -> FilledTonalButton(actions.searchAgain, button) { SlotLabel(Icons.Rounded.Refresh, "Try again") }
@@ -365,7 +370,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             }
         }
         // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
-        if (shown == null && search.complete && others == 0) Spacer(Modifier.height(14.dp))
+        if (shown == null && (search.complete && others == 0 || !search.complete)) Spacer(Modifier.height(if (search.complete) 14.dp else 48.dp))
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
@@ -460,7 +465,8 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 /** Format marks for a shelf row: quiet icons and words, no extra container around the row. */
 @Composable
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier) {
-    if (!formats.audio && !formats.ebook) return
+    // A book saved before choosing a recording or ebook says what it's waiting for.
+    if (!formats.audio && !formats.ebook) { Text("Saved · No recording yet", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         if (formats.audio) FormatMark(Icons.Rounded.Headphones, "Audiobook")
         if (formats.ebook) FormatMark(Icons.AutoMirrored.Rounded.MenuBook, "Ebook")

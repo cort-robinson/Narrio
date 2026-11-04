@@ -90,7 +90,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
                     Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         AnimatedVisibility(state.playing, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { NarrationPulse(true, Modifier.size(12.dp, 10.dp)) }
-                        Text(if (state.buffering) "Buffering…" else "${state.part?.title ?: "Ready to listen"} · ${formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (state.buffering) "Buffering…" else "${state.placeTitle ?: book.author} · ${formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 SkipButton(true, 48.dp, 24.dp) { vm.graph.playback.service?.skip(it) }
@@ -113,6 +113,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     var partsOpen by remember { mutableStateOf(false) }
     var bookmarksOpen by remember { mutableStateOf(false) }
     var coloursOpen by remember { mutableStateOf(false) }
+    val findingEbook = remember { mutableStateOf(false) }
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -134,13 +135,12 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
         if (dense) Row(pullDown, verticalAlignment = Alignment.CenterVertically) {
             if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
             Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            ReadAlongEntry(vm, book, dense = true)
-            BookColoursButton { coloursOpen = true }
+            ReadAlongEntry(vm, book, dense = true, finding = findingEbook)
             BookmarkNow(vm)
-            PlayerMenu(vm)
+            PlayerMenu(vm, { coloursOpen = true })
         } else Column(pullDown) {
-            PlayerHeading(vm, compact) { coloursOpen = true }
-            ReadAlongEntry(vm, book, dense = false, modifier = Modifier.padding(start = if (compact) 12.dp else 0.dp, bottom = 4.dp))
+            PlayerHeading(vm, compact, { coloursOpen = true }) { findingEbook.value = true }
+            ReadAlongEntry(vm, book, dense = false, modifier = Modifier.padding(start = if (compact) 12.dp else 0.dp, bottom = 4.dp), finding = findingEbook)
         }
     }
     val controls: @Composable (Boolean) -> Unit = { dense ->
@@ -216,11 +216,6 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     }
     if (bookmarksOpen) ListeningBookmarksSheet(vm, state, book) { bookmarksOpen = false }
     if (coloursOpen) BookColoursSheet(vm, book) { coloursOpen = false }
-}
-
-@Composable
-private fun BookColoursButton(open: () -> Unit) {
-    IconButton(open, Modifier.testTag("book-colours-open")) { Icon(Icons.Rounded.Palette, "Colours for this book") }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -314,28 +309,34 @@ private fun ListeningCover(book: Audiobook, playing: Boolean, modifier: Modifier
 }
 
 @Composable
-private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: () -> Unit) {
+private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: () -> Unit, findEbook: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
         Text("Now playing", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
-        BookColoursButton(openColours)
         BookmarkNow(vm)
-        PlayerMenu(vm)
+        PlayerMenu(vm, openColours, findEbook)
     }
 }
 
 /**
- * Close player stops listening and clears Now playing; the shelf keeps the book and its place. It sits behind a menu
- * so a sleepy tap meant for Bookmark can't end the session (the mini-player keeps it as a TalkBack action).
+ * The room's less frequent actions: this book's colours, finding its ebook to read along, and Close player. Close
+ * stops listening and clears Now playing; the shelf keeps the book and its place. It sits behind the menu so a
+ * sleepy tap meant for Bookmark can't end the session (the mini-player keeps it as a TalkBack action).
  */
 @Composable
-private fun PlayerMenu(vm: NarrioViewModel) {
+private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit, findEbook: (() -> Unit)? = null) {
     val haptics = LocalHapticFeedback.current
     var open by remember { mutableStateOf(false) }
+    val state by vm.playback.collectAsStateWithLifecycle()
+    val formats by remember(state.book?.id) { state.book?.let { vm.readingLibrary.value.observeBook(it) } ?: kotlinx.coroutines.flow.flowOf(null) }.collectAsStateWithLifecycle(null)
     Box {
         IconButton({ open = true }, Modifier.testTag("player-menu")) { Icon(Icons.Rounded.MoreVert, "More options") }
         DropdownMenu(open, { open = false }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            DropdownMenuItem({ Text("Colours for this book") }, { open = false; openColours() },
+                leadingIcon = { Icon(Icons.Rounded.Palette, null) }, modifier = Modifier.testTag("book-colours-open"))
+            if (findEbook != null && formats?.ebook == false) DropdownMenuItem({ Text("Find the ebook to read along") }, { open = false; findEbook() },
+                leadingIcon = { Icon(Icons.Rounded.Search, null) }, modifier = Modifier.testTag("find-ebook-to-read-along"))
             DropdownMenuItem({ Text("Close player") }, { open = false; haptics.performHapticFeedback(HapticFeedbackType.Reject); vm.dismissPlayback() },
                 leadingIcon = { Icon(Icons.Rounded.Close, null) }, modifier = Modifier.testTag("close-player"))
         }
@@ -361,7 +362,11 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
     val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
     var scrub by remember { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxWidth()) {
-        ChapterTitleRow(vm, state, dense, if (dense) null else "Part ${state.partIndex + 1} of ${state.source?.parts?.size ?: 1} · ${deliveryLabel(state.source)}")
+        // Parts are counted only when there are several; where it plays from matters only when it's the phone.
+        val partCount = state.source?.parts?.size ?: 1
+        val subtitle = listOfNotNull("Part ${state.partIndex + 1} of $partCount".takeIf { partCount > 1 }, deliveryLabel(state.source).takeIf { it == "On this phone" })
+            .joinToString(" · ").takeIf { it.isNotEmpty() && !dense }
+        ChapterTitleRow(vm, state, dense, subtitle)
         SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -381,7 +386,9 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
             ToolSlot(Icons.Rounded.Bedtime, sleep, active = state.sleep.active) {
                 FitLabel(sleepLabel(state))
             }
-            ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel("Parts") }
+            // One file without chapters has nothing to list.
+            if (state.chapters.isNotEmpty() || (state.source?.parts?.size ?: 1) > 1)
+                ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel(if (state.chapters.isNotEmpty()) "Chapters" else "Parts") }
             ToolSlot(Icons.Rounded.Bookmarks, bookmarks) { FitLabel("Bookmarks") }
         }
         AnimatedVisibility(state.error != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {

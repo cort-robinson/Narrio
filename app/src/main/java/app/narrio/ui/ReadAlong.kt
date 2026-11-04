@@ -410,7 +410,7 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
     val confidence = readAlong.place?.confidence ?: MappingConfidence.UNMAPPED
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(playback.part?.title ?: "Ready to listen", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(playback.placeTitle ?: playback.book?.title.orEmpty(), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (chapters != null) ReadAlongOptionsButton(options)
         }
         StatusRow(readAlong, playback, options, showTime = false)
@@ -611,7 +611,7 @@ private fun SheetAction(icon: androidx.compose.ui.graphics.vector.ImageVector, t
  * using the book's Find ebook sheet.
  */
 @Composable
-fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifier: Modifier = Modifier) {
+fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifier: Modifier = Modifier, finding: MutableState<Boolean> = remember { mutableStateOf(false) }) {
     val formatsFlow = remember(book.id) { vm.readingLibrary.value.observeBook(book) }
     val formats by formatsFlow.collectAsStateWithLifecycle(null)
     val search by vm.ebookSearch.collectAsStateWithLifecycle()
@@ -619,27 +619,24 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
     val connected by vm.connected.collectAsStateWithLifecycle()
     val addons by vm.graph.addons.installed.collectAsStateWithLifecycle()
     val searchLinks = remember(book.title, book.author, addons) { vm.graph.addons.ebookSearchLinks(book) }
-    var sheet by remember { mutableStateOf(false) }
+    var sheet by finding
     val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
     val ebook = formats?.ebook == true
     // The ebook search judges editions against the recording and audio playing now.
     val playing by vm.playback.collectAsStateWithLifecycle()
     val narration = playing.source?.takeIf { playing.book?.id == book.id }?.let { NarrationContext(playing.book ?: book, it) }
-    val find = { sheet = true; vm.openEbookSearch(book, narration) }
+    val find = { sheet = true }
+    // However the search opens (here or the player's menu), it judges editions against what's playing.
+    LaunchedEffect(sheet) { if (sheet) vm.openEbookSearch(book, narration) }
     if (dense) IconButton(if (ebook) vm::readAlong else find, modifier.testTag("read-along")) {
         Icon(if (ebook) Icons.AutoMirrored.Rounded.MenuBook else Icons.Rounded.Search, if (ebook) "Read along" else "Find the ebook to read along", tint = MaterialTheme.colorScheme.primary)
-    } else Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (ebook) FilledTonalButton(vm::readAlong, Modifier.testTag("read-along")) {
+    // Without an ebook the room stays quiet; finding one lives in the player's menu.
+    } else if (ebook) Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        FilledTonalButton(vm::readAlong, Modifier.testTag("read-along")) {
             Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Read along")
-        } else OutlinedButton(find, Modifier.testTag("find-ebook-to-read-along"), enabled = formats != null) {
-            Icon(Icons.Rounded.Search, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Find the ebook")
         }
-        Text(when {
-            formats == null -> ""
-            !ebook -> "Add the edition of this recording to read along."
-            formats?.pairing == PairingStatus.MISMATCH -> "The ebook doesn't match this narration."
-            else -> "The page turns with the narration."
-        }, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+        if (formats?.pairing == PairingStatus.MISMATCH) Text("The ebook doesn't match this narration.", Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
     }
     val current = formats
     if (sheet && current != null) EbookSheet(book, current, search, providers, connected, "Add and read along", EbookActions(
