@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -78,7 +79,12 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 RecentSearchList(recent, { vm.search(it); vm.rememberSearch(it); focus.clearFocus() }, vm::forgetSearch, vm::clearRecentSearches, Modifier.padding(top = 8.dp))
             }
             AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                LazyRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // The chips run to the screen's edges, so a cut-off chip reads as more to scroll.
+                LazyRow(Modifier.padding(top = 10.dp).layout { measurable, constraints ->
+                    val bleed = 24.dp.roundToPx()
+                    val row = measurable.measure(constraints.copy(minWidth = constraints.maxWidth + 2 * bleed, maxWidth = constraints.maxWidth + 2 * bleed))
+                    layout(constraints.maxWidth, row.height) { row.place(-bleed, 0) }
+                }, contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // All, then Classics, whose free public recordings play without TorBox; the check shows where Discover opened.
                     items(AppleBooks.genres.keys.sortedBy { when (it) { "All" -> 0; "Classics" -> 1; else -> 2 } }) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
                         leadingIcon = { AnimatedVisibility(category == it, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } }) }
