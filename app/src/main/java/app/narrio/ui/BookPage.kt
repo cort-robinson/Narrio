@@ -136,7 +136,11 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     // A book never listened to plays its best match (or the listener's pick); a book with a recording plays that.
     val best = if (current != null) null else chosen?.takeIf { it.id != pinned.shown?.recording?.id } ?: pinned.shown?.recording
     val onPhone: (Audiobook) -> Boolean = { recording -> downloadsHere.any { it.complete && sameRecording(it.book, recording) } }
-    val openChooser: (ChooserView) -> Unit = { view -> interacted = true; chooser = view }
+    // Change answers the tap at once; the chooser, slower to build the first time, follows and clears it once drawn.
+    var chooserOpening by remember(book.id) { mutableStateOf<ChooserView?>(null) }
+    LaunchedEffect(chooserOpening) { chooserOpening?.let { view -> withFrameNanos { }; withFrameNanos { }; chooser = view } }
+    LaunchedEffect(chooser) { if (chooser != null) { withFrameNanos { }; chooserOpening = null } }
+    val openChooser: (ChooserView) -> Unit = { view -> interacted = true; chooserOpening = view }
     // The offline row stands for the recording Listen plays, once it can play.
     val offlineTarget = current?.recording ?: best?.takeIf { playableNow(it, onPhone(it)) }
     val offlineShown = offlineTarget?.let { offlineDownload(it, current, downloadsHere) }
@@ -211,6 +215,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                         searchAgain = { vm.findSources(book.catalogIdentity(), force = true) }, connectTorBox = vm::requestTorBoxConnect, sourceSettings = vm::openSourceSettings,
                         listenAgain = { vm.listenAgain(book.id) }, unfinish = { vm.setFinished(book.id, false) },
                         openPlayer = { vm.playerOpen.value = true }, addOwnAudio = { openChooser(ChooserView.ADVANCED) },
+                        changing = chooserOpening != null,
                     ))
             }
             val read: @Composable () -> Unit = { ReadSlot(book, formats, leading = readingFirst, read = { vm.read(book) }, change = openEbooks,
@@ -322,8 +327,9 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         if (maxWidth >= 560.dp) Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
             BookCover(cover, Modifier.size(260.dp), large = true, blank = neutralCover)
             Column(Modifier.weight(1f), content = identity)
-        } else if (short) Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(fading) { BookCover(cover, Modifier.size(coverSize), large = true, blank = neutralCover) }
+        } else if (short) Row(fading, horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Side by side, the whole header fades under the bar together, so no line of it is left clipped there.
+            BookCover(cover, Modifier.size(coverSize), large = true, blank = neutralCover)
             Column(Modifier.weight(1f), content = identity)
         } else Column {
             Box(Modifier.fillMaxWidth().then(fading), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(coverSize), large = true, blank = neutralCover) }
@@ -350,6 +356,8 @@ class ListenActions(
     val openPlayer: () -> Unit = {},
     /** Audio files the listener already has, added from the phone in the chooser's Advanced view. */
     val addOwnAudio: () -> Unit = {},
+    /** True while the recording chooser is being opened, so Change answers the tap before the sheet has drawn. */
+    val changing: Boolean = false,
 )
 
 /**
@@ -385,7 +393,7 @@ private fun ListenSlot(
                         SlotLabel(if (copy) Icons.Rounded.OfflinePin else Icons.Rounded.PlayArrow, resumeLabel(current))
                     }
                 }
-                RecordingLine(recordingLine(current.recording, book, connected, copy).let { if (finished) "Finished · $it" else it }, actions.change)
+                RecordingLine(recordingLine(current.recording, book, connected, copy).let { if (finished) "Finished · $it" else it }, actions.change, actions.changing)
                 if (finished) TextButton(actions.unfinish, Modifier.heightIn(min = 48.dp).testTag("mark-not-finished")) { Text("Mark as not finished") }
             }
             best != null -> {
@@ -396,7 +404,7 @@ private fun ListenSlot(
                     !ready -> ModeButton({ actions.getReady(best) }, button, leading, enabled = !busy) { SlotLabel(Icons.Rounded.CloudDownload, "Get it ready") }
                     else -> ModeButton({ actions.listen(best) }, button, leading, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
                 }
-                RecordingLine(recordingLine(best, book, connected, onPhone(best)), actions.change)
+                RecordingLine(recordingLine(best, book, connected, onPhone(best)), actions.change, actions.changing)
                 if (!ready && connected) Text("Getting a recording ready can take from minutes to hours. Nothing downloads to your phone.",
                     style = MaterialTheme.typography.bodySmall, color = muted)
             }
@@ -432,10 +440,16 @@ private fun ListenSlot(
 
 /** "Ray Porter · Unabridged · Ready now", and Change, which opens the recording chooser. */
 @Composable
-private fun RecordingLine(text: String, change: () -> Unit) {
+private fun RecordingLine(text: String, change: () -> Unit, changing: Boolean = false) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, Modifier.weight(1f).testTag("recording-summary"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        TextButton(change, Modifier.testTag("change-recording").semantics { contentDescription = "Change recording" }) { Text("Change") }
+        TextButton(change, Modifier.testTag("change-recording").semantics { contentDescription = "Change recording" }) {
+            // The label keeps its width while the spinner stands in, so nothing beside it moves.
+            Box(contentAlignment = Alignment.Center) {
+                Text("Change", Modifier.graphicsLayer { alpha = if (changing) 0f else 1f })
+                if (changing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            }
+        }
     }
 }
 
@@ -539,6 +553,8 @@ private fun OfflineRow(vm: NarrioViewModel, book: Audiobook, target: Audiobook?,
                     Text(listOfNotNull("Download for offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
                     Text(if (wifiOnly) "Downloads only on Wi-Fi" else "Can use mobile data", style = MaterialTheme.typography.bodySmall, color = muted)
                 }
+                // The whole row starts it; the word says so, as Find ebook's chevron says it opens.
+                Text("Download", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 4.dp))
             }
         }
     }

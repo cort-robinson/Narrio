@@ -57,11 +57,11 @@ class EbookResultsModelTest {
         ), complete = true)
         val choices = ebookChoices(search, book, shownId = null)
         assertEquals(listOf("book.epub", "sample", "maybe"), choices.map { it.edition.id })
-        assertEquals("In this recording's files", choices.first().source)
+        assertEquals("Came with this recording", choices.first().source)
         // Coming with the recording is the reason to try it, said once: no check note, no source line, and the book's name, not the file's.
         assertEquals(listOf(ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")), ebookChoiceNotes(choices.first(), recording = true))
         assertNull(ebookChoiceSource(choices.first(), recording = true))
-        assertEquals("Author not listed · In this recording's files", possibleMatchSource(choices.first(), book))
+        assertEquals("Author not listed · Came with this recording", possibleMatchSource(choices.first(), book))
         assertEquals("Pride and Prejudice", ebookChoiceTitle(choices.first(), book))
         assertEquals("Pride and Prejudice - abridged", ebookChoiceTitle(choices.last(), book))
         assertEquals("Pride and Prejudice", ebookChoiceTitle(EbookChoice(BookTextSource("t", "Pride and Prejudice [EPUB]", "", "EPUB", "gutenberg"), "gutenberg", "Project Gutenberg", false, choices.last().fit), book))
@@ -89,12 +89,12 @@ class EbookResultsModelTest {
         val words = ebookWordSuggestions(wizard)
         assertEquals("A Wizard of Earthsea: The Earthsea Cycle, Book 1 Ursula K. Le Guin", words.bookDetails)
         assertEquals(listOf(
-            EbookWordChoice("Title only", "A Wizard of Earthsea: The Earthsea Cycle, Book 1"),
+            EbookWordChoice("Without the author", "A Wizard of Earthsea: The Earthsea Cycle, Book 1"),
             EbookWordChoice("Without subtitle", "A Wizard of Earthsea Ursula K. Le Guin"),
             EbookWordChoice("Original title", "The Wizard of the Archipelago Ursula K. Le Guin"),
         ), words.choices)
         // A plain title has nothing to shorten and no other title to offer.
-        assertEquals(listOf("Title only"), ebookWordSuggestions(book).choices.map { it.label })
+        assertEquals(listOf("Without the author"), ebookWordSuggestions(book).choices.map { it.label })
         // Searching for the book's own details is the default search, not custom words.
         assertEquals("", customEbookWords(" pride and prejudice  JANE AUSTEN ", book))
         assertEquals("Pride Prejudice", customEbookWords(" Pride Prejudice ", book))
@@ -118,7 +118,7 @@ class EbookResultsModelTest {
         assertEquals("Source gutenberg has no ebook of this book. Connect TorBox to also check 1 more source.", ebookNoMatchCopy(nothing, tally).message)
         val possible = nothing.copy(groups = nothing.groups.map { if (it.providerId == "gutenberg") it.copy(possible = listOf(ebook("p"))) else it })
         assertEquals(NoMatchKind.POSSIBLE_ONLY, ebookNoMatchCopy(possible, ebookTally(possible, byId, false)).kind)
-        assertEquals("1 source searched · 0 found · 1 need TorBox", searchSummary(possible.complete, ebookTally(possible, byId, false)))
+        assertEquals("1 source searched · 1 possible match · 1 need TorBox", searchSummary(possible.complete, ebookTally(possible, byId, false)))
         // A lookup that couldn't start fails every active section with its reason.
         val failed = pendingEbookSearch(book, providers, connected = true, recording = false, searching = false, error = "No connection")
         assertEquals(listOf(SourceGroupStatus.FAILED, SourceGroupStatus.FAILED), failed.groups.map { it.status })

@@ -96,7 +96,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
         }
         // While a book plays the listener is already listening; the hint waits for a quieter moment.
-        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty(), compact = short) }
+        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty(), compact = true) }
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {
@@ -267,7 +267,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 // The book in the mini-player shows its live place, so the row and the player never disagree.
                 val live = if (!here) null else playingLine(playing).takeIf { it.contains("left") }
                 ShelfRow(entry, book, bookFormats, here, live, !connected && entry.bookId in needsTorBox, { vm.continueBook(entry) }, { vm.open(book) },
-                    { vm.setFinished(entry.bookId, it) }) { remove = book }
+                    { vm.setFinished(entry.bookId, it) }, removeBook = { remove = book }, connect = vm::requestTorBoxConnect)
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Spacer(Modifier.height(20.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -294,14 +294,15 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, live: String?, needsTorBox: Boolean, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
+private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, live: String?, needsTorBox: Boolean, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit,
+                     connect: (() -> Unit)? = null) {
     val finished = entry.finishedAt > 0
     val mode = formats.leadingMode
     var menu by remember { mutableStateOf(false) }
     // A shelf row is the book, its formats, and its place; the recording's details live on the book's page.
     // Formats and the place sit in the text column beside the cover.
     BookRow(book, details, recording = false, extra = {
-        FormatMarks(formats, Modifier.padding(top = 2.dp), needsTorBox)
+        FormatMarks(formats, Modifier.padding(top = 2.dp), needsTorBox, connect)
         if (finished) FinishedMark(Modifier.padding(top = 6.dp))
         else placeSummary(formats)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp), live = live) }
     }) {

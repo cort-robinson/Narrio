@@ -122,7 +122,8 @@ fun searchSummary(search: StreamedSourceSearch, tally: SearchTally): String = se
 
 /** The same line for any per-source search; ebook sources word it identically. */
 internal fun searchSummary(complete: Boolean, tally: SearchTally): String {
-    val found = "${tally.found} found"
+    // Only possible matches are counted as such, so the line never says "0 found" beside a possible match.
+    val found = if (tally.found == 0 && tally.possible > 0) "${tally.possible} possible ${if (tally.possible == 1) "match" else "matches"}" else "${tally.found} found"
     val torbox = if (tally.needTorBox > 0) " · ${tally.needTorBox} need TorBox" else ""
     return when {
         tally.active == 0 -> "No sources are searching$torbox"

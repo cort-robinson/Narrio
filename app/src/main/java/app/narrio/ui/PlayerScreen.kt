@@ -13,6 +13,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.*
@@ -181,7 +182,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             scaleX = 1f - drag * .08f; scaleY = scaleX
         }) {
             Column(Modifier.padding(horizontal = if (compact) 16.dp else 24.dp).padding(top = if (dense) 0.dp else 8.dp)) { heading(dense) }
-            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown) { controls(dense) } }
+            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown, { vm.openPlayingBook() }) { controls(dense) } }
         }
         }
     }
@@ -243,7 +244,7 @@ private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -
  * neither fits (small windows or very large text).
  */
 @Composable
-private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean, pullDown: Modifier, controls: @Composable () -> Unit) {
+private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean, pullDown: Modifier, openBook: () -> Unit, controls: @Composable () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = maxWidth; val height = maxHeight
         val wide = width >= 560.dp && width > height * 1.15f
@@ -252,7 +253,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 val coverHeight = minOf(height - 16.dp, width * .4f).coerceAtLeast(120.dp)
                 ListeningCover(book, state.playing || state.buffering, pullDown.size(coverHeight))
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
-                    TitleBlock(book, 2)
+                    TitleBlock(book, 2, openBook)
                     Spacer(Modifier.height(20.dp))
                     controls()
                 }
@@ -261,7 +262,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 // A short, narrow pane (a landscape phone's split view): the book becomes a byline beside its cover.
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     ListeningCover(book, state.playing || state.buffering, pullDown.size(72.dp))
-                    TitleBlock(book, 1)
+                    TitleBlock(book, 1, openBook)
                 }
                 Spacer(Modifier.height(12.dp))
                 controls()
@@ -280,7 +281,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                         ListeningCover(book, state.playing || state.buffering, Modifier.size(coverHeight))
                     }
                     Column(Modifier.onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }) {
-                        TitleBlock(book, 2)
+                        TitleBlock(book, 2, openBook)
                         Spacer(Modifier.height(16.dp))
                         controls()
                         Spacer(Modifier.height(16.dp))
@@ -292,9 +293,14 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
 }
 
 @Composable
-private fun TitleBlock(book: Audiobook, maxLines: Int) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(book.title, style = MaterialTheme.typography.headlineMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+private fun TitleBlock(book: Audiobook, maxLines: Int, open: (() -> Unit)? = null) {
+    // The title leads to the book's page, as a row does on the shelf.
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+        .then(if (open != null) Modifier.clickable(onClickLabel = "Open the book's page", onClick = open).testTag("player-book-page") else Modifier)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(book.title, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.headlineMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+            if (open != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.padding(start = 4.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
     }

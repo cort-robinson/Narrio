@@ -201,8 +201,6 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
         // Only a search with no best match at all, so a best one still settling into the card never counts as missing.
         val lead = choices.firstOrNull()?.takeIf { streamed.best == null && pinned.shown == null && streamed.complete }
         val listed = if (lead != null) choices.drop(1) else choices
-        // Without a sure match, looking further is the likely next step, so other sources open by themselves.
-        LaunchedEffect(lead?.edition?.id) { if (lead != null) advanced = true }
         LazyColumn(Modifier.fillMaxWidth().testTag("ebook-sheet")
             .pointerInput(book.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); interacted = true } },
             listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -382,8 +380,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Adding…") }
                 AddingStep(step, Modifier.padding(top = 8.dp))
             }
-            // Weaker than a confirmed match's filled button: it opens the text to check, and the reader then asks to keep it.
-            possible != null -> FilledTonalButton({ (actions.addAndCheck ?: actions.addAndOpen)(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) {
+            // Checking is the next step; the reader then asks to keep or remove it, so the doubt never commits the listener.
+            possible != null -> Button({ (actions.addAndCheck ?: actions.addAndOpen)(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) {
                 SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, "Check this ebook")
             }
             // The header already says it's searching; the action's place is held so nothing shifts when one is found.
@@ -399,7 +397,9 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         }
         // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
         // Other choices appear once the search has settled, so the count never ticks up under the listener.
-        if (!search.complete || others == 0) Spacer(Modifier.height(14.dp))
+        // While sources answer, the row other editions may need is held, so the sheet doesn't jump when they arrive.
+        if (!search.complete) Spacer(Modifier.height(48.dp))
+        else if (others == 0) Spacer(Modifier.height(14.dp))
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
@@ -477,7 +477,7 @@ private fun CandidateRow(candidate: BookTextSource, best: Boolean, adding: Boole
             if (best) Text("Best match", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             Text(candidate.title, style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(listOf(candidate.author, candidate.language, candidate.format).filter(String::isNotBlank).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(candidate.attribution.ifBlank { "In this recording's files" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+            Text(candidate.attribution.ifBlank { "Came with this recording" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
             if (also.isNotEmpty()) Text("Also found by ${also.joinToString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (adding) AddingStep(step)
         }
@@ -494,10 +494,16 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 
 /** Format marks for a shelf row: quiet icons and words, no extra container around the row. */
 @Composable
-fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox: Boolean = false) {
-    // A book saved before choosing a recording or ebook says what it's waiting for.
-    // It's a status, so it's quiet; Connect TorBox is the book page's own action.
-    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Needs TorBox" else "Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox: Boolean = false, connect: (() -> Unit)? = null) {
+    // A book saved before choosing a recording or ebook says what it's waiting for: a quiet status, with Connect
+    // beside it when TorBox is the way forward, so the row is never a dead end.
+    if (!formats.audio && !formats.ebook) {
+        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+            Text(if (needsTorBox) "Needs TorBox" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (needsTorBox && connect != null) TextButton(connect, Modifier.heightIn(min = 40.dp).testTag("shelf-connect-torbox")) { Text("Connect") }
+        }
+        return
+    }
     // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
     if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

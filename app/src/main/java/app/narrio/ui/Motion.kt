@@ -56,15 +56,18 @@ object Motion {
             .togetherWith(slideOutHorizontally(tween(MEDIUM, easing = Emphasized)) { -direction * it / 7 } + fadeOut(tween(90, easing = EmphasizedAccelerate)))
     }
 
-    /** The listening room rises from the mini-player and settles back into it. */
+    /**
+     * The listening room rises as a sheet from the bottom, where the mini-player and Listen are, and drops back down
+     * over the page it came from; the page underneath stays put, so the room is what moves.
+     */
     fun rise(): ContentTransform =
-        (slideInVertically(tween(LONG, easing = Emphasized)) { it / 4 } + fadeIn(tween(MEDIUM, easing = EmphasizedDecelerate)))
-            .togetherWith(fadeOut(tween(SHORT, easing = EmphasizedAccelerate)) + scaleOut(tween(LONG, easing = Emphasized), targetScale = .94f))
+        (slideInVertically(tween(MEDIUM, easing = EmphasizedDecelerate)) { it } + fadeIn(tween(SHORT)))
+            .togetherWith(fadeOut(tween(MEDIUM, delayMillis = SHORT)))
             .apply { targetContentZIndex = 1f }
 
     fun fall(): ContentTransform =
-        (fadeIn(tween(MEDIUM, delayMillis = 60, easing = EmphasizedDecelerate)) + scaleIn(tween(LONG, easing = Emphasized), initialScale = .94f))
-            .togetherWith(slideOutVertically(tween(MEDIUM, easing = EmphasizedAccelerate)) { it / 4 } + fadeOut(tween(MEDIUM, easing = EmphasizedAccelerate)))
+        fadeIn(tween(SHORT))
+            .togetherWith(slideOutVertically(tween(MEDIUM, easing = EmphasizedAccelerate)) { it } + fadeOut(tween(MEDIUM, delayMillis = SHORT)))
             .apply { targetContentZIndex = -1f }
 }
 

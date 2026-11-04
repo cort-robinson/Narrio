@@ -75,7 +75,7 @@ object SourceWords {
     fun variants(book: Audiobook): List<WordsVariant> {
         val title = mainTitle(book).ifBlank { return emptyList() }
         return listOfNotNull(
-            WordsVariant("Title only", title),
+            WordsVariant("Without the author", title),
             series(book)?.let { WordsVariant("Include series name", "$it $title") },
             lastName(book.author)?.let { WordsVariant("Author last name only", "$title $it") },
         ).distinctBy { BookIdentity.normalize(it.words) }

@@ -320,9 +320,9 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithTag("ebook-other-choices-toggle").assertDoesNotExist()
         compose.onNodeWithTag("ebook-other-choices").assertDoesNotExist()
 
-        // Looking further is the likely next step, so other sources open by themselves.
+        // Other sources stay folded until asked for, so the sheet leads with checking the match.
         sheet.performScrollToNode(hasTestTag("ebook-advanced"))
-        compose.onNodeWithTag("ebook-advanced").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Expanded"))
+        compose.onNodeWithTag("ebook-advanced").assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "Collapsed")).performClick()
         sheet.performScrollToNode(hasTestTag("ebook-section:gutenberg"))
         sheet.performScrollToNode(hasTestTag("ebook-retry:addon:knaben-ebooks"))
         sheet.performScrollToNode(hasTestTag("ebook-search-words"))

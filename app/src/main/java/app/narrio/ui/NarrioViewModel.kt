@@ -550,6 +550,14 @@ class NarrioViewModel @JvmOverloads constructor(
      * Opens a book's one page, whichever way the listener arrives. A book without a recording of its own looks for
      * one right away; one with a recording keeps it, and looks for others when the recording chooser opens.
      */
+    /** From the Listening room to the playing book's page, as the shelf opens it. */
+    fun openPlayingBook() = viewModelScope.launch {
+        val book = playback.value.book ?: return@launch
+        // Its page may already be under the player; then the player simply settles back onto it.
+        if (selection.value.book?.id == book.id) { playerOpen.value = false; return@launch }
+        open(graph.library.find(book.id)?.book() ?: book)
+    }
+
     fun open(book: Audiobook, keepSources: Boolean = false) {
         playerOpen.value = false
         reader.value = null

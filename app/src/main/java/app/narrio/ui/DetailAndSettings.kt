@@ -111,7 +111,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.ManageSearch, "Search sites", "Where Narrio looks for recordings, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
+                SettingsRow(Icons.Rounded.ManageSearch, "Search sources", "Where Narrio looks for recordings, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
             }
         }
         // The everyday switches and how the app looks share one heading, so no section holds a single row.
