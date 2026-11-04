@@ -106,7 +106,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val narration = current?.let { NarrationContext(it.recording, it.source) }
     // The row answers the tap at once; the sheet, slower to build the first time, follows a frame later.
     var ebookOpening by remember(book.id) { mutableStateOf(false) }
-    LaunchedEffect(ebookOpening) { if (ebookOpening) { withFrameNanos { }; withFrameNanos { }; ebookSheet = true; ebookOpening = false } }
+    LaunchedEffect(ebookOpening) { if (ebookOpening) { withFrameNanos { }; withFrameNanos { }; ebookSheet = true } }
+    // The spinner stays until the sheet has drawn, so the wait while it's first built never looks like nothing happened.
+    LaunchedEffect(ebookSheet) { if (ebookSheet) { withFrameNanos { }; ebookOpening = false } }
     val openEbooks = { ebookOpening = true; vm.openEbookSearch(book, narration) }
     val finished = (entry?.finishedAt ?: 0) > 0
     // A book without its own recording searches as it opens; one with a recording searches when the chooser opens.
