@@ -338,7 +338,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 // The edition itself leads; then what it is and where it's from in one line, and only a reason that helps read along.
                 Column {
                     val copy = bestEbookCopy(best, search.book, narrated)
-                    Text(best.edition.title.ifBlank { search.book.title }, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(ebookTitle(best.edition.title, search.book), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     // What it is and where it's from; the file format is the app's business.
                     Text((copy.headline.split(" · ").filterNot { it == best.edition.format } + (providers[best.providerId]?.name ?: best.edition.attribution)).filter(String::isNotBlank).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp).testTag("best-ebook-reasons"))

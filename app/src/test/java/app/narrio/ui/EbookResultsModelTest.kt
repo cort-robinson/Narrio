@@ -63,6 +63,7 @@ class EbookResultsModelTest {
         assertNull(ebookChoiceSource(choices.first(), recording = true))
         assertEquals("Pride and Prejudice", ebookChoiceTitle(choices.first(), book))
         assertEquals("Pride and Prejudice - abridged", ebookChoiceTitle(choices.last(), book))
+        assertEquals("Pride and Prejudice", ebookChoiceTitle(EbookChoice(BookTextSource("t", "Pride and Prejudice [EPUB]", "", "EPUB", "gutenberg"), "gutenberg", "Project Gutenberg", false, choices.last().fit), book))
         assertEquals(listOf(ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author"), ChoiceNote(ChoiceNoteKind.CAUTION, "May not follow the narration: abridged or a sample")),
             ebookChoiceNotes(choices.last(), recording = true))
     }

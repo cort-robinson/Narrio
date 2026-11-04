@@ -139,8 +139,15 @@ fun ebookChoiceDetail(choice: EbookChoice, book: Audiobook): String {
 fun ebookChoiceTitle(choice: EbookChoice, book: Audiobook): String {
     val title = choice.edition.title
     val fileName = FILE_NAME.containsMatchIn(title) || (' ' !in title && '_' in title)
-    return if (title.isBlank() || choice.providerId == DeviceSourceProviderSettings.RECORDING_FILES && fileName) book.title else title
+    return if (title.isBlank() || choice.providerId == DeviceSourceProviderSettings.RECORDING_FILES && fileName) book.title
+        else ebookTitle(title, book)
 }
+
+/** An edition's title as the sheet shows it, without a release's format tag. */
+fun ebookTitle(title: String, book: Audiobook): String = title.replace(FORMAT_TAG, "").trim().ifBlank { book.title }
+
+/** "Lantern Keeper [EPUB]": a release's format tag is the app's business, not part of the title. */
+private val FORMAT_TAG = Regex("""\s*[\[(](?:EPUB|PDF|TXT|MOBI|AZW3?|FB2)[\])]""", RegexOption.IGNORE_CASE)
 
 /** The one doubt about a possible match that leads the ebook sheet. */
 fun possibleMatchCaution(choice: EbookChoice): String =
