@@ -97,6 +97,8 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, openAddons: () -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
     val backgroundAlignment by vm.backgroundAlignment.collectAsStateWithLifecycle()
+    // The one highlights switch is on only when both of its settings are, so it never shows On over a setting that's off.
+    val readAlongSync by vm.readAlongSync.collectAsStateWithLifecycle()
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
     val updates by vm.graph.updates.state.collectAsStateWithLifecycle()
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -120,7 +122,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
             SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books prepare while charging on Wi-Fi.",
-                backgroundAlignment, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
+                backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         item {
             Text("Display", style = MaterialTheme.typography.headlineSmall)

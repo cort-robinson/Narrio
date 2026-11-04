@@ -58,7 +58,8 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         // A cover that changes in place (a recording's own art replacing the catalog's) keeps the last art showing
         // until the new one arrives, rather than flashing the drawn fallback in between.
         var lastLoaded by remember { mutableStateOf<String?>(null) }
-        val previous = lastLoaded?.takeIf { it != book.coverUrl && it in loadedCovers }
+        // A replacement that fails stops the bridge, so the old art never stands in for the new book indefinitely.
+        val previous = lastLoaded?.takeIf { !failed && it != book.coverUrl && it in loadedCovers }
         val fallback = reveal < 1f && previous == null && drawn
         // A large cover still on its way says so, rather than reading as a missing image.
         if (large && !drawn && !coverLoaded && previous == null) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
