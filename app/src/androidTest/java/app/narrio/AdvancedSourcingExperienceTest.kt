@@ -190,7 +190,7 @@ class AdvancedSourcingExperienceTest {
         openChooser()
         compose.waitUntil(5_000) { has("recording:${us.id}") }
         compose.onNodeWithTag("recording:${us.id}").performClick()
-        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near"))
+        compose.waitUntil(5_000) { runCatching { compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near")) }.isSuccess }
         // One whole-book file of unknown length: the same elapsed time, 1:30:00, labelled approximate.
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Start near 1:30:00 (≈)").fetchSemanticsNodes().isNotEmpty() }
         capture("advanced-start-near")

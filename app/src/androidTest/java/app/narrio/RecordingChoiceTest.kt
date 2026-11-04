@@ -114,7 +114,8 @@ class RecordingChoiceTest {
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:${ray.id}").performClick()
         // Ray has a place of its own, so the start choice shows, resuming there unless the listener picks otherwise.
-        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near"))
+        // Its options load from the library after the pick, so wait for them rather than racing a short sheet.
+        compose.waitUntil(5_000) { runCatching { compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near")) }.isSuccess }
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Resume where you stopped in this one", substring = true) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
         compose.onNodeWithTag("chooser-listen").performClick()
@@ -123,6 +124,8 @@ class RecordingChoiceTest {
         main { service.toggle() }
 
         // After a restart the book still knows which recording is the listener's, and every recording's audio.
+        // The listener's recording is saved as playback starts; wait for that write rather than racing it.
+        compose.waitUntil(5_000) { ListeningRecordings(graph.preferences)[parent.id]?.let { sameRecording(it, ray) } == true }
         val restarted = ListeningRecordings(graph.preferences)
         assertTrue(sameRecording(restarted[parent.id]!!, ray))
         assertEquals(listOf(kim.sources.single().id), restarted.playedSources(parent.id, kim))
