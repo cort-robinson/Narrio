@@ -36,7 +36,7 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
      * first and marks them Free, so a listener without TorBox starts with books that play.
      */
     suspend fun freeReadings(books: List<Audiobook>): Set<String> = withContext(Dispatchers.IO) {
-        val titles = books.map { freeTitle(it.title) }.filter(String::isNotBlank).distinct().take(60)
+        val titles = books.map { queryTitle(it.title) }.filter(String::isNotBlank).distinct().take(60)
         if (titles.isEmpty()) return@withContext emptySet()
         val q = "collection:librivoxaudio AND mediatype:audio AND (" + titles.joinToString(" OR ") { "title:(\"$it\")" } + ")"
         val url = "https://archive.org/advancedsearch.php".toHttpUrl().newBuilder()
@@ -60,6 +60,13 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
 
     companion object {
         fun cleanHtml(value: String): String = MetadataText.clean(value)
+
+        /**
+         * A title as Archive search phrases it: without a subtitle or bracketed note, and with only letters, digits, and
+         * apostrophes, which Archive needs to find "Alice's Adventures in Wonderland" and are safe inside a quoted phrase.
+         */
+        fun queryTitle(title: String): String = title.replace(Regex("""\s*[(\[].*?[)\]]"""), "").substringBefore(':').replace('’', '\'')
+            .replace(Regex("[^\\p{L}\\p{N}' ]+"), " ").replace(Regex("\\s+"), " ").trim()
 
         /** "Pride and Prejudice (version 3)" and "Pride and Prejudice: A Novel" are both "pride and prejudice". */
         fun freeTitle(title: String): String = BookIdentity.normalize(title.replace(Regex("""\s*[(\[].*?[)\]]"""), "").substringBefore(':').replace(Regex("['’\"]"), ""))

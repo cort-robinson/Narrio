@@ -23,5 +23,8 @@ class ArchiveDiscoveryTest {
         assertEquals(setOf("pp", "dracula"), ArchiveDiscovery.freeMatches(books, readings))
         assertEquals("pride and prejudice", ArchiveDiscovery.freeTitle("Pride and Prejudice: A Novel"))
         assertEquals("dont look", ArchiveDiscovery.freeTitle("Don’t Look [Abridged]"))
+        // Archive finds titles with apostrophes only when the query keeps them; quotes and Lucene syntax never reach it.
+        assertEquals("Alice's Adventures in Wonderland", ArchiveDiscovery.queryTitle("Alice’s Adventures in Wonderland (Unabridged)"))
+        assertEquals("The Count of Monte Cristo", ArchiveDiscovery.queryTitle("The \"Count\" of Monte-Cristo: A Novel"))
     }
 }
