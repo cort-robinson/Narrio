@@ -40,7 +40,7 @@ class ReaderExperienceTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText("I · There Is No One Left").fetchSemanticsNodes().isNotEmpty() }
 
         compose.runOnIdle { controller.next(animated = false) }
-        compose.waitUntil(10_000) { (controller.visible.value?.first?.offset ?: 0) > first.offset }
+        compose.waitUntil(10_000) { (controller.cursor.value?.offset ?: 0) > first.offset }
         assertTrue("a page turn moves the reader's place", controller.cursor.value!!.offset > first.offset)
 
         compose.onNodeWithTag("reader-page").performTouchInput { click(center) }
