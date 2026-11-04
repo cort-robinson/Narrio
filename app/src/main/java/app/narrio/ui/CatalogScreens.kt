@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -50,7 +51,10 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val browse = query.isBlank() && (category == "All" || category == vm.homeCategory)
     // A book already on the shelf wears the cover it has there (its recording's own), so it looks the same everywhere.
     val shelfCovers = remember(shelf) { shelf.associate { it.bookId to runCatching { it.book().coverUrl }.getOrDefault("") }.filterValues(String::isNotBlank) }
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+    // Short windows, such as a folding phone's cover screen, tighten the gaps so more books show.
+    val short = LocalConfiguration.current.screenHeightDp < SHORT_WINDOW_DP
+    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = if (short) 8.dp else 20.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(if (short) 16.dp else 24.dp)) {
         item(key = "heading") {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 NarrioMark(); Spacer(Modifier.width(10.dp))
@@ -75,14 +79,14 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
             AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 LazyRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // The category Discover opens on leads, then All, then Classics, whose free public recordings play without TorBox.
-                    items(AppleBooks.genres.keys.sortedBy { when (it) { vm.homeCategory -> 0; "All" -> 1; "Classics" -> 2; else -> 3 } }) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
+                    // All, then Classics, whose free public recordings play without TorBox; the check shows where Discover opened.
+                    items(AppleBooks.genres.keys.sortedBy { when (it) { "All" -> 0; "Classics" -> 1; else -> 2 } }) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
                         leadingIcon = { AnimatedVisibility(category == it, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } }) }
                 }
             }
         }
         // While a book plays the listener is already listening; the hint waits for a quieter moment.
-        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem()) }
+        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty()) }
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {
@@ -112,12 +116,25 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
             items(catalog.books, key = { it.id }) { book ->
                 BookRow(shelfCovers[book.id]?.let { book.copy(coverUrl = it) } ?: book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading),
+                    extra = if (book.id in catalog.free) ({ FreeMark() }) else null,
                     // The book in the mini-player is marked where it appears in the list.
                     trailing = if (playing.book?.id == book.id) ({ NarrationPulse(playing.playing, Modifier.padding(end = 8.dp).semantics { contentDescription = "Now playing" }) }) else null)
             }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
         }
+    }
+}
+
+/** Below this height, Discover and a book's page tighten their spacing and cover so actions stay in view. */
+internal const val SHORT_WINDOW_DP = 800
+
+/** A book LibriVox has a free reading of. */
+@Composable
+private fun FreeMark() {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.Headphones, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+        Text("Free to listen", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
     }
 }
 
@@ -238,7 +255,13 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         // Adding an ebook file belongs with the shelf's ebooks; a shelf too small for filters always offers it, as an empty one does.
         if (shelf.isNotEmpty() && (filter == ShelfFilter.EBOOKS && visible.isNotEmpty() || !organizable)) item(key = "add-file") {
-            SettingsRow(Icons.Rounded.UploadFile, "Add your own ebook", "An EPUB or text file from your phone", { if (!importing.working) addEbook() }, Modifier.animateItem())
+            // A footer action, set apart so the list holds only books.
+            Column(Modifier.animateItem()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                TextButton({ if (!importing.working) addEbook() }, Modifier.padding(top = 8.dp).heightIn(min = 48.dp).testTag("shelf-add-ebook")) {
+                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add an ebook from your phone")
+                }
+            }
         }
     }
     remove?.let { book -> AlertDialog(onDismissRequest = { remove = null }, title = { Text("Remove from your shelf?") },

@@ -31,6 +31,21 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
         (json["response"] as? JsonObject)?.objects("docs").orEmpty().map { parseBook(it, false) }
     }
 
+    /**
+     * Which of [books] LibriVox has a free reading of, by title and author surname, in one search. Discover lists them
+     * first and marks them Free, so a listener without TorBox starts with books that play.
+     */
+    suspend fun freeReadings(books: List<Audiobook>): Set<String> = withContext(Dispatchers.IO) {
+        val titles = books.map { freeTitle(it.title) }.filter(String::isNotBlank).distinct().take(60)
+        if (titles.isEmpty()) return@withContext emptySet()
+        val q = "collection:librivoxaudio AND mediatype:audio AND (" + titles.joinToString(" OR ") { "title:(\"$it\")" } + ")"
+        val url = "https://archive.org/advancedsearch.php".toHttpUrl().newBuilder()
+            .addQueryParameter("q", q).addQueryParameter("output", "json").addQueryParameter("rows", "300")
+        listOf("title", "creator").forEach { url.addQueryParameter("fl[]", it) }
+        val docs = (get(url.build().toString())["response"] as? JsonObject)?.objects("docs").orEmpty()
+        freeMatches(books, docs.map { it.text("title") to it.text("creator") })
+    }
+
     override suspend fun recording(id: String): Audiobook = withContext(Dispatchers.IO) {
         require(id.matches(Regex("[A-Za-z0-9_.-]+"))) { "This recording identifier is invalid." }
         parseRecording(get("https://archive.org/metadata/$id"))
@@ -45,6 +60,19 @@ class ArchiveDiscovery(private val http: OkHttpClient) : RecordingDiscovery {
 
     companion object {
         fun cleanHtml(value: String): String = MetadataText.clean(value)
+
+        /** "Pride and Prejudice (version 3)" and "Pride and Prejudice: A Novel" are both "pride and prejudice". */
+        fun freeTitle(title: String): String = BookIdentity.normalize(title.replace(Regex("""\s*[(\[].*?[)\]]"""), "").substringBefore(':').replace(Regex("['’\"]"), ""))
+
+        /** The ids of [books] whose title and author surname match one of LibriVox's [readings] (title, creator). */
+        fun freeMatches(books: List<Audiobook>, readings: List<Pair<String, String>>): Set<String> {
+            val found = readings.map { (title, creator) -> freeTitle(title) to " ${BookIdentity.normalize(creator)} " }
+            return books.filter { book ->
+                val title = freeTitle(book.title)
+                val surname = BookIdentity.normalize(book.author).split(' ').lastOrNull().orEmpty()
+                title.isNotBlank() && surname.isNotBlank() && found.any { (t, creator) -> t == title && " $surname " in creator }
+            }.map { it.id }.toSet()
+        }
 
         fun parseBook(meta: JsonObject, loaded: Boolean): Audiobook {
             val description = cleanHtml(meta.text("description"))

@@ -81,6 +81,8 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 /** What TorBox is, in one breath: it costs money, it's what most books need, and free recordings don't. */
 /** The one line Discover uses, on its hint and under the list, about what plays free and what needs TorBox. */
 internal const val FREE_AND_TORBOX = "Older books often play free. Newer ones usually need TorBox, a paid service."
+/** Once Discover has marked the books that play free, the hint points at the marks instead of promising the list. */
+internal const val FREE_MARKED_AND_TORBOX = "Books marked Free to listen play right away. Most others need TorBox, a paid service."
 
 internal const val TORBOX_PITCH = "TorBox is a paid service that can find and stream many more audiobooks. Free LibriVox recordings play without it."
 
@@ -201,12 +203,12 @@ fun rememberTorBoxNudge(preferences: SharedPreferences) = remember(preferences) 
 /** Most chart books need TorBox to play; says so once at the top of browsing, pointing to free Classics and the way to connect. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier) {
+fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier, marked: Boolean = false) {
     Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
         .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("torbox-nudge")) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(FREE_AND_TORBOX, style = MaterialTheme.typography.titleSmall)
+                Text(if (marked) FREE_MARKED_AND_TORBOX else FREE_AND_TORBOX, style = MaterialTheme.typography.titleSmall)
             }
             IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }

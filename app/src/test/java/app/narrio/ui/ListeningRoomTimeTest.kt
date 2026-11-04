@@ -22,7 +22,7 @@ class ListeningRoomTimeTest {
         val parts = ListeningState(source = mp3, durationMs = 3_600_000)
         assertTrue("At the end of this audio part" in labels(parts))
         assertFalse("At the end of this chapter" in labels(parts))
-        assertEquals("Off", labels(parts).last())
+        assertEquals("No timer", labels(parts).last())
     }
 
     @Test fun theChosenOptionIsSelectedAndTheStatusSaysWhenItPauses() {
@@ -38,7 +38,7 @@ class ListeningRoomTimeTest {
         assertEquals(listOf("At the end of this chapter"), sleepChoices(chapter).filter { it.selected(chapter.sleep) }.map { it.label })
         assertEquals("Pauses at the end of this chapter, in about 7 minutes.", sleepStatus(chapter, now))
         assertEquals("End of chapter", sleepLabel(chapter))
-        assertEquals(listOf("Off"), sleepChoices(ListeningState(source = m4b)).filter { it.selected(SleepTimer()) }.map { it.label })
+        assertEquals(listOf("No timer"), sleepChoices(ListeningState(source = m4b)).filter { it.selected(SleepTimer()) }.map { it.label })
     }
 
     @Test fun timeLeftCoversTheWholeBookWithTheChapterAndTheTimeAtTheChosenSpeed() {

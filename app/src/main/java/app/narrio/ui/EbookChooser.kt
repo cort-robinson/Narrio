@@ -54,14 +54,14 @@ internal fun EbookChoiceRow(choice: EbookChoice, book: Audiobook, recording: Boo
     Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = enabled, onClickLabel = "Add this ebook", onClick = add).heightIn(min = 48.dp)
         .padding(vertical = 8.dp).testTag("ebook-choice:${choice.edition.id}"), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(choice.edition.title, style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            Text(ebookChoiceTitle(choice, book), style = MaterialTheme.typography.titleSmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
             ebookChoiceDetail(choice, book).takeIf(String::isNotBlank)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
             notes.forEach { ChoiceNoteLine(it) }
-            Text(choice.source, style = MaterialTheme.typography.labelSmall, color = muted)
+            ebookChoiceSource(choice, recording)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = muted) }
             if (adding && step.isNotBlank()) Text(step, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall, color = muted)
         }
         if (adding) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-        else Icon(Icons.Rounded.Add, null, tint = if (enabled) MaterialTheme.colorScheme.primary else muted)
+        else TextButton(add, enabled = enabled) { Text("Add") }
     }
 }
 

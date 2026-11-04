@@ -37,7 +37,7 @@ internal fun sleepChoices(state: ListeningState): List<SleepChoice> = buildList 
     listOf(15, 30, 45, 60, 90).forEach { add(SleepChoice("In $it minutes", SleepMode.MINUTES, it)) }
     if (state.chapters.isNotEmpty() || state.sleep.mode == SleepMode.END_OF_CHAPTER) add(SleepChoice("At the end of this chapter", SleepMode.END_OF_CHAPTER))
     if ((state.source?.parts?.size ?: 0) > 1 || state.sleep.mode == SleepMode.END_OF_PART) add(SleepChoice("At the end of this audio part", SleepMode.END_OF_PART))
-    add(SleepChoice("Off", SleepMode.OFF))
+    add(SleepChoice("No timer", SleepMode.OFF))
 }
 
 /** Whole minutes left on the timer, rounded up so it never reads 0 while running; null when unknown. */

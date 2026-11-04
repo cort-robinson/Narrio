@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -181,8 +182,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // Without TorBox only a free public reading can play, so the catalog's audiobook cover (often naming its own
             // narrator) would only be replaced; the page shows the book's drawn cover until the recording is known.
             val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && streamed?.complete != true
-            // While this book plays, the mini-player docked below shows where the listener is; the page keeps its length.
-            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch)
+            // While this book plays, its length gives way to the time left, matching the mini-player docked below.
+            val left = playback.takeIf { it.book?.id == book.id }?.let { state -> state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 } }
+            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left)
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
@@ -266,7 +268,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false) {
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
     val cover = when {
@@ -284,8 +286,13 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         }
         if (line.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary) }
         val length = (recording?.durationMs?.takeIf { it > 0 } ?: book.durationMs).takeIf { it > 0 }
-        if (length != null) Text(durationLabel(length), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
+        val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
+        if (time != null) Text(time, style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
+    // A short window, such as a folding phone's cover screen, keeps the cover to about a third of its height so the
+    // actions stay above the mini-player.
+    val height = LocalConfiguration.current.screenHeightDp
+    val coverSize = if (height < SHORT_WINDOW_DP) (height * .3f).dp.coerceIn(140.dp, 240.dp) else 240.dp
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
         // so the page's cover is too.
@@ -293,7 +300,7 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
             BookCover(cover, Modifier.size(260.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover)
             Column(Modifier.weight(1f), content = identity)
         } else Column {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(240.dp), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { BookCover(cover, Modifier.size(coverSize), large = true, sharedKey = "cover-${book.id}", blank = neutralCover) }
             Spacer(Modifier.height(24.dp))
             identity()
         }

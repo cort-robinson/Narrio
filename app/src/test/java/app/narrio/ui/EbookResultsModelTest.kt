@@ -40,8 +40,9 @@ class EbookResultsModelTest {
         assertEquals(listOf("Abridged or a sample"), ebookChoiceNotes(choices[1], recording = false).map { it.text })
         assertEquals(listOf(ChoiceNoteKind.CHECK), ebookChoiceNotes(choices[3], recording = true).map { it.kind })
         // The language shows only when it differs from the book's.
-        assertEquals("Jane Austen · TXT", ebookChoiceDetail(choices[0], book))
-        assertEquals("Jane Austen · French · EPUB", ebookChoiceDetail(choices[2], book))
+        assertEquals("Jane Austen", ebookChoiceDetail(choices[0], book))
+        assertEquals("Jane Austen · French", ebookChoiceDetail(choices[2], book))
+        assertEquals("Anna's Archive", ebookChoiceSource(choices[0], recording = true))
     }
 
     /** Before, a recording's own unnamed file sat below every confirmed edition, and a possible match hid its known difference. */
@@ -57,8 +58,11 @@ class EbookResultsModelTest {
         val choices = ebookChoices(search, book, shownId = null)
         assertEquals(listOf("book.epub", "sample", "maybe"), choices.map { it.edition.id })
         assertEquals("In this recording's files", choices.first().source)
-        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author"), ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")),
-            ebookChoiceNotes(choices.first(), recording = true))
+        // Coming with the recording is the reason to try it, said once: no check note, no source line, and the book's name, not the file's.
+        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")), ebookChoiceNotes(choices.first(), recording = true))
+        assertNull(ebookChoiceSource(choices.first(), recording = true))
+        assertEquals("Pride and Prejudice", ebookChoiceTitle(choices.first(), book))
+        assertEquals("Pride and Prejudice - abridged", ebookChoiceTitle(choices.last(), book))
         assertEquals(listOf(ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author"), ChoiceNote(ChoiceNoteKind.CAUTION, "May not follow the narration: abridged or a sample")),
             ebookChoiceNotes(choices.last(), recording = true))
     }

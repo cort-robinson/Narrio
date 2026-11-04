@@ -234,11 +234,15 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                     Box(Modifier.size(1.dp).semantics { liveRegion = LiveRegionMode.Polite; contentDescription = ebookAnnouncement(streamed, pinned.shown, tally, book) })
                 }
             }
-            if (showChoices) {
+            // With only possible matches, the card above already names them.
+            val possibleOnly = pinned.shown == null && choices.isNotEmpty()
+            if (showChoices && !possibleOnly) {
                 item(key = "choices-heading") {
                     Text(if (choices.isEmpty()) "No other editions yet." else if (pinned.shown == null) "Possible matches" else "Other editions", style = MaterialTheme.typography.titleSmall,
                         color = if (choices.isEmpty()) muted else MaterialTheme.colorScheme.onSurface, modifier = Modifier.semantics { heading() }.testTag("ebook-other-choices"))
                 }
+            }
+            if (showChoices) {
                 items(choices, key = { "choice:${it.edition.id}" }) { choice ->
                     EbookChoiceRow(choice, streamed.book, narrated, adding = state.adding == choice.edition.id, state.step, enabled = !busy, add = { actions.add(choice.edition) },
                         modifier = Modifier.animateItem())
@@ -373,7 +377,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         }
         // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
         // Other choices appear once the search has settled, so the count never ticks up under the listener.
-        if (!search.complete || others == 0) Spacer(Modifier.height(14.dp))
+        // Possible matches always show below, so they need no toggle.
+        if (!search.complete || others == 0 || shown == null) Spacer(Modifier.height(if (shown == null && search.complete) 2.dp else 14.dp))
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
@@ -456,7 +461,7 @@ private fun CandidateRow(candidate: BookTextSource, best: Boolean, adding: Boole
             if (adding) AddingStep(step)
         }
         if (adding) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-        else Icon(Icons.Rounded.Add, null, tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        else TextButton(add, enabled = enabled) { Text("Add") }
     }
 }
 

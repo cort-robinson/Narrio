@@ -31,10 +31,8 @@ private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>
 fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null, blank: Boolean = false) {
     // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
     if (blank) {
-        Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-            // A small spinner says the cover is on its way rather than missing.
-            CircularProgressIndicator(Modifier.size(28.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, strokeWidth = 2.5.dp)
-        }
+        // The page below already says what it's finding, so the shape stays plain.
+        Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest))
         return
     }
     val key = book.title.lowercase()
