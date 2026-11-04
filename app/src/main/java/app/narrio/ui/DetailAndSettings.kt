@@ -119,10 +119,10 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         item {
             Text("Read along", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
-            SettingSwitch("Prepare highlights ahead of time", "Lines up each book's text and audio in the background. Streamed books wait for Wi-Fi and charging.",
+            SettingSwitch("Prepare highlights ahead of time", "Runs in the background. Streamed books wait for Wi-Fi and charging.",
                 backgroundAlignment, vm::setBackgroundAlignment, Modifier.testTag("background-alignment"))
             Spacer(Modifier.height(12.dp))
-            SettingSwitch("Adjust highlights while listening", "Keeps the highlighted words in step as you read along. Nothing leaves this phone.",
+            SettingSwitch("Adjust highlights while listening", "Keeps the words in step as you read along. Nothing leaves this phone.",
                 readAlongSync, vm::setReadAlongSync, Modifier.testTag("read-along-sync"))
         }
         item { UpdateSettings(vm.graph.updates) }

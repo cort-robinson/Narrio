@@ -55,7 +55,7 @@ class PersistentPlayerTest {
             val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
             val docked = compose.onNodeWithTag("mini-player").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             assertEquals("Docked at the bottom edge", root.bottom, docked.bottom, 1f)
-            compose.onNodeWithContentDescription("Skip forward 30 seconds").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Rewind 10 seconds").assertIsDisplayed()
             capture("docked-details.png")
 
             // So does the reader, with the page ending where the player begins.

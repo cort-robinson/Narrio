@@ -201,7 +201,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "intro") {
                 Text(if (formats.ebook) "Choose an edition" else "Find an ebook", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(if (narrated) "Add the book's text to read along as you listen. The best match for this recording comes first."
+                Text(if (narrated) "Add the book's text to read along as you listen."
                      else "Pick the edition you want to read. It's saved on this phone with the book.", style = MaterialTheme.typography.bodyMedium, color = muted)
             }
             if (formats.editions.isNotEmpty()) {
@@ -367,7 +367,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         }
         // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
         // Other choices appear once the search has settled, so the count never ticks up under the listener.
-        if (!search.complete || others == 0) Spacer(Modifier.height(if (search.complete) 14.dp else 48.dp))
+        if (!search.complete || others == 0) Spacer(Modifier.height(14.dp))
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
@@ -463,7 +463,7 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 @Composable
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier) {
     // A book saved before choosing a recording or ebook says what it's waiting for.
-    if (!formats.audio && !formats.ebook) { Text("Saved · No recording yet", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    if (!formats.audio && !formats.ebook) { Text("Saved · Not started", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
     // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
     if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -482,10 +482,14 @@ private fun FormatMark(icon: ImageVector, label: String) {
 
 /** One progress line and bar from the shared place: "Ch 12 · 43%" or "Part 3 of 12 · 43%". */
 @Composable
-fun ShelfProgress(place: PlaceSummary, modifier: Modifier = Modifier) {
+fun ShelfProgress(place: PlaceSummary, modifier: Modifier = Modifier, live: String? = null) {
     Column(modifier.fillMaxWidth()) {
-        Text(place.label, Modifier.semantics { contentDescription = "${if (place.mode == PositionOrigin.READING) "Read to" else "Listened to"} ${spokenPlace(place.label)}" },
-            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // A listener thinks in time left: "10 h 22 m left", or the live place of the book playing now.
+        val left = place.remainingMs?.takeIf { place.mode == PositionOrigin.LISTENING }?.let { "${timeLeftLabel(it)} left" }
+        val label = live ?: left ?: place.label
+        Text(label, Modifier.semantics { contentDescription = live ?: left?.let { "${spokenTimeLeft(place.remainingMs!!)} left" }
+                ?: "${if (place.mode == PositionOrigin.READING) "Read to" else "Listened to"} ${spokenPlace(place.label)}" },
+            style = MaterialTheme.typography.labelSmall, color = if (live != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         place.fraction?.let { progress ->
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth().height(3.dp).clearAndSetSemantics { }, color = MaterialTheme.colorScheme.primary,

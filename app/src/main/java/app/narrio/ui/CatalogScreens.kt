@@ -214,7 +214,11 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         val row: @Composable LazyItemScope.(ShelfItem) -> Unit = { (entry, book, bookFormats) ->
             Column(Modifier.animateItem()) {
-                ShelfRow(entry, book, bookFormats, playing.book?.id == entry.bookId && playing.playing, { vm.continueBook(entry) }, { vm.graph.playback.service?.toggle() }, { vm.open(book) },
+                val here = playing.book?.id == entry.bookId
+                // The book in the mini-player shows its live place, so the row and the player never disagree.
+                val live = if (!here) null else (playing.bookTime?.remainingMs ?: (playing.durationMs - playing.positionMs).takeIf { playing.durationMs > 0 })
+                    ?.let { "${if (playing.playing) "Playing" else "Paused"} · ${timeLeftLabel(it)} left" }
+                ShelfRow(entry, book, bookFormats, here, live, { vm.continueBook(entry) }, { vm.open(book) },
                     { vm.setFinished(entry.bookId, it) }) { remove = book }
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Spacer(Modifier.height(20.dp))
@@ -233,7 +237,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, resume: () -> Unit, pause: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
+private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, live: String?, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit) {
     val finished = entry.finishedAt > 0
     val mode = formats.leadingMode
     var menu by remember { mutableStateOf(false) }
@@ -242,7 +246,7 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
     BookRow(book, details, recording = false, extra = {
         FormatMarks(formats, Modifier.padding(top = 2.dp))
         if (finished) FinishedMark(Modifier.padding(top = 6.dp))
-        else placeSummary(formats)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp)) }
+        else placeSummary(formats)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp), live = live) }
     }) {
         // Continue and the overflow sit together at the row's edge, so a shelf entry is one line of controls.
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -250,13 +254,9 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
                 mode == PositionOrigin.READING -> IconButton(resume) {
                     Icon(Icons.AutoMirrored.Rounded.MenuBook, "${if (formats.lastMode == PositionOrigin.READING) "Continue reading" else "Read"} ${book.title}", tint = MaterialTheme.colorScheme.primary)
                 }
-                // The book playing now pauses from here, like the mini-player.
-                entry.sourceJson.isNotBlank() -> IconButton(if (nowPlaying) pause else resume) {
-                    Crossfade(nowPlaying, label = "now playing") { live ->
-                        if (live) Icon(Icons.Rounded.Pause, "Pause ${book.title}", tint = MaterialTheme.colorScheme.primary)
-                        else Icon(Icons.Rounded.PlayArrow, "Resume ${book.title}", tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
+                // The book playing now is controlled from the mini-player below; its row says so instead.
+                nowPlaying -> Unit
+                entry.sourceJson.isNotBlank() -> IconButton(resume) { Icon(Icons.Rounded.PlayArrow, "Resume ${book.title}", tint = MaterialTheme.colorScheme.primary) }
             }
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "More for ${book.title}") }

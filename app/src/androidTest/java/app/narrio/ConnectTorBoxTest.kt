@@ -182,7 +182,7 @@ class ConnectTorBoxTest {
             vm.connected.value = false; vm.navigate(0); vm.search("")
         }
         compose.onNodeWithTag("torbox-nudge").assertIsDisplayed()
-        compose.onNodeWithText("Most popular audiobooks need TorBox, a paid service.").assertIsDisplayed()
+        compose.onNodeWithText("Free classics play right away.").assertIsDisplayed()
         compose.runOnIdle { vm.connected.value = true }
         compose.onNodeWithTag("torbox-nudge").assertDoesNotExist()
         compose.runOnIdle { vm.connected.value = false }

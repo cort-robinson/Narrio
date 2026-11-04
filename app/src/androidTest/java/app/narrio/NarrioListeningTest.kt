@@ -48,7 +48,7 @@ class NarrioListeningTest {
         compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.source?.format == "MP3" && graph.playback.state.value.positionMs > 1000 }
         assertEquals(27, graph.playback.state.value.source?.parts?.size)
         compose.runOnIdle { graph.playback.service!!.speed(1f) }
-        compose.onNodeWithText("1×").performScrollTo().performClick()
+        compose.onNodeWithText("1× speed").performScrollTo().performClick()
         compose.onNodeWithText("1.5× speed").performScrollTo().performClick()
         compose.waitUntil(3000) { graph.playback.state.value.speed == 1.5f }
         compose.runOnIdle { graph.playback.service!!.part(1, 120_000) }

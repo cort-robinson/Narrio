@@ -43,7 +43,9 @@ enum class ShelfFilter(val label: String) {
 }
 
 /** A place in one mode, ready to show: "Ch 12 · 43%" or "Part 3 of 12 · 43%". [fraction] is null when unknown. */
-data class PlaceSummary(val mode: PositionOrigin, val label: String, val fraction: Float?, val confidence: MappingConfidence = MappingConfidence.EXACT)
+data class PlaceSummary(val mode: PositionOrigin, val label: String, val fraction: Float?, val confidence: MappingConfidence = MappingConfidence.EXACT,
+                        /** Listening time left in the whole book, when every part's length is known. */
+                        val remainingMs: Long? = null)
 
 /** Where the shared place stands in the mode that last moved it. */
 fun placeSummary(formats: BookFormats): PlaceSummary? {
@@ -75,7 +77,8 @@ fun readingPlace(cursor: ContentCursor, chapter: Int?): PlaceSummary {
 fun listeningPlace(cursor: AudioCursor, source: AudioSource?): PlaceSummary {
     val parts = source?.parts.orEmpty()
     val index = resumeIndex(parts, cursor.partId)
-    val fraction = bookTime(parts, index, cursor.positionMs)?.fraction
+    val known = bookTime(parts, index, cursor.positionMs)
+    val fraction = known?.fraction
     val time = formatTime(cursor.positionMs)
     val label = when {
         parts.size > 1 && fraction != null -> "Part ${index + 1} of ${parts.size} · ${percent(fraction)}"
@@ -83,7 +86,7 @@ fun listeningPlace(cursor: AudioCursor, source: AudioSource?): PlaceSummary {
         fraction != null -> "$time · ${percent(fraction)}"
         else -> "$time in"
     }
-    return PlaceSummary(PositionOrigin.LISTENING, label, fraction)
+    return PlaceSummary(PositionOrigin.LISTENING, label, fraction, remainingMs = known?.remainingMs)
 }
 
 /** A started book reads "<1%" rather than 0% or an overstated 1%, and an unfinished one never as 100%. */

@@ -127,24 +127,25 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Getting the key comes first; pasting it follows.
+        Text("Copy your key from your TorBox account, then come back and paste it below.", style = MaterialTheme.typography.bodyMedium)
         TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.offset(x = (-12).dp)) {
             Text("Get your key from TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("TorBox API key") }, singleLine = true,
+        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Paste your TorBox key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }),
             trailingIcon = {
                 if (key.isEmpty()) IconButton({ scope.launch { clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.let { change(it.toString()) } } }) {
-                    Icon(Icons.Rounded.ContentPaste, "Paste API key")
+                    Icon(Icons.Rounded.ContentPaste, "Paste your key")
                 } else IconButton({ shown = !shown }) { Icon(if (shown) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (shown) "Hide API key" else "Show API key") }
             },
             supportingText = state.error?.let { error -> { Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("torbox-error")) } },
             shape = RoundedCornerShape(12.dp))
         Button(::submit, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("torbox-connect"), enabled = key.isNotBlank() && !state.connecting) {
             if (state.connecting) { CircularProgressIndicator(Modifier.size(18.dp), LocalContentColor.current, strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
-            Text(if (state.connecting) "Connecting…" else "Connect TorBox", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            Text(if (state.connecting) "Connecting…" else "Connect", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
         Text("Your key stays on this phone, encrypted. It's never backed up or shared.",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -203,8 +204,8 @@ fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier
         .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("torbox-nudge")) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Most popular audiobooks need TorBox, a paid service.", style = MaterialTheme.typography.titleSmall)
-                Text("Free classics from LibriVox play right away.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Free classics play right away.", style = MaterialTheme.typography.titleSmall)
+                Text("Most new audiobooks need TorBox, a paid service.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }

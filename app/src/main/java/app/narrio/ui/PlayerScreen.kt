@@ -88,12 +88,13 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
                 BookCover(book, Modifier.width(38.dp).height(52.dp), sharedKey = "now-${book.id}")
                 Column(Modifier.weight(1f)) {
                     Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AnimatedVisibility(state.playing, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { NarrationPulse(true, Modifier.size(12.dp, 10.dp)) }
+                    // The play/pause button already says whether it's playing; the line says where.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(if (state.buffering) "Buffering…" else "${state.placeTitle ?: book.author} · ${formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                SkipButton(true, 48.dp, 24.dp) { vm.graph.playback.service?.skip(it) }
+                // One skip fits here: back 10 s, to catch what was just missed.
+                SkipButton(false, 48.dp, 24.dp) { vm.graph.playback.service?.skip(it) }
                 IconButton({ haptics.performHapticFeedback(if (state.playing) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn); vm.graph.playback.service?.toggle() }) {
                     PlayGlyph(state, 24.dp, MaterialTheme.colorScheme.primary, 20.dp)
                 }
@@ -153,7 +154,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
                     val coverHeight = minOf(maxHeight, maxWidth * .55f * 1.45f).coerceAtLeast(1.dp)
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                        ListeningCover(book, state.playing, Modifier.width(coverHeight / 1.45f).height(coverHeight))
+                        ListeningCover(book, state.playing || state.buffering, Modifier.width(coverHeight / 1.45f).height(coverHeight))
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                             Text(book.title, style = MaterialTheme.typography.headlineLarge)
                             Spacer(Modifier.height(12.dp))
@@ -247,7 +248,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
         when {
             wide -> Row(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
                 val coverHeight = minOf(height - 16.dp, width * .4f * 1.45f).coerceAtLeast(120.dp)
-                ListeningCover(book, state.playing, pullDown.width(coverHeight / 1.45f).height(coverHeight))
+                ListeningCover(book, state.playing || state.buffering, pullDown.width(coverHeight / 1.45f).height(coverHeight))
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
                     TitleBlock(book, 2)
                     Spacer(Modifier.height(20.dp))
@@ -257,7 +258,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
             height < 480.dp -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp)) {
                 // A short, narrow pane (a landscape phone's split view): the book becomes a byline beside its cover.
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ListeningCover(book, state.playing, pullDown.width(64.dp).height(93.dp))
+                    ListeningCover(book, state.playing || state.buffering, pullDown.width(64.dp).height(93.dp))
                     TitleBlock(book, 1)
                 }
                 Spacer(Modifier.height(12.dp))
@@ -273,7 +274,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 val coverHeight = minOf(space, cap).coerceAtLeast(if (compact) 150.dp else 180.dp)
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                     Box(Modifier.fillMaxWidth().then(pullDown).padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                        ListeningCover(book, state.playing, Modifier.width(coverHeight / 1.45f).height(coverHeight))
+                        ListeningCover(book, state.playing || state.buffering, Modifier.width(coverHeight / 1.45f).height(coverHeight))
                     }
                     Column(Modifier.onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }) {
                         TitleBlock(book, 2)
@@ -369,7 +370,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         Spacer(Modifier.height(if (dense) 4.dp else 20.dp))
         // A quiet tool tray: four equal slots that never wrap into an orphaned row.
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent(speedLabel(state.speed), transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { FitLabel(it) } }
+            ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent("${speedLabel(state.speed)} speed", transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { FitLabel(it) } }
             ToolSlot(Icons.Rounded.Bedtime, sleep, active = state.sleep.active) {
                 FitLabel(sleepLabel(state))
             }
@@ -473,5 +474,6 @@ internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}�
 @Composable
 internal fun ChoiceDialog(title: String, dismiss: () -> Unit, extra: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
     AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) },
-        confirmButton = { TextButton(dismiss) { Text("Close") } }, dismissButton = extra)
+        // Choosing applies and closes; tapping outside or Back closes without a change.
+        confirmButton = { extra?.invoke() })
 }

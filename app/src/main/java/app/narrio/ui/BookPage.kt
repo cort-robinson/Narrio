@@ -171,7 +171,12 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     LazyColumn(Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.nestedScrollConnection).testTag("book-details")
         .pointerInput(book.id) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial); interacted = true } },
         listState, contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 6.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        item(key = "identity") { BookIdentity(book, current?.recording ?: best) }
+        item(key = "identity") {
+            // Without TorBox only a free public reading can play, so the catalog's audiobook cover (often naming its own
+            // narrator) would only be replaced; the page shows the book's drawn cover until the recording is known.
+            val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && streamed?.complete != true
+            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch)
+        }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             val readingFirst = formats.leadingMode == PositionOrigin.READING
@@ -251,10 +256,14 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?) {
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
-    val cover = recording?.let { book.copy(coverUrl = app.narrio.data.SourceQuality.coverFor(it, book)) } ?: book
+    val cover = when {
+        neutralCover -> book.copy(coverUrl = "")
+        recording != null -> book.copy(coverUrl = app.narrio.data.SourceQuality.coverFor(recording, book))
+        else -> book
+    }
     val identity: @Composable ColumnScope.() -> Unit = {
         Text(book.title, style = MaterialTheme.typography.headlineLarge, modifier = Modifier.semantics { heading() })
         Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyLarge, color = muted)

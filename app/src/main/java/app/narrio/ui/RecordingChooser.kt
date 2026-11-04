@@ -142,7 +142,7 @@ fun RecordingChooser(
                         Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         Column(Modifier.weight(1f)) {
                             Text("Advanced options", style = MaterialTheme.typography.titleSmall)
-                            Text("Can't find the right one? See every source's results and files.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Every recording found, with its files", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -166,7 +166,7 @@ private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolea
             // An unnamed reading is named by what sets it apart: a full cast says so instead of "Narrator not listed".
             val kind = recordingKind(recording, book)
             val dramatized = SourceQuality.DRAMATIZED in kind
-            val narrator = recordingNarrator(recording).ifBlank { if (dramatized) "Full cast (dramatized)" else "Narrator not listed" }
+            val narrator = recordingNarrator(recording).ifBlank { if (dramatized) "Full cast (dramatized)" else "Unknown narrator" }
             Text(narrator, style = MaterialTheme.typography.titleSmall)
             // How long it is tells readings apart better than file size; the size shows when the length isn't known.
             val facts = kind.filterNot { dramatized && narrator.startsWith("Full cast") && it == SourceQuality.DRAMATIZED } + listOfNotNull(recording.durationMs.takeIf { it > 0 }?.let(::durationLabel) ?: bytes.takeIf { it > 0 }?.let(::sizeLabel))
