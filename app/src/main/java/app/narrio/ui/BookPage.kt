@@ -390,8 +390,9 @@ private fun ListenSlot(
                     NoMatchKind.ALL_OFF -> ModeButton(actions.sourceSettings, button, leading) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
-                // TorBox isn't the only way: audio files already on the phone play without it.
-                if (copy.kind == NoMatchKind.NEEDS_TORBOX) TextButton(actions.addOwnAudio, Modifier.offset(x = (-12).dp).testTag("add-own-audio")) { Text("Have the audio file? Add it") }
+                // TorBox isn't the only way: the same row as the chooser's searches again with other words, or adds your own file.
+                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Find another recording, or add your own file", expanded = null, open = actions.addOwnAudio,
+                    modifier = Modifier.padding(top = 8.dp).testTag("add-own-audio"))
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
         }

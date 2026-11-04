@@ -34,7 +34,7 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
     // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
     if (blank) {
         Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.AutoStories, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .35f))
+            Icon(Icons.Rounded.AutoStories, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .6f))
         }
         return
     }

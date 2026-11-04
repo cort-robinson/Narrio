@@ -114,7 +114,7 @@ fun RecordingChooser(
                 item(key = "intro") {
                     Text("Choose a recording", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(6.dp))
-                    Text(listOfNotNull("Each one is a different reading of ${book.title}.", shared).joinToString(" "),
+                    Text(listOfNotNull("Different readings of ${book.title}.", shared).joinToString(" "),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // A better match than the one Listen plays waits here, never moving the page under the listener.
@@ -212,7 +212,7 @@ internal fun SearchOtherSourcesRow(detail: String?, expanded: Boolean?, open: ()
 
 /** The status every row shares, said once for the list: "All are free public recordings." Null keeps it per row. */
 internal fun sharedStatus(status: String): String? = when (status) {
-    "Free public recording" -> "All are free public recordings."
+    "Free public recording" -> "All are free."
     "Ready now" -> "All are ready to play now."
     "Needs TorBox" -> "All need TorBox."
     "On this phone" -> "All are on this phone."

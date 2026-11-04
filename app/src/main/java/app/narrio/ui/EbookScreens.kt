@@ -259,7 +259,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "advanced") {
                 Column {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(bottom = 4.dp))
-                    SearchOtherSourcesRow(null, expanded = advanced, title = "Find another edition", open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
+                    SearchOtherSourcesRow("Find another edition", expanded = advanced, open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
                 }
             }
             if (advanced) {
@@ -470,7 +470,7 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 @Composable
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox: Boolean = false) {
     // A book saved before choosing a recording or ebook says what it's waiting for.
-    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Saved · Needs TorBox" else "Saved · Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    if (!formats.audio && !formats.ebook) { Text(if (needsTorBox) "Saved · No free recording" else "Saved · Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
     // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
     if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

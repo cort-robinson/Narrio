@@ -75,8 +75,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
             AnimatedVisibility(query.isBlank(), enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                 LazyRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Classics sits next to All: free public recordings of them play without TorBox.
-                    items(AppleBooks.genres.keys.sortedBy { when (it) { "All" -> 0; "Classics" -> 1; else -> 2 } }) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
+                    // The category Discover opens on leads, then All, then Classics, whose free public recordings play without TorBox.
+                    items(AppleBooks.genres.keys.sortedBy { when (it) { vm.homeCategory -> 0; "All" -> 1; "Classics" -> 2; else -> 3 } }) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
                         leadingIcon = { AnimatedVisibility(category == it, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } }) }
                 }
             }
