@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.ui.Modifier
@@ -34,7 +35,10 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
     // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
     if (blank) {
         Box(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.AutoStories, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .6f))
+            // A gentle pulse says the cover is on its way rather than missing.
+            val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "cover pending").animateFloat(.3f, .7f,
+                androidx.compose.animation.core.infiniteRepeatable<Float>(tween(900), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulse")
+            Icon(Icons.Rounded.AutoStories, null, Modifier.size(48.dp).graphicsLayer { alpha = pulse }, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }

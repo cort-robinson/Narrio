@@ -109,7 +109,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.ManageSearch, "Search sources", "Choose where Narrio looks for books", openAddons, Modifier.testTag("sources-entry"))
+                SettingsRow(Icons.Rounded.ManageSearch, "Where Narrio searches", "Sites for recordings, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
             }
         }
         // Listening's two everyday switches share one heading.

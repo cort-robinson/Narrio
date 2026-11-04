@@ -34,7 +34,7 @@ class EbookResultsModelTest {
         val choices = ebookChoices(search, book, shownId = "best")
         assertEquals(listOf("en", "sample", "fr", "maybe"), choices.map { it.edition.id })
         assertEquals("Anna's Archive", choices.first().source)
-        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.LIKELY, "Likely matches the narration")), ebookChoiceNotes(choices[0], recording = true))
+        assertEquals(listOf(ChoiceNote(ChoiceNoteKind.LIKELY, "Fits this recording")), ebookChoiceNotes(choices[0], recording = true))
         assertEquals(emptyList<ChoiceNote>(), ebookChoiceNotes(choices[0], recording = false))
         assertEquals(listOf(ChoiceNote(ChoiceNoteKind.CAUTION, "May not follow the narration: abridged or a sample")), ebookChoiceNotes(choices[1], recording = true))
         assertEquals(listOf("Abridged or a sample"), ebookChoiceNotes(choices[1], recording = false).map { it.text })

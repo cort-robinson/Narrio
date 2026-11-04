@@ -181,9 +181,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // Without TorBox only a free public reading can play, so the catalog's audiobook cover (often naming its own
             // narrator) would only be replaced; the page shows the book's drawn cover until the recording is known.
             val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && streamed?.complete != true
-            // While this book plays, its length gives way to where the listener is, as on the shelf.
-            val left = playback.takeIf { it.book?.id == book.id }?.let { it.bookTime?.remainingMs ?: (it.durationMs - it.positionMs).takeIf { _ -> it.durationMs > 0 } }
-            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, playingLeft = left)
+            // While this book plays, the mini-player docked below shows where the listener is; the page keeps its length.
+            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch)
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
@@ -267,7 +266,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, playingLeft: Long? = null) {
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
     val cover = when {
@@ -285,8 +284,7 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         }
         if (line.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary) }
         val length = (recording?.durationMs?.takeIf { it > 0 } ?: book.durationMs).takeIf { it > 0 }
-        if (playingLeft != null) Text("Playing · ${timeLeftLabel(playingLeft)} left", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
-        else if (length != null) Text(durationLabel(length), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
+        if (length != null) Text(durationLabel(length), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
