@@ -98,6 +98,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     val context = LocalContext.current
     val backgroundAlignment by vm.backgroundAlignment.collectAsStateWithLifecycle()
     var aboutOpen by rememberSaveable { mutableStateOf(false) }
+    val updates by vm.graph.updates.state.collectAsStateWithLifecycle()
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // TorBox leads: it gates every source beyond LibriVox. Where books come from and how the app looks follow as rows,
     // then everyday switches, then the app itself.
@@ -106,7 +107,6 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         item(key = "torbox") {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.Hub, "Sources", "Where Narrio finds audiobooks, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
                 AppearanceEntry(appearance, openAppearance)
             }
         }
@@ -117,10 +117,13 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights the words as they're read. Streamed books are prepared on Wi-Fi while charging.",
+            SettingSwitch("Read-along highlights", "Highlights the words as they're read. For streamed books, the highlighting is prepared on Wi-Fi while charging.",
                 backgroundAlignment, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
-        item { UpdateSettings(vm.graph.updates) }
+        // Where books come from is for the curious; it follows the everyday switches.
+        item { SettingsRow(Icons.Rounded.Hub, "Sources", "Where Narrio finds audiobooks, ebooks, and book details", openAddons, Modifier.testTag("sources-entry")) }
+        // Local builds have no update channel and show their version under About instead.
+        if (updates.channel != null) item { UpdateSettings(vm.graph.updates) }
         item {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
             Text("About Narrio", style = MaterialTheme.typography.headlineSmall)

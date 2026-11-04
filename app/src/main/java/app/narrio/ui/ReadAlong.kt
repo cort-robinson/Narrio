@@ -372,7 +372,7 @@ fun ReadAlongPanel(vm: NarrioViewModel, readAlong: ReadAlong, playback: Listenin
         Column(Modifier.fillMaxSize().statusBarsIgnoringVisibilityPadding().navigationBarsIgnoringVisibilityPadding().padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
             playback.book?.takeIf { readAlong.playingHere }?.let { book ->
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BookCover(book, Modifier.width(52.dp).height(76.dp))
+                    BookCover(book, Modifier.size(56.dp))
                     Column(Modifier.weight(1f)) {
                         Text(book.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

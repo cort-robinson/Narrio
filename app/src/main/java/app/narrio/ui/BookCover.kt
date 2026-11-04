@@ -115,13 +115,7 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
             }
             val painter = rememberAsyncImagePainter(request,
                 onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false; failed = true })
-            // Art whose shape differs from its frame (square art in a book-shaped row, a portrait ebook cover in the
-            // square player) fills the margins with its own softened light from a tiny upscaled decode.
-            if (coverLoaded) {
-                val glow = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(16).memoryCacheKey("${book.coverUrl}#glow").build() }
-                Image(rememberAsyncImagePainter(glow), null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Crop)
-                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
-            }
+            // Covers are square, like audiobook art; other shapes (a portrait ebook cover) sit on the plain surface behind them.
             // Rows and the mini-player already read the title beside the art; only standalone covers describe it.
             Image(painter, if (large) "Cover of ${book.title}" else null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Fit)
         }

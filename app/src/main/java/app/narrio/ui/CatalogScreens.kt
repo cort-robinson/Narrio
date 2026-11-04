@@ -140,7 +140,7 @@ fun BookRow(book: Audiobook, open: () -> Unit, modifier: Modifier = Modifier, re
     val interaction = remember { MutableInteractionSource() }
     Row(modifier.fillMaxWidth().pressScale(interaction, .985f).clip(RoundedCornerShape(12.dp)).clickable(interaction, LocalIndication.current, onClick = open),
         horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-        BookCover(book, Modifier.width(76.dp).height(112.dp), sharedKey = "cover-${book.id}")
+        BookCover(book, Modifier.size(76.dp), sharedKey = "cover-${book.id}")
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -186,7 +186,15 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         item(key = "heading") {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.Center, itemVerticalAlignment = Alignment.CenterVertically) {
                 Text("My shelf", style = MaterialTheme.typography.displaySmall)
-                TextButton(addEbook, enabled = !importing.working) { Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add ebook file") }
+                // Adding a file is occasional, so it waits in a menu; an empty shelf offers it outright below.
+                var menu by remember { mutableStateOf(false) }
+                Box {
+                    IconButton({ menu = true }, Modifier.testTag("shelf-more")) { Icon(Icons.Rounded.MoreVert, "More shelf options") }
+                    DropdownMenu(menu, { menu = false }) {
+                        DropdownMenuItem({ Text("Add an ebook from your phone") }, { menu = false; addEbook() }, enabled = !importing.working,
+                            leadingIcon = { Icon(Icons.Rounded.UploadFile, null) })
+                    }
+                }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
             if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),

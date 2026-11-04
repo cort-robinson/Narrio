@@ -142,7 +142,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         navigationIcon = { if (compact) IconButton({ vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to books") } },
         actions = {
             // Saved reads as a state, not a greyed-out button.
-            TextButton({ vm.save(book) }, Modifier.padding(end = if (saved) 0.dp else 8.dp), enabled = !saved,
+            TextButton({ vm.save(book) }, enabled = !saved,
                 colors = ButtonDefaults.textButtonColors(disabledContentColor = MaterialTheme.colorScheme.secondary)) {
                 AnimatedContent(saved, transitionSpec = { (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn()).togetherWith(scaleOut(targetScale = .4f) + fadeOut()) }, label = "saved") { done ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -150,14 +150,16 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                     }
                 }
             }
-            // A shelved book can be moved into or out of Finished from here, as on the shelf.
-            if (saved) {
-                var menu by remember(book.id) { mutableStateOf(false) }
-                Box {
-                    IconButton({ menu = true }, Modifier.testTag("book-more")) { Icon(Icons.Rounded.MoreVert, "More options") }
-                    DropdownMenu(menu, { menu = false }) {
-                        if (finished) DropdownMenuItem({ Text("Mark as not finished") }, { menu = false; vm.setFinished(book.id, false) })
-                        else DropdownMenuItem({ Text("Mark as finished") }, { menu = false; vm.setFinished(book.id, true) }, Modifier.testTag("mark-finished"))
+            // The menu is always there, so the bar keeps its shape before and after saving; a shelved book moves into
+            // or out of Finished from here, as on the shelf.
+            var menu by remember(book.id) { mutableStateOf(false) }
+            Box {
+                IconButton({ menu = true }, Modifier.testTag("book-more")) { Icon(Icons.Rounded.MoreVert, "More options") }
+                DropdownMenu(menu, { menu = false }) {
+                    when {
+                        !saved -> DropdownMenuItem({ Text("Save to My shelf") }, { menu = false; vm.save(book) })
+                        finished -> DropdownMenuItem({ Text("Mark as not finished") }, { menu = false; vm.setFinished(book.id, false) })
+                        else -> DropdownMenuItem({ Text("Mark as finished") }, { menu = false; vm.setFinished(book.id, true) }, Modifier.testTag("mark-finished"))
                     }
                 }
             }
@@ -175,7 +177,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // Without TorBox only a free public reading can play, so the catalog's audiobook cover (often naming its own
             // narrator) would only be replaced; the page shows the book's drawn cover until the recording is known.
             val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && streamed?.complete != true
-            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch)
+            // While this book plays, its length gives way to the live time left, as in the mini-player.
+            val left = playback.takeIf { it.book?.id == book.id }?.let { it.bookTime?.remainingMs ?: (it.durationMs - it.positionMs).takeIf { _ -> it.durationMs > 0 } }
+            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, timeLeft = left)
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
@@ -256,7 +260,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false) {
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, timeLeft: Long? = null) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
     val cover = when {
@@ -274,7 +278,8 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         }
         if (line.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary) }
         val length = (recording?.durationMs?.takeIf { it > 0 } ?: book.durationMs).takeIf { it > 0 }
-        if (length != null) Text(durationLabel(length), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
+        if (timeLeft != null) Text("${timeLeftLabel(timeLeft)} left", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+        else if (length != null) Text(durationLabel(length), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,

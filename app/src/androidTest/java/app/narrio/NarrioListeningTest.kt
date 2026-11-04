@@ -118,7 +118,7 @@ class NarrioListeningTest {
         // Choosing it in the chooser keeps the book's one page and leads Listen with it.
         val recording = vm.sourceSearch.value.recordings.first { it.provider == "archive" }
         compose.runOnIdle { vm.chooseVersion(recording) }
-        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        compose.onNodeWithTag("recording-summary").assertTextContains("· Free", substring = true)
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
     }
 }

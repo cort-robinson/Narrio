@@ -132,7 +132,7 @@ class LibraryFormatsExperienceTest {
         // Audio only: Resume on the book's own recording leads; Find ebook replaces Read.
         compose.runOnIdle { vm.selection.value = SelectionState(audioOnly) }
         compose.onNodeWithTag("listen-action").assertIsEnabled().assertTextContains("Resume · 1 h 35 m left")
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ruth Golding · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ruth Golding · Free")
         compose.onNodeWithTag("find-ebook-action").assertIsDisplayed()
         compose.onNodeWithText("Listening · Part 3 of 12 · 20%").assertIsDisplayed()
         compose.onNodeWithText("Save").assertDoesNotExist()
@@ -157,8 +157,8 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Likely matches the narration").assertIsDisplayed()
         // The simple layer keeps each source's own section and status in Advanced; the file choice stays visible.
         compose.onNodeWithTag("ebook-sources-summary").assertDoesNotExist()
-        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Choose an EPUB or text file"))
-        compose.onNodeWithText("Choose an EPUB or text file").assertExists()
+        compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Choose a file from your phone"))
+        compose.onNodeWithText("Choose a file from your phone").assertExists()
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-advanced"))
         compose.onNodeWithTag("ebook-advanced").performClick()
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("ebook-sources-summary"))
@@ -322,7 +322,7 @@ class LibraryFormatsExperienceTest {
         val toggle = compose.onNodeWithTag("ebook-other-choices-toggle")
         fun state(value: String) = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, value)
         sheet.performScrollToNode(hasTestTag("ebook-other-choices-toggle"))
-        toggle.assert(state("Expanded")).assertTextContains("Other choices · 1", substring = true).performClick()
+        toggle.assert(state("Expanded")).assertTextContains("1 other edition", substring = true).performClick()
         toggle.assert(state("Collapsed"))
         compose.onNodeWithTag("ebook-choice:${possible.id}").assertDoesNotExist()
         toggle.performClick()

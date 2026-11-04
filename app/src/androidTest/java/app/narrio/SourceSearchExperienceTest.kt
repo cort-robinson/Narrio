@@ -147,14 +147,14 @@ class SourceSearchExperienceTest {
         capture("sources-advanced-in-progress-night")
         backToList()
         compose.onNodeWithTag("recording:${public.id}").assertIsSelected()
-        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        compose.onNodeWithTag("recording-summary").assertTextContains("· Free", substring = true)
         compose.onNodeWithTag("listen-action").assertIsEnabled()
         capture("chooser-in-progress-night")
 
         // The listener is choosing now; the slow source's better release waits in the chooser instead of moving Listen.
         compose.runOnIdle { search.answer() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("better-match").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        compose.onNodeWithTag("recording-summary").assertTextContains("· Free", substring = true)
         capture("chooser-better-match-night")
         compose.onNodeWithTag("better-match").performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("better-match").fetchSemanticsNodes().isEmpty() }

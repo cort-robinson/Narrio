@@ -85,7 +85,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
         color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, interactionSource = interaction) {
         Column(if (aboveSystemBar) Modifier.navigationBarsIgnoringVisibilityPadding() else Modifier) {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                BookCover(book, Modifier.width(38.dp).height(52.dp), sharedKey = "now-${book.id}")
+                BookCover(book, Modifier.size(48.dp), sharedKey = "now-${book.id}")
                 Column(Modifier.weight(1f)) {
                     Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     // The play/pause button already says whether it's playing; the line says where.

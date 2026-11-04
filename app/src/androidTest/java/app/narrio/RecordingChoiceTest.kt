@@ -110,7 +110,7 @@ class RecordingChoiceTest {
 
         // Back on the page Kim's recording is the one Resume plays; choosing Ray again picks up at Ray's place.
         compose.runOnIdle { vm.playerOpen.value = false }
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Kim Doe · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Kim Doe · Free")
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:${ray.id}").performClick()
         // Ray has a place of its own, so the start choice shows, resuming there unless the listener picks otherwise.
@@ -159,7 +159,7 @@ class RecordingChoiceTest {
         // The page resumes Ray and shows Kim's recording still getting ready.
         compose.runOnIdle { vm.playerOpen.value = false; vm.open(entry.book()) }
         compose.onNodeWithTag("listen-action").assertTextContains("Resume", substring = true)
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Free")
         compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("preparation"))
         compose.onNodeWithText("Getting ready in TorBox").assertExists()
         compose.onNodeWithText("Kim Doe's recording").assertExists()

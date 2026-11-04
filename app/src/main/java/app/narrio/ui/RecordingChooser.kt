@@ -133,7 +133,7 @@ fun RecordingChooser(
                         status = readiness(recording, connected, phone).takeIf { shared == null }, ready = phone || SourceQuality.ready(recording), enabled = !busy,
                         bytes = downloadBytes(recording, current?.source?.format?.takeIf { mine } ?: defaultFormat(recording, vm.savedFormat(book.id))),
                         // Every match can share a narrator, and an unnamed one has nothing else to go by: their release names tell them apart.
-                        release = releaseNote(recording, book).takeIf { (showAll || recordingNarrator(recording).isBlank()) && !mine }) { pick(recording) }
+                        release = releaseNote(recording, book).takeIf { !mine && (showAll || recordingNarrator(recording).isBlank() && SourceQuality.DRAMATIZED !in SourceQuality.edition(recording).kind) }) { pick(recording) }
                 }
                 item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {

@@ -232,7 +232,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             }
             if (showChoices) {
                 item(key = "choices-heading") {
-                    Text(if (choices.isEmpty()) "No other choices yet." else "Other choices", style = MaterialTheme.typography.titleSmall,
+                    Text(if (choices.isEmpty()) "No other editions yet." else "Other editions", style = MaterialTheme.typography.titleSmall,
                         color = if (choices.isEmpty()) muted else MaterialTheme.colorScheme.onSurface, modifier = Modifier.semantics { heading() }.testTag("ebook-other-choices"))
                 }
                 items(choices, key = { "choice:${it.edition.id}" }) { choice ->
@@ -247,9 +247,9 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                 // Any EPUB or text file works, so the universal fallback stays on the simple layer.
                 TextButton(actions.chooseFile, Modifier.heightIn(min = 48.dp), enabled = !busy) {
                     if (state.adding == EbookSearchState.FILE) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp)); Text(if (state.adding == EbookSearchState.FILE) "Adding your file…" else "Choose an EPUB or text file")
+                    Spacer(Modifier.width(8.dp)); Text(if (state.adding == EbookSearchState.FILE) "Adding your file…" else "Choose a file from your phone")
                 }
-                Text("Ebooks stay on this phone. Kindle, PDF, and DRM-protected files can't be opened.", style = MaterialTheme.typography.bodySmall, color = muted,
+                Text("EPUB or text. Some store-bought ebooks can't be opened.", style = MaterialTheme.typography.bodySmall, color = muted,
                     modifier = Modifier.padding(start = 12.dp))
             }
             item(key = "advanced") {
@@ -371,7 +371,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
-                Text("Other choices · $others")
+                // Named for what they are, so they aren't mistaken for Search other sources below.
+                Text("$others other ${if (others == 1) "edition" else "editions"}")
                 Icon(Icons.Rounded.ExpandMore, null, Modifier.padding(start = 4.dp).size(18.dp).rotate(turn))
             }
         }
@@ -463,7 +464,7 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 @Composable
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier) {
     // A book saved before choosing a recording or ebook says what it's waiting for.
-    if (!formats.audio && !formats.ebook) { Text("Saved · Not started", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
+    if (!formats.audio && !formats.ebook) { Text("Saved · Open to find a recording", modifier, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); return }
     // In a listening app an audiobook goes without saying; the marks matter once an ebook is involved.
     if (!formats.ebook) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
