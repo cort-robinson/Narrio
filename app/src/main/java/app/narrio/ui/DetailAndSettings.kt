@@ -10,6 +10,8 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,6 +118,11 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
                 SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Choose which sources Narrio searches", openAddons, Modifier.testTag("sources-entry"))
+                // An ebook file of your own is another place books come from; it opens as a new book, and My shelf shows any problem.
+                val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.importEbook(uri); if (uri != null) vm.navigate(1) }
+                SettingsRow(Icons.Rounded.UploadFile, "Import an ebook file", "Adds it to My shelf as a new book", {
+                    vm.beginEbookImport(null); importer.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream"))
+                }, Modifier.testTag("settings-import-ebook"))
             }
         }
         // The everyday listening and reading switches.
