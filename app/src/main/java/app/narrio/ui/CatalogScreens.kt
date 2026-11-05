@@ -49,6 +49,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val torBoxNudge = rememberTorBoxNudge(vm.graph.preferences)
     val recent by vm.recentSearches.collectAsStateWithLifecycle()
     var searchFocused by remember { mutableStateOf(false) }
+    // Narrowing results to free recordings lasts for one search; a new search shows everything again.
+    var freeOnly by remember(catalog.query) { mutableStateOf(false) }
     val focus = LocalFocusManager.current
     val browse = query.isBlank() && (category == "All" || category == vm.homeCategory)
     // A book already on the shelf wears the cover it has there (its recording's own), so it looks the same everywhere.
@@ -126,17 +128,23 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     }
                 }
             }
+            val freeHere = catalog.books.count { it.id in catalog.free }
+            val canFilterFree = query.isNotBlank() && !connected && freeHere > 0 && !catalog.loading
             if (query.isNotBlank()) item(key = "results-title") {
-                // Once free recordings are marked, the count says so; what an unmarked book needs is told on its page.
+                // Once free recordings are marked, the count says how many, and that count narrows the list to them.
                 val count = "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}"
-                val freeHere = catalog.books.count { it.id in catalog.free }
-                AnimatedContent(if (catalog.loading) "Searching…" else if (!connected && freeHere > 0) "$count · $freeHere free to listen" else count,
-                    transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
-                    Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AnimatedContent(if (catalog.loading) "Searching…" else count, Modifier.weight(1f, fill = false),
+                        transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
+                        Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (canFilterFree) FilterChip(freeOnly, { freeOnly = !freeOnly }, { Text("$freeHere free to listen") },
+                        leadingIcon = { Icon(Icons.Rounded.Headphones, null, Modifier.size(16.dp)) }, modifier = Modifier.testTag("free-only"))
                 }
             }
-            val nudgeAfter = if (nudge) minOf(NUDGE_AFTER, catalog.books.size) else catalog.books.size
-            catalog.books.forEachIndexed { index, book -> item(key = book.id) {
+            val listed = if (canFilterFree && freeOnly) catalog.books.filter { it.id in catalog.free } else catalog.books
+            val nudgeAfter = if (nudge) minOf(NUDGE_AFTER, listed.size) else listed.size
+            listed.forEachIndexed { index, book -> item(key = book.id) {
                 BookRow(shelfCovers[book.id]?.let { book.copy(coverUrl = it) } ?: book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading),
                     // The book in the mini-player says so in words where it appears in the list, as on the shelf.
                     extra = when {

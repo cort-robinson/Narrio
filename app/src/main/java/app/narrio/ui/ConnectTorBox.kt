@@ -135,13 +135,12 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun change(value: String) { key = value.filterNot(Char::isWhitespace); edited() }
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Three short steps, each beside its control: sign in, copy the key, paste it.
-        Text("1. Open TorBox and sign in (or sign up).", style = MaterialTheme.typography.bodyMedium)
+        // Two steps, each beside its control: get the key, then paste it.
+        Text("1. Get your TorBox key: sign in (or sign up), then go to Settings → API Key.", style = MaterialTheme.typography.bodyMedium)
         OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
             Text("Open TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        Text("2. In TorBox, go to Settings → API Key and copy it.", style = MaterialTheme.typography.bodyMedium)
-        Text("3. Come back and paste it here.", style = MaterialTheme.typography.bodyMedium)
+        Text("2. Paste your key here.", style = MaterialTheme.typography.bodyMedium)
         OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Paste your API key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),

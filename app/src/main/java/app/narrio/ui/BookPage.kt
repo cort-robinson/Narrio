@@ -442,7 +442,8 @@ private fun ListenSlot(
                 when (copy.kind) {
                     NoMatchKind.POSSIBLE_ONLY -> ModeButton(actions.review, button, leading) { SlotLabel(Icons.Rounded.Search, "Review possible matches") }
                     NoMatchKind.ALL_FAILED -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Try again") }
-                    NoMatchKind.NEEDS_TORBOX -> ModeButton(actions.connectTorBox, button, leading) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
+                    // Connecting an account is set-up, not playback, so it's the quieter tonal button rather than Listen's.
+                    NoMatchKind.NEEDS_TORBOX -> FilledTonalButton(actions.connectTorBox, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
                     NoMatchKind.ALL_OFF -> ModeButton(actions.sourceSettings, button, leading) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
