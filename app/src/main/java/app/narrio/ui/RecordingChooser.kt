@@ -105,49 +105,52 @@ fun RecordingChooser(
             WindowCompat.getInsetsController(window, window.decorView).apply { isAppearanceLightStatusBars = !dark; isAppearanceLightNavigationBars = !dark }
         } }
         AnimatedContent(advanced, transitionSpec = { Motion.sharedAxisX(targetState) }, label = "chooser view") { inAdvanced ->
-            if (inAdvanced) AdvancedSources(book, picked, current, streamed, tally, providers, pinned.shown?.recording?.id, connected, format, delivery,
-                chooseFormat = { chosenFormat, chosenDelivery -> format = chosenFormat; delivery = chosenDelivery }, actions = actions,
-                refreshDetails = refreshDetails?.takeIf { current != null && picked != null && sameRecording(picked, current.recording) }, metadataLoading = metadataLoading,
-                back = { advanced = false }, extraSections = advancedSections)
-            else LazyColumn(Modifier.fillMaxWidth().testTag("recording-chooser"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // When every row plays the same way, say it once here instead of on each row.
-                val statuses = shown.map { recording -> readiness(recording, connected, phoneCopy(recording)) }
-                val shared = statuses.distinct().singleOrNull()?.takeIf { shown.size > 1 }?.let(::sharedStatus)
-                item(key = "intro") {
-                    Text("Choose a recording", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
-                    Spacer(Modifier.height(6.dp))
-                    // Before anything plays, it says that picking one doesn't start it, so choosing for a download is safe.
-                    Text(listOfNotNull("Different recordings of ${book.title}.", shared, "Your choice is kept when you close this.".takeIf { current == null }).joinToString(" "),
-                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                // A better match than the one Listen plays waits here, never moving the page under the listener.
-                if (current == null && pinned.pending != null && (chosen == null || chosen.id == pinned.shown?.recording?.id)) item(key = "better") {
-                    BetterMatchFound({ acceptBetter(); pickedKey = null }, Modifier.padding(top = 4.dp))
-                }
-                items(shown, key = { "recording:${it.id}" }) { recording ->
-                    val mine = current != null && sameRecording(recording, current.recording)
-                    val phone = phoneCopy(recording)
-                    RecordingRow(recording, book, selected = picked?.let { sameRecording(it, recording) } == true,
-                        tag = when {
-                            mine -> listOfNotNull("Listening now", current.fraction?.takeIf { current.started }?.let { "${(it * 100).toInt().coerceIn(1, 99)}%" }).joinToString(" · ")
-                            search?.possible?.any { it.id == recording.id } == true -> "Might be this book"
-                            current == null && recording.id == pinned.shown?.recording?.id -> "Suggested"
-                            else -> null
-                        },
-                        status = readiness(recording, connected, phone).takeIf { shared == null }, ready = phone || SourceQuality.ready(recording), enabled = !busy,
-                        bytes = downloadBytes(recording, current?.source?.format?.takeIf { mine } ?: defaultFormat(recording, vm.savedFormat(book.id))),
-                        // Every match can share a narrator, and an unnamed one has nothing else to go by: their release names tell them apart.
-                        release = releaseNote(recording, book).takeIf { !mine && (showAll || recordingNarrator(recording).isBlank() && SourceQuality.DRAMATIZED !in SourceQuality.edition(recording).kind) }) { pick(recording) }
-                }
-                item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
-                if (picked != null) item(key = "actions") {
-                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close,
-                        switched = pickedKey != null && pickedKey != openedOn)
-                }
-                item(key = "advanced") {
-                    SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
-                        modifier = Modifier.padding(top = 8.dp).testTag("advanced-entry"))
+            // Opaque, so the view sliding in covers the one beneath instead of showing its text through.
+            Box(Modifier.background(MaterialTheme.colorScheme.surfaceContainer)) {
+                if (inAdvanced) AdvancedSources(book, picked, current, streamed, tally, providers, pinned.shown?.recording?.id, connected, format, delivery,
+                    chooseFormat = { chosenFormat, chosenDelivery -> format = chosenFormat; delivery = chosenDelivery }, actions = actions,
+                    refreshDetails = refreshDetails?.takeIf { current != null && picked != null && sameRecording(picked, current.recording) }, metadataLoading = metadataLoading,
+                    back = { advanced = false }, extraSections = advancedSections)
+                else LazyColumn(Modifier.fillMaxWidth().testTag("recording-chooser"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // When every row plays the same way, say it once here instead of on each row.
+                    val statuses = shown.map { recording -> readiness(recording, connected, phoneCopy(recording)) }
+                    val shared = statuses.distinct().singleOrNull()?.takeIf { shown.size > 1 }?.let(::sharedStatus)
+                    item(key = "intro") {
+                        Text("Choose a recording", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
+                        Spacer(Modifier.height(6.dp))
+                        // Before anything plays, it says that picking one doesn't start it, so choosing for a download is safe.
+                        Text(listOfNotNull("Different recordings of ${book.title}.", shared, "Your choice is kept when you close this.".takeIf { current == null }).joinToString(" "),
+                            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    // A better match than the one Listen plays waits here, never moving the page under the listener.
+                    if (current == null && pinned.pending != null && (chosen == null || chosen.id == pinned.shown?.recording?.id)) item(key = "better") {
+                        BetterMatchFound({ acceptBetter(); pickedKey = null }, Modifier.padding(top = 4.dp))
+                    }
+                    items(shown, key = { "recording:${it.id}" }) { recording ->
+                        val mine = current != null && sameRecording(recording, current.recording)
+                        val phone = phoneCopy(recording)
+                        RecordingRow(recording, book, selected = picked?.let { sameRecording(it, recording) } == true,
+                            tag = when {
+                                mine -> listOfNotNull("Listening now", current.fraction?.takeIf { current.started }?.let { "${(it * 100).toInt().coerceIn(1, 99)}%" }).joinToString(" · ")
+                                search?.possible?.any { it.id == recording.id } == true -> "Might be this book"
+                                current == null && recording.id == pinned.shown?.recording?.id -> "Suggested"
+                                else -> null
+                            },
+                            status = readiness(recording, connected, phone).takeIf { shared == null }, ready = phone || SourceQuality.ready(recording), enabled = !busy,
+                            bytes = downloadBytes(recording, current?.source?.format?.takeIf { mine } ?: defaultFormat(recording, vm.savedFormat(book.id))),
+                            // Every match can share a narrator, and an unnamed one has nothing else to go by: their release names tell them apart.
+                            release = releaseNote(recording, book).takeIf { !mine && (showAll || recordingNarrator(recording).isBlank() && SourceQuality.DRAMATIZED !in SourceQuality.edition(recording).kind) }) { pick(recording) }
+                    }
+                    item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
+                    if (picked != null) item(key = "actions") {
+                        ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close,
+                            switched = pickedKey != null && pickedKey != openedOn)
+                    }
+                    item(key = "advanced") {
+                        SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
+                            modifier = Modifier.padding(top = 8.dp).testTag("advanced-entry"))
+                    }
                 }
             }
         }

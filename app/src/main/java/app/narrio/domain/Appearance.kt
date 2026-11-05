@@ -29,13 +29,13 @@ enum class ThemePalette(val label: String, val description: String, val seasonal
     MIDNIGHT("Midnight", "Indigo & starlight"),
     EMBER("Ember", "Terracotta & ochre"),
     HALLOWEEN("Halloween", "Pumpkin & black", seasonal = true),
-    CUSTOM("Custom", "Your own colours");
+    CUSTOM("Custom", "Your own colors");
 }
 
 /** Night backgrounds in true black for OLED screens: only the reader's pages, or all of Narrio. */
 @Serializable
 enum class PureBlack(val label: String, val description: String) {
-    OFF("Off", "Night uses each palette's own dark colour."),
+    OFF("Off", "Night uses each palette's own dark color."),
     READER("Reader", "Book pages turn true black at night."),
     EVERYWHERE("Everywhere", "All of Narrio turns true black at night."),
 }

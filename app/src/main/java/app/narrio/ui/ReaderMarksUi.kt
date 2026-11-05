@@ -521,7 +521,7 @@ private fun HighlightSheet(draft: HighlightDraft, ui: ReaderMarksUi, session: Re
                     Text(draft.text, style = MaterialTheme.typography.bodyLarge.copy(fontFamily = Editorial), maxLines = 8, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Text("Colour", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp, bottom = 2.dp))
+            Text("Color", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 16.dp, bottom = 2.dp))
             Row(Modifier.selectableGroup().offset(x = (-8).dp)) { HighlightColor.entries.forEach { option -> ColorSwatch(option, option == color, dark, surface) { color = option } } }
             OutlinedTextField(note, { note = it }, Modifier.fillMaxWidth().padding(top = 8.dp).focusRequester(focus).testTag("reader-note-field"),
                 label = { Text("Note") }, placeholder = { Text("What does this passage mean to you?") }, minLines = 3, maxLines = 8,
@@ -662,7 +662,7 @@ private fun HighlightsTab(ui: ReaderMarksUi, session: ReaderSession, highlights:
                     IconButton({ menu = true }) { Icon(Icons.Rounded.MoreVert, "Highlight options", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                     DropdownMenu(menu, { menu = false }) {
                         DropdownMenuItem({ Text(if (highlight.note.isBlank()) "Add note" else "Edit note") }, { menu = false; ui.edit(highlight) }, leadingIcon = { Icon(Icons.Rounded.EditNote, null) })
-                        DropdownMenuItem({ Text("Change colour") }, { menu = false; ui.edit(highlight, focusNote = false) }, leadingIcon = { Icon(Icons.Rounded.Palette, null) })
+                        DropdownMenuItem({ Text("Change color") }, { menu = false; ui.edit(highlight, focusNote = false) }, leadingIcon = { Icon(Icons.Rounded.Palette, null) })
                         DropdownMenuItem({ Text("Remove") }, { menu = false; ui.remove(highlight) }, leadingIcon = { Icon(Icons.Rounded.DeleteOutline, null) })
                     }
                 }

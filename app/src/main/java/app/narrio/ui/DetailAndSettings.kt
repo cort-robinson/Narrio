@@ -9,6 +9,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -89,10 +90,13 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     // Leaving Settings cancels a connection its form started, so the key is never saved later; the sheet keeps its own.
     DisposableEffect(vm) { onDispose { if (!vm.torBox.value.prompt) vm.dismissTorBoxConnect() } }
     AnimatedContent(page, modifier, transitionSpec = { Motion.sharedAxisX(targetState != "home") }, label = "settings page") { shown ->
-        when (shown) {
-            "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, vm::requestTorBoxConnect, vm::addonsChanged, { vm.sourceSettingsOpen.value = false })
-            "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
-            else -> SettingsHome(vm, connected, appearance, wifiOnly, { vm.sourceSettingsOpen.value = true }) { appearanceOpen = true }
+        // Opaque, so the page sliding in covers the one beneath instead of showing its text through.
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            when (shown) {
+                "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, vm::requestTorBoxConnect, vm::addonsChanged, { vm.sourceSettingsOpen.value = false })
+                "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
+                else -> SettingsHome(vm, connected, appearance, wifiOnly, { vm.sourceSettingsOpen.value = true }) { appearanceOpen = true }
+            }
         }
     }
 }
