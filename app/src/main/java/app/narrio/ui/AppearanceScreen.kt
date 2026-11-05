@@ -64,8 +64,11 @@ fun AppearanceScreen(settings: AppearanceSettings, change: (AppearanceSettings) 
     val dark = settings.mode.isDark(isSystemInDarkTheme())
     BackHandler { if (editing) editing = false else back() }
     AnimatedContent(editing, modifier, transitionSpec = { Motion.sharedAxisX(targetState) }, label = "appearance page") { edit ->
-        if (edit) CustomThemeEditor(settings, { custom -> change(settings.copy(palette = ThemePalette.CUSTOM, custom = custom)); editing = false }, { editing = false }, Modifier)
-        else AppearanceOptions(settings, dark, change, back) { editing = true }
+        // Opaque, so the page sliding in covers the one beneath instead of showing its text through.
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            if (edit) CustomThemeEditor(settings, { custom -> change(settings.copy(palette = ThemePalette.CUSTOM, custom = custom)); editing = false }, { editing = false }, Modifier)
+            else AppearanceOptions(settings, dark, change, back) { editing = true }
+        }
     }
 }
 
@@ -117,12 +120,12 @@ private fun AppearanceOptions(settings: AppearanceSettings, dark: Boolean, chang
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
-                SectionTitle("Book colours", "Any book can have colours of its own: choose them from its reader or Listening room.")
+                SectionTitle("Book colors", "Any book can have colors of its own: choose them from its reader or Listening room.")
                 Row(Modifier.fillMaxWidth().toggleable(settings.coverThemes, role = Role.Switch) { change(settings.copy(coverThemes = it)) }
                     .testTag("cover-themes").padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f).padding(end = 16.dp)) {
                         Text("Match each book's cover", style = MaterialTheme.typography.titleMedium)
-                        Text("Books without their own colours take a palette from their cover while you read or listen.",
+                        Text("Books without their own colors take a palette from their cover while you read or listen.",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(settings.coverThemes, null)
@@ -228,7 +231,7 @@ fun BookThemePicker(book: Audiobook, appearance: AppearanceSettings, themes: Boo
     Spacer(Modifier.height(8.dp))
     val detail = when (current.colours) {
         BookColours.APP -> "App theme · ${appearance.paletteName}. This book follows your Appearance settings."
-        BookColours.COVER -> if (cover == null) "Match the cover · Reading the cover's colours…" else "Match the cover · Colours drawn from this book's cover."
+        BookColours.COVER -> if (cover == null) "Match the cover · Reading the cover's colors…" else "Match the cover · Colors drawn from this book's cover."
         BookColours.PALETTE -> "${name(current)} · Only this book. Your Appearance settings are unchanged."
     }
     Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.semantics { liveRegion = androidx.compose.ui.semantics.LiveRegionMode.Polite })

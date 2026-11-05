@@ -543,7 +543,7 @@ private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSett
         SwitchRow("Hyphenation", "Break long words at line ends", settings.hyphenate && !settings.publisherStyles) { value -> update { withAdvanced { copy(hyphenate = value) } } }
         SwitchRow("Publisher styles", if (settings.publisherStyles) "The book's own spacing and alignment" else "Your spacing and alignment choices", settings.publisherStyles) { value -> update { copy(publisherStyles = value) } }
         SwitchRow("Volume keys turn pages", "Only while nothing is playing", settings.volumeKeys) { value -> update { copy(volumeKeys = value) } }
-        SheetLabel("Colours for this book")
+        SheetLabel("Colors for this book")
         bookColours()
         SheetLabel("Mode")
         Segments(ThemeMode.entries, appearance.mode, { it.label }) { mode -> updateAppearance(appearance.copy(mode = mode)) }

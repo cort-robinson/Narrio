@@ -235,7 +235,7 @@ private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -
     val dark = appearance.mode.isDark(isSystemInDarkTheme())
     ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
-            Text("Colours for this book", style = MaterialTheme.typography.headlineSmall)
+            Text("Colors for this book", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
             Text("Used in the Listening room and the reader for ${book.title}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
@@ -353,7 +353,7 @@ private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit) {
     Box {
         IconButton({ open = true }, Modifier.testTag("player-menu")) { Icon(Icons.Rounded.MoreVert, "More options") }
         DropdownMenu(open, { open = false }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            DropdownMenuItem({ Text("Colours for this book") }, { open = false; openColours() },
+            DropdownMenuItem({ Text("Colors for this book") }, { open = false; openColours() },
                 leadingIcon = { Icon(Icons.Rounded.Palette, null) }, modifier = Modifier.testTag("book-colours-open"))
             DropdownMenuItem({ Text("Close player") }, { open = false; haptics.performHapticFeedback(HapticFeedbackType.Reject); vm.dismissPlayback() },
                 leadingIcon = { Icon(Icons.Rounded.Close, null) }, modifier = Modifier.testTag("close-player"))
