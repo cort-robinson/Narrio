@@ -220,7 +220,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         item(key = "actions") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             val readingFirst = formats.leadingMode == PositionOrigin.READING
             val listen: @Composable () -> Unit = {
-                ListenSlot(book, current, best, streamed, tally, connected, busy, starting, preparation, leading = !readingFirst, awaitingAudioSearch, onPhone,
+                ListenSlot(book, current, best, streamed, tally, connected, busy && startingBook == null, starting, preparation, leading = !readingFirst, awaitingAudioSearch, onPhone,
                     announcement = streamed?.takeIf { current == null && tally != null }?.let { searchAnnouncement(it, pinned.shown, tally!!, book) },
                     finished = finished, playingHere = playback.book?.id == book.id && (playback.playing || playback.buffering) && startingBook == null, actions = ListenActions(
                         listen = { vm.listenTo(it) }, getReady = { vm.getReady(it) }, change = { openChooser(ChooserView.LIST) },
@@ -448,7 +448,7 @@ private fun ListenSlot(
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
                 // TorBox isn't the only way: the same row as the chooser's searches again with other words, or adds your own file.
-                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Search other sources, or choose a file from your phone", expanded = null, open = actions.addOwnAudio, title = "Find or add a recording",
+                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Use your own file, or search the sites you've turned on", expanded = null, open = actions.addOwnAudio, title = "Find or add a recording",
                     modifier = Modifier.padding(top = 8.dp).testTag("add-own-audio"))
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }

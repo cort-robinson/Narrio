@@ -381,11 +381,13 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         TimeLeftLine(state, Modifier.padding(top = if (dense) 0.dp else 4.dp), dense)
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
-            // While Listen's audio is still being found, the room is loading, not paused: the button says so from its first frame.
+            // While Listen's audio is still being found, the room is loading, not paused: the button says so from its first frame,
+            // and the skips rest dimmed until there's audio to move through.
             val starting by vm.startingBook.collectAsStateWithLifecycle()
+            val loaded = starting == null && state.durationMs > 0
+            SkipButton(false, 56.dp, 32.dp, enabled = loaded) { vm.graph.playback.service?.skip(it) }
             PlayButton(if (starting != null) state.copy(buffering = true) else state, if (dense) 64.dp else 82.dp, if (dense) 34.dp else 42.dp) { vm.graph.playback.service?.toggle() }
-            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
+            SkipButton(true, 56.dp, 32.dp, enabled = loaded) { vm.graph.playback.service?.skip(it) }
         }
         Spacer(Modifier.height(if (dense) 4.dp else 20.dp))
         // A quiet tool tray: four equal slots that never wrap into an orphaned row.
@@ -449,14 +451,14 @@ private fun PlayGlyph(state: ListeningState, iconSize: Dp, tint: Color, spinner:
 
 /** Back 10 s, ahead 30 s. Skips give a small turn in their direction, so the jump feels like a physical nudge. */
 @Composable
-internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: (deltaMs: Long) -> Unit) {
+internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, enabled: Boolean = true, skip: (deltaMs: Long) -> Unit) {
     val turn = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     IconButton({
         haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); skip(if (forward) SKIP_FORWARD_MS else -SKIP_BACK_MS)
         scope.launch { turn.animateTo(if (forward) 1f else -1f, tween(90, easing = Motion.EmphasizedDecelerate)); turn.animateTo(0f, spring(dampingRatio = .45f, stiffness = Spring.StiffnessLow)) }
-    }, Modifier.size(size)) {
+    }, Modifier.size(size), enabled = enabled) {
         Icon(if (forward) Icons.Rounded.Forward30 else Icons.Rounded.Replay10, if (forward) "Skip forward 30 seconds" else "Rewind 10 seconds",
             Modifier.size(iconSize).graphicsLayer { rotationZ = turn.value * 30f })
     }

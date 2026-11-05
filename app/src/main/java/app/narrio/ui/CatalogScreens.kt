@@ -126,7 +126,9 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 }
             }
             if (query.isNotBlank()) item(key = "results-title") {
-                AnimatedContent(if (catalog.loading) "Searching…" else "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}",
+                // Once free readings are marked, the count says what an unmarked book likely needs.
+                val count = "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}"
+                AnimatedContent(if (catalog.loading) "Searching…" else if (!connected && catalog.free.isNotEmpty()) "$count · others may need TorBox" else count,
                     transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
                     Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -233,7 +235,12 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val organizable = shelf.size >= SHELF_ORGANIZE_AT || filter != ShelfFilter.ALL || typed.isNotEmpty()
     val searchable = alwaysSearchable || typed.isNotEmpty() || searchOpen
     val query = if (searchable) typed.trim() else ""
-    val visible = remember(items, filter, query, sort) { sortShelf(items.filter { filter.matches(it.formats) && matchesShelfQuery(it.book, query) }, sort) }
+    // By recent activity, the book being listened to leads, so coming back finds it in the same place on every screen.
+    val playingId = playing.book?.id
+    val visible = remember(items, filter, query, sort, playingId) {
+        sortShelf(items.filter { filter.matches(it.formats) && matchesShelfQuery(it.book, query) }, sort)
+            .let { sorted -> if (sort == ShelfSort.RECENT) sorted.sortedByDescending { it.entry.bookId == playingId } else sorted }
+    }
     val (finished, going) = remember(visible) { visible.partition { it.finished } }
     // Finished books fold away under their own heading, unless they're all that's left to show.
     val finishedCollapsible = going.isNotEmpty() && query.isEmpty()

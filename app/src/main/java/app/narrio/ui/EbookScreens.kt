@@ -268,7 +268,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             }
             item(key = "advanced") {
                 // With no sure match, what's wanted may be a different ebook, not another edition of this one.
-                SearchOtherSourcesRow(if (pinned.shown == null) "Find a different ebook" else "Look on other sites", expanded = advanced, open = { advanced = !advanced },
+                SearchOtherSourcesRow("Find a different ebook", expanded = advanced, open = { advanced = !advanced },
                     modifier = Modifier.testTag("ebook-advanced"))
             }
             if (advanced) {
@@ -363,7 +363,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Text(ebookChoiceTitle(possible, search.book), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(possible.source, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 // Like a confirmed match's reason line: why this text should follow the narration.
-                if (trusted) Text("Likely the text this reading follows", style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
+                if (trusted) Text("Same text as this reading", style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 ebookChoiceNotes(possible, narrated).filter { it.kind == ChoiceNoteKind.CAUTION }.forEach {
                     Text(it.text, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
