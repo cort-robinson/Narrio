@@ -421,7 +421,8 @@ private fun ListenSlot(
                     starting -> ModeButton({}, button, leading, enabled = false) { WorkingLabel("Starting…") }
                     !ready && !connected -> ModeButton(actions.connectTorBox, button, leading) { SlotLabel(Icons.Rounded.Link, "Connect TorBox to listen") }
                     !ready -> ModeButton({ actions.getReady(best) }, button, leading, enabled = !busy) { SlotLabel(Icons.Rounded.CloudDownload, "Get it ready") }
-                    else -> ModeButton({ actions.listen(best) }, button, leading, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
+                    // Listen fades in over the searching button's place, as the recording line and offline row do, so the page settles in one soft step.
+                    else -> ModeButton({ actions.listen(best) }, button.fadesIn(), leading, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
                 }
                 RecordingLine(recordingLine(best, book, connected, onPhone(best)), actions.change, actions.changing)
                 if (!ready && connected) Text("Getting a recording ready can take from minutes to hours. Nothing downloads to your phone.",
@@ -442,8 +443,8 @@ private fun ListenSlot(
                 when (copy.kind) {
                     NoMatchKind.POSSIBLE_ONLY -> ModeButton(actions.review, button, leading) { SlotLabel(Icons.Rounded.Search, "Review possible matches") }
                     NoMatchKind.ALL_FAILED -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Try again") }
-                    // Connecting an account is set-up, not playback, so it's the quieter tonal button rather than Listen's.
-                    NoMatchKind.NEEDS_TORBOX -> FilledTonalButton(actions.connectTorBox, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
+                    // The book's one way to audio sits where Listen does on every other book page, in the same primary style.
+                    NoMatchKind.NEEDS_TORBOX -> ModeButton(actions.connectTorBox, button, leading) { SlotLabel(Icons.Rounded.Link, "Connect TorBox") }
                     NoMatchKind.ALL_OFF -> ModeButton(actions.sourceSettings, button, leading) { SlotLabel(Icons.Rounded.Tune, "Open source settings") }
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
