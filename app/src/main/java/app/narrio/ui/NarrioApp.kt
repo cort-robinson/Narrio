@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -205,7 +206,9 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
     }
     val transition = rememberTransition(seekState, label = "screen")
     Box(Modifier.fillMaxSize()) {
-        transition.AnimatedContent(Modifier.fillMaxSize(), transitionSpec = {
+        // While the Listening room rises or drops it draws above the mini-player and tabs, so they never show over it.
+        val roomMoving = transition.currentState == Listening || transition.targetState == Listening
+        transition.AnimatedContent(Modifier.fillMaxSize().zIndex(if (roomMoving) 1f else 0f), transitionSpec = {
             when {
                 targetState == Listening -> Motion.rise()
                 initialState == Listening -> Motion.fall()

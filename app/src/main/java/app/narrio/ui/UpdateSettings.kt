@@ -49,7 +49,10 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
         // install, beside that update, so an up-to-date app never shows a warning.
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Automatic updates", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            Column(Modifier.weight(1f)) {
+                Text("Automatic updates", style = MaterialTheme.typography.titleSmall)
+                Text("Installs new versions while Narrio is closed", style = MaterialTheme.typography.bodySmall, color = muted)
+            }
             Switch(state.automatic, automatic, Modifier.semantics { contentDescription = "Automatic app updates" })
         }
         if (state.available != null) {

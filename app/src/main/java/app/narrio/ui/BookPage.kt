@@ -65,7 +65,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     val selected = currentSelection.takeIf { it.book?.id == book.id } ?: SelectionState(book)
     val preparation by vm.preparation.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    val starting by vm.starting.collectAsStateWithLifecycle()
+    // While the Listening room is opening for this start, the page shows no "Starting…" of its own beneath it.
+    val startingBook by vm.startingBook.collectAsStateWithLifecycle()
+    val starting = vm.starting.collectAsStateWithLifecycle().value && startingBook == null
     val shelf by vm.shelf.collectAsStateWithLifecycle()
     val connected by vm.connected.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
@@ -207,7 +209,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // While this book plays, its length gives way to the time left, matching the mini-player docked below.
             val left = playback.takeIf { it.book?.id == book.id }?.let { state -> state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 } }
             BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left,
-                reserveTime = current == null && best == null && streamed?.complete != true,
+                // The length's line is held from the start of the search until a recording brings it.
+                reserveTime = current == null && (best != null || streamed?.complete != true),
                 scrolled = { if (listState.firstVisibleItemIndex > 0) Int.MAX_VALUE else listState.firstVisibleItemScrollOffset }, titleInBar = { titleGone })
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
@@ -240,7 +243,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             // While a free recording is still being found, the Download row's place is held too, so the page settles once.
-            if (current == null && best == null && streamed?.complete != true) Spacer(Modifier.height(68.dp))
+            // A free recording found but not yet described still gets its offline row, so its place stays held too.
+            if (current == null && (best == null && streamed?.complete != true || best?.provider == "archive" && offlineTarget == null)) Spacer(Modifier.height(72.dp))
             else OfflineRow(vm, book, offlineTarget, current, downloadsHere, wifiOnly, connected, busy, Modifier.padding(top = 12.dp))
         } }
         // Phone copies the offline row doesn't stand for (another recording or format) keep their own cards until removed.
@@ -573,7 +577,7 @@ private fun OfflineRow(vm: NarrioViewModel, book: Audiobook, target: Audiobook?,
                 Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.primary)
                 Column(Modifier.weight(1f)) {
                     Text(listOfNotNull("Listen offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
-                    Text(if (wifiOnly) "Downloads only on Wi-Fi" else "Can use mobile data", style = MaterialTheme.typography.bodySmall, color = muted)
+                    Text(if (wifiOnly) "Saves to this phone over Wi-Fi" else "Saves to this phone; can use mobile data", style = MaterialTheme.typography.bodySmall, color = muted)
                 }
                 // The whole row starts it; the word says so, as Find ebook's chevron says it opens.
                 Text("Download", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 4.dp))

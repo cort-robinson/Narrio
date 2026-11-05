@@ -82,7 +82,7 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 /** The one line Discover uses, on its hint and under the list, about what plays free and what needs TorBox. */
 internal const val FREE_AND_TORBOX = "Older books often play free. Newer ones usually need TorBox, a paid service."
 /** Once Discover has marked the books that play free, the hint points at the marks instead of promising the list. */
-internal const val FREE_MARKED_AND_TORBOX = "Books marked “Free to listen” play right away. Most others need TorBox, a paid service."
+internal const val FREE_MARKED_AND_TORBOX = "Start with books marked “Free to listen”. Most others need TorBox, a paid service."
 
 internal const val TORBOX_PITCH = "A paid service that finds and streams many more audiobooks. Books marked “Free to listen” play without it."
 /** Opened from a book's page, the sheet says what connecting does for that book. */
@@ -135,12 +135,12 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Two short steps, each beside its control: get the key, then paste it.
-        Text("1. Sign in to TorBox and copy your API key.", style = MaterialTheme.typography.bodyMedium)
+        Text("1. Open TorBox (sign up if you're new) and copy your key.", style = MaterialTheme.typography.bodyMedium)
         OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
-            Text("Get your API key"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+            Text("Open TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        Text("2. Paste your key.", style = MaterialTheme.typography.bodyMedium)
-        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Your API key") }, singleLine = true,
+        Text("2. Paste it here.", style = MaterialTheme.typography.bodyMedium)
+        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Your TorBox key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
@@ -170,7 +170,7 @@ fun TorBoxSettings(vm: NarrioViewModel, connected: Boolean) {
         Icon(if (connected) Icons.Rounded.CheckCircle else Icons.Rounded.Link, null, tint = if (connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
             Text("TorBox", style = MaterialTheme.typography.titleMedium)
-            Text(if (connected) "Connected on this phone" else "Paid service · Finds and streams more audiobooks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (connected) "Connected on this phone" else "Paid · finds more audiobooks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (connected) TextButton({ confirm = true }, Modifier.heightIn(min = 48.dp)) { Text("Disconnect") }
         // The same filled Connect TorBox as on a book that needs it.
@@ -203,21 +203,16 @@ class TorBoxNudgeState(private val preferences: SharedPreferences) {
 fun rememberTorBoxNudge(preferences: SharedPreferences) = remember(preferences) { TorBoxNudgeState(preferences) }
 
 /** Most chart books need TorBox to play; says so once at the top of browsing, pointing to free Classics and the way to connect. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TorBoxNudgeCard(connect: () -> Unit, dismiss: () -> Unit, modifier: Modifier = Modifier, marked: Boolean = false, compact: Boolean = false) {
+    // A compact note: the books stay the screen's main content, and connecting a paid account is the quiet second step.
     Column(modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-        .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp).testTag("torbox-nudge")) {
+        .padding(start = 16.dp, end = 4.dp).testTag("torbox-nudge")) {
         Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f).padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                // On a short screen it reads as a note, so more of the list fits beneath it.
-                Text(if (marked) FREE_MARKED_AND_TORBOX else FREE_AND_TORBOX, style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleSmall)
-            }
+            Text(if (marked) FREE_MARKED_AND_TORBOX else FREE_AND_TORBOX, Modifier.weight(1f).padding(top = 12.dp),
+                style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleSmall)
             IconButton(dismiss) { Icon(Icons.Rounded.Close, "Not now", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        FlowRow(Modifier.padding(top = if (compact) 0.dp else 4.dp, end = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            // Discover already opens on free Classics; connecting a paid account is the secondary step here.
-            TextButton(connect, Modifier.offset(x = (-12).dp)) { Text("Connect TorBox") }
-        }
+        TextButton(connect, Modifier.offset(x = (-12).dp)) { Text("Connect TorBox") }
     }
 }

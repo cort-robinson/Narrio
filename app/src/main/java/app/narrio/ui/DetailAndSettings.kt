@@ -111,7 +111,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Where it looks for recordings, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
+                SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Where Narrio looks for books", openAddons, Modifier.testTag("sources-entry"))
             }
         }
         // The everyday listening and reading switches.
@@ -127,7 +127,8 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         // How the app looks and keeps itself current. Local builds have no update channel and show their version under
         // About instead, so the section is then just Appearance.
         item {
-            Text("App", style = MaterialTheme.typography.headlineSmall)
+            // Each section heading has the same room above it.
+            Text("App", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
             AppearanceEntry(appearance, openAppearance)
             if (updates.channel != null) { Spacer(Modifier.height(8.dp)); UpdateSettings(vm.graph.updates) }

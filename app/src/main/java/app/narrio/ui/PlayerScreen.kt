@@ -433,11 +433,8 @@ private fun PlayGlyph(state: ListeningState, iconSize: Dp, tint: Color, spinner:
         (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn(tween(Motion.SHORT))).togetherWith(scaleOut(tween(Motion.SHORT), targetScale = .4f) + fadeOut(tween(Motion.SHORT)))
     }, contentAlignment = Alignment.Center, label = "play glyph") { shown ->
         when (shown) {
-            // Loading keeps the button readable: a dimmed pause inside a ring that turns, never a lone arc.
-            0 -> Box(Modifier.semantics { contentDescription = "Loading" }, contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Pause, null, Modifier.size(spinner), tint = tint.copy(alpha = .4f))
-                CircularProgressIndicator(Modifier.size(iconSize * 1.25f), color = tint, strokeWidth = 2.5.dp)
-            }
+            // Loading is one clear, full-size spinner; the pause glyph appears only once audio plays.
+            0 -> CircularProgressIndicator(Modifier.size(iconSize).semantics { contentDescription = "Loading" }, color = tint, strokeWidth = 3.5.dp)
             1 -> Icon(Icons.Rounded.Pause, "Pause", Modifier.size(iconSize), tint = tint)
             else -> Icon(Icons.Rounded.PlayArrow, "Play", Modifier.size(iconSize), tint = tint)
         }
