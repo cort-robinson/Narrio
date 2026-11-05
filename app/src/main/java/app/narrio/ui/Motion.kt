@@ -52,9 +52,10 @@ object Motion {
     /** Material shared axis X: deeper content arrives from the trailing edge. */
     fun sharedAxisX(forward: Boolean): ContentTransform {
         val direction = if (forward) 1 else -1
-        // Long enough to see the page leave and the next arrive, so going back never reads as a cut.
-        return (slideInHorizontally(tween(MEDIUM, easing = Emphasized)) { direction * it / 5 } + fadeIn(tween(240, delayMillis = 60, easing = EmphasizedDecelerate)))
-            .togetherWith(slideOutHorizontally(tween(MEDIUM, easing = Emphasized)) { -direction * it / 5 } + fadeOut(tween(150, easing = EmphasizedAccelerate)))
+        // Long enough, and evenly paced enough, to see the page leave and the next arrive, so neither direction reads as a cut.
+        // Standard easing spreads the travel across the whole move instead of spending it in the first frames.
+        return (slideInHorizontally(tween(400, easing = FastOutSlowInEasing)) { direction * it / 4 } + fadeIn(tween(250, delayMillis = 80, easing = LinearOutSlowInEasing)))
+            .togetherWith(slideOutHorizontally(tween(400, easing = FastOutSlowInEasing)) { -direction * it / 4 } + fadeOut(tween(160, easing = FastOutLinearInEasing)))
     }
 
     /**
@@ -70,7 +71,7 @@ object Motion {
     fun fall(): ContentTransform =
         // The room stays opaque as it drops, so it never lies see-through over the page; it fades only once nearly gone.
         fadeIn(tween(SHORT))
-            .togetherWith(slideOutVertically(tween(MEDIUM, easing = EmphasizedAccelerate)) { it } + fadeOut(tween(60, delayMillis = MEDIUM - 60)))
+            .togetherWith(slideOutVertically(tween(350, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(60, delayMillis = 350 - 60)))
             .apply { targetContentZIndex = -1f }
 }
 

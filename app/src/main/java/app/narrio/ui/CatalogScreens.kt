@@ -286,7 +286,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 // The book in the mini-player shows its live place, so the row and the player never disagree.
                 val live = if (!here) null else playingLine(playing)
                 ShelfRow(entry, book, bookFormats, here, live, !connected && entry.bookId in needsTorBox, { vm.continueBook(entry) }, { vm.open(book) },
-                    { vm.setFinished(entry.bookId, it) }, removeBook = { remove = book }, connect = vm::requestTorBoxConnect)
+                    { vm.setFinished(entry.bookId, it) }, removeBook = { remove = book }, connect = vm::requestTorBoxConnect,
+                    livePlace = if (here) PlaceSummary(PositionOrigin.LISTENING, live.orEmpty(), playing.progress) else null)
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
                 Spacer(Modifier.height(20.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -314,7 +315,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, nowPlaying: Boolean, live: String?, needsTorBox: Boolean, resume: () -> Unit, details: () -> Unit, setFinished: (Boolean) -> Unit, removeBook: () -> Unit,
-                     connect: (() -> Unit)? = null) {
+                     connect: (() -> Unit)? = null, livePlace: PlaceSummary? = null) {
     val finished = entry.finishedAt > 0
     val mode = formats.leadingMode
     var menu by remember { mutableStateOf(false) }
@@ -323,9 +324,8 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
     BookRow(book, details, recording = false, extra = {
         FormatMarks(formats, Modifier.padding(top = 2.dp), needsTorBox, connect)
         if (finished) FinishedMark(Modifier.padding(top = 6.dp))
-        // A book just started has no saved place yet; its live line stands in, so the row never goes blank.
-        else placeSummary(formats)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp), live = live) }
-            ?: live?.let { Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
+        // A book just started has no saved place yet; the player's place stands in, so the row keeps its line and bar.
+        else (placeSummary(formats) ?: livePlace)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp), live = live) }
     }) {
         // Continue and the overflow sit together at the row's edge, so a shelf entry is one line of controls.
         Row(verticalAlignment = Alignment.CenterVertically) {
