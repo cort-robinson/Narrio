@@ -131,13 +131,13 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun change(value: String) { key = value.filterNot(Char::isWhitespace); edited() }
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Two numbered steps: get the key, then paste it.
-        Text("1. Open TorBox and sign in, or sign up for a paid account.", style = MaterialTheme.typography.bodyMedium)
+        // Two numbered steps: get the key (the button goes straight to where it lives), then paste it.
+        Text("1. Get your API key, the code that links Narrio to your TorBox account. Sign in first, or sign up for a paid account.",
+            style = MaterialTheme.typography.bodyMedium)
         OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
-            Text("Open TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
+            Text("Get your API key"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        Text("2. Copy your API key (the code that links Narrio to your account) from TorBox's Settings → API.", style = MaterialTheme.typography.bodyMedium)
-        Text("3. Paste it here.", style = MaterialTheme.typography.bodyMedium)
+        Text("2. Copy the key from TorBox's Settings → API, and paste it here.", style = MaterialTheme.typography.bodyMedium)
         OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Your API key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),

@@ -72,7 +72,8 @@ class AppUpdatesExperienceTest {
         val state = mutableStateOf(UpdateState(UpdateChannel.DEV, phase = UpdatePhase.READY, available = update, permissionNeeded = true))
         var allowed = 0; var installed = 0; var checked = 0
         content(state, allow = { allowed++ }, install = { installed++ }, check = { checked++ })
-        compose.onNodeWithText("Allow app updates").performScrollTo().performClick()
+        // Without Android's permission the switch reads off; turning it on asks Android for the permission.
+        compose.onNodeWithContentDescription("Automatic app updates").performScrollTo().assertIsOff().performClick()
         assertEquals(1, allowed)
         capture("ready-night")
         compose.runOnIdle { state.value = state.value.copy(permissionNeeded = false, waitingForPlayback = true) }

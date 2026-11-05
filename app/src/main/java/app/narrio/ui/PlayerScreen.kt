@@ -115,6 +115,8 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     // Until its audio has loaded, the room shows the book Listen is starting, in its loading state.
     val starting by vm.startingBook.collectAsStateWithLifecycle()
     val book = state.book ?: starting ?: return
+    // While Listen's audio loads, the cover already sits at its playing size, so nothing grows once it starts.
+    val leaning = state.playing || state.buffering || starting != null
     var speedOpen by remember { mutableStateOf(false) }
     var sleepOpen by remember { mutableStateOf(false) }
     var partsOpen by remember { mutableStateOf(false) }
@@ -159,7 +161,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
                     val coverHeight = minOf(maxHeight, maxWidth * .55f).coerceAtLeast(1.dp)
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                        ListeningCover(book, state.playing || state.buffering, Modifier.size(coverHeight))
+                        ListeningCover(book, leaning, Modifier.size(coverHeight))
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                             Text(book.title, style = MaterialTheme.typography.headlineLarge)
                             Spacer(Modifier.height(12.dp))
@@ -184,7 +186,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             scaleX = 1f - drag * .08f; scaleY = scaleX
         }) {
             Column(Modifier.padding(horizontal = if (compact) 16.dp else 24.dp).padding(top = if (dense) 0.dp else 8.dp)) { heading(dense) }
-            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown, { vm.openPlayingBook() }) { controls(dense) } }
+            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown, { vm.openPlayingBook() }, leaning) { controls(dense) } }
         }
         }
     }
@@ -246,14 +248,15 @@ private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -
  * neither fits (small windows or very large text).
  */
 @Composable
-private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean, pullDown: Modifier, openBook: () -> Unit, controls: @Composable () -> Unit) {
+private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean, pullDown: Modifier, openBook: () -> Unit, leaning: Boolean,
+                       controls: @Composable () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = maxWidth; val height = maxHeight
         val wide = width >= 560.dp && width > height * 1.15f
         when {
             wide -> Row(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
                 val coverHeight = minOf(height - 16.dp, width * .4f).coerceAtLeast(120.dp)
-                ListeningCover(book, state.playing || state.buffering, pullDown.size(coverHeight))
+                ListeningCover(book, leaning, pullDown.size(coverHeight))
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
                     TitleBlock(book, 2, openBook)
                     Spacer(Modifier.height(20.dp))
@@ -263,7 +266,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
             height < 480.dp -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp)) {
                 // A short, narrow pane (a landscape phone's split view): the book becomes a byline beside its cover.
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ListeningCover(book, state.playing || state.buffering, pullDown.size(72.dp))
+                    ListeningCover(book, leaning, pullDown.size(72.dp))
                     TitleBlock(book, 1, openBook)
                 }
                 Spacer(Modifier.height(12.dp))
@@ -280,7 +283,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 val coverHeight = minOf(space, cap).coerceAtLeast(if (compact) 150.dp else 180.dp)
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                     Box(Modifier.fillMaxWidth().then(pullDown).padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                        ListeningCover(book, state.playing || state.buffering, Modifier.size(coverHeight))
+                        ListeningCover(book, leaning, Modifier.size(coverHeight))
                     }
                     Column(Modifier.onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }) {
                         TitleBlock(book, 2, openBook)

@@ -249,15 +249,16 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             PreparationCard(prep, pending, busy, connected, check = { vm.refreshPreparation(book) }, listen = { vm.listenTo(it) },
                 tryAnother = { vm.findRecordings(); openChooser(ChooserView.LIST) }, Modifier.animateItem())
         } }
-        item(key = "about") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
+        // A different narrator's recording drops the catalog edition's praise for its own reader.
+        // While a free reading is still being found, praise for the catalog's narrator would only be dropped later.
+        val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) }
+            ?: if (!connected && book.provider == "catalog" && streamed?.complete != true) app.narrio.data.SourceQuality.withoutNarration(book) else book.description
+        // No heading stands empty while the search could still bring a description.
+        if (about.isNotBlank() || streamed?.complete != false) item(key = "about") { Column(Modifier.animateContentSize(tween(Motion.MEDIUM, easing = Motion.Emphasized))) {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(24.dp))
             Text("About this book", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
             Spacer(Modifier.height(12.dp))
-            // A different narrator's recording drops the catalog edition's praise for its own reader.
-            // While a free reading is still being found, praise for the catalog's narrator would only be dropped later.
-            val about = (current?.recording ?: best)?.let { app.narrio.data.SourceQuality.descriptionFor(it, book) }
-                ?: if (!connected && book.provider == "catalog" && streamed?.complete != true) app.narrio.data.SourceQuality.withoutNarration(book) else book.description
             Text(about.ifBlank { "No description has been found for this book yet." }, style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expandedDescription) Int.MAX_VALUE else 9, overflow = TextOverflow.Ellipsis)
             if (about.length > 500) TextButton({ expandedDescription = !expandedDescription }, Modifier.offset(x = (-12).dp)) { Text(if (expandedDescription) "Read less" else "Read more") }
@@ -521,7 +522,7 @@ private fun ReadSlot(book: Audiobook, formats: BookFormats, leading: Boolean, re
 }
 
 /**
- * The phone copy of the recording Listen plays: "Download for offline · 412 MB", its progress while it saves, then
+ * The phone copy of the recording Listen plays: "Listen offline · 412 MB", its progress while it saves, then
  * "On this phone" with Remove (and Play offline when Listen plays something else).
  */
 @Composable
@@ -569,7 +570,7 @@ private fun OfflineRow(vm: NarrioViewModel, book: Audiobook, target: Audiobook?,
                 .heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("download-offline"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.primary)
                 Column(Modifier.weight(1f)) {
-                    Text(listOfNotNull("Download for offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
+                    Text(listOfNotNull("Listen offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
                     Text(if (wifiOnly) "Downloads only on Wi-Fi" else "Can use mobile data", style = MaterialTheme.typography.bodySmall, color = muted)
                 }
                 // The whole row starts it; the word says so, as Find ebook's chevron says it opens.

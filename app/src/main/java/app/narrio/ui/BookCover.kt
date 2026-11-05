@@ -126,7 +126,8 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
             val context = LocalContext.current
             val request = remember(book.coverUrl, large) {
                 ImageRequest.Builder(context).data(book.coverUrl).size(if (large) 720 else 240).memoryCacheKey(coverKey(book.coverUrl, large))
-                    .apply { if (large) placeholderMemoryCacheKey(coverKey(book.coverUrl, false)) }.build()
+                    // Each size stands in for the other, so the mini-player never shows an empty tile for art already on screen.
+                    .placeholderMemoryCacheKey(coverKey(book.coverUrl, !large)).build()
             }
             val painter = rememberAsyncImagePainter(request,
                 onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false; failed = true })

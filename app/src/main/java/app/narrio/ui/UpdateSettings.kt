@@ -6,6 +6,8 @@ import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,19 +46,21 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
-        // Android's install permission matters only when Narrio would install something: automatically, or an update
-        // that's waiting. Then it's a quiet note under the switch with its fix, and the longer explanation waits.
-        val permissionMatters = state.permissionNeeded && (state.automatic || state.available != null)
+        // The switch reads on only when updates really can install. While Android's permission is missing it reads off,
+        // and turning it on asks Android for that permission (Narrio remembers the choice meanwhile).
+        val blocked = state.permissionNeeded
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Automatic updates", style = MaterialTheme.typography.titleSmall)
-                if (permissionMatters) Text("Needs Android's permission to install", style = MaterialTheme.typography.bodySmall, color = muted)
+                if (blocked && state.automatic) Text("Turns on once Android lets Narrio install updates", style = MaterialTheme.typography.bodySmall, color = muted)
             }
-            Switch(state.automatic, automatic, Modifier.semantics { contentDescription = "Automatic app updates" })
+            Switch(state.automatic && !blocked, { on -> if (on && blocked) { automatic(true); allow() } else automatic(on) },
+                Modifier.semantics { contentDescription = "Automatic app updates" })
         }
-        if (permissionMatters) FilledTonalButton(allow, enabled = !busy) { Text("Allow app updates") }
-        else Text(if (state.automatic && automaticInstallSupported) "Downloads use Wi-Fi. Updates install while Narrio is closed and playback is paused. Android may ask you to confirm."
+        // An update waiting to install by hand needs the same permission; then it's the one action offered.
+        if (blocked && state.available != null && !state.automatic) FilledTonalButton(allow, enabled = !busy) { Text("Allow app updates") }
+        if (!blocked) Text(if (state.automatic && automaticInstallSupported) "Downloads use Wi-Fi. Updates install while Narrio is closed and playback is paused. Android may ask you to confirm."
             else if (state.automatic) "Downloads use Wi-Fi. When an update is ready, pause playback and tap Install update. Android will ask you to confirm."
             else "Automatic checks, downloads, and installation are off. You can check for updates here.",
             style = MaterialTheme.typography.bodyMedium, color = muted)
@@ -72,10 +76,14 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
         }
         // Checking is a row like the others in Settings, with where things stand beneath it.
         val canCheck = !busy && state.phase != UpdatePhase.CONFIRMATION
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = canCheck, role = Role.Button, onClick = check)
-            .heightIn(min = 48.dp).padding(vertical = 6.dp).semantics(mergeDescendants = true) { }) {
-            Text("Check for updates", style = MaterialTheme.typography.titleSmall, color = if (canCheck) MaterialTheme.colorScheme.onSurface else muted)
-            status?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall, color = muted) }
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = canCheck, role = Role.Button, onClick = check)
+            .heightIn(min = 48.dp).padding(vertical = 6.dp).semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Check for updates", style = MaterialTheme.typography.titleSmall, color = if (canCheck) MaterialTheme.colorScheme.onSurface else muted)
+                status?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall, color = muted) }
+            }
+            // Visibly something to tap, like the other rows in Settings.
+            Icon(Icons.Rounded.Refresh, null, tint = if (canCheck) MaterialTheme.colorScheme.primary else muted)
         }
         if (state.phase == UpdatePhase.DOWNLOADING) LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
         if (state.phase == UpdatePhase.CHECKING || state.phase == UpdatePhase.INSTALLING) LinearProgressIndicator(Modifier.fillMaxWidth())

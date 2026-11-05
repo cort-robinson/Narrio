@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
+import app.narrio.data.DeviceSourceProviderSettings
 import app.narrio.domain.*
 import kotlinx.coroutines.launch
 
@@ -323,13 +324,15 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         AnimatedVisibility(pinned.pending != null, enter = expandVertically(tween(Motion.MEDIUM, easing = Motion.Emphasized)) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             BetterMatchFound(acceptBetter, Modifier.padding(bottom = 12.dp))
         }
+        // Text that came with the chosen recording is that recording's own book, so it's suggested outright.
+        val trusted = possible?.providerId == DeviceSourceProviderSettings.RECORDING_FILES
         if (shown != null || !search.complete || possible != null) {
             Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // One spinner says the search is on; "Suggested" waits until there is one.
                 val searching = !search.complete && tally.active > 0
                 if (shown == null && searching) Working(Modifier.size(16.dp))
-                else Icon(if (shown == null && possible != null) Icons.Rounded.Info else Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                Text(when { shown == null && searching -> "Finding an ebook…"; shown == null && possible != null -> "Possible match"; else -> "Suggested" }, style = MaterialTheme.typography.labelLarge,
+                else Icon(if (shown == null && possible != null && !trusted) Icons.Rounded.Info else Icons.Rounded.AutoAwesome, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                Text(when { shown == null && searching -> "Finding an ebook…"; shown == null && possible != null && !trusted -> "Possible match"; else -> "Suggested" }, style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
                 // Once there's a best match, the remaining sources finish quietly.
                 AnimatedVisibility(searching && shown == null, enter = fadeIn(), exit = fadeOut()) {
@@ -352,15 +355,14 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 }
             }
             !search.complete && tally.active > 0 -> CardSkeleton()
-            // What it is, where it's from, and the one doubt, said once.
+            // What it is, where it's from, and (for a text from elsewhere) the one doubt, said once.
             possible != null -> Column(Modifier.testTag("ebook-choice:${possible.edition.id}")) {
                 Text(ebookChoiceTitle(possible, search.book), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(possibleMatchSource(possible, search.book),
-                    style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
+                Text(possible.source, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 ebookChoiceNotes(possible, narrated).filter { it.kind == ChoiceNoteKind.CAUTION }.forEach {
                     Text(it.text, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
-                Text(POSSIBLE_MATCH_CAUTION, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
+                if (!trusted) Text(possibleMatchCaution(possible), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
             }
             else -> {
                 val copy = ebookNoMatchCopy(search, tally)
@@ -380,6 +382,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Button({}, button.testTag("best-ebook-action"), enabled = false) { WorkingLabel("Adding…") }
                 AddingStep(step, Modifier.padding(top = 8.dp))
             }
+            possible != null && trusted -> Button({ actions.addAndOpen(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
             // Checking is the next step; the reader then asks to keep or remove it, so the doubt never commits the listener.
             possible != null -> Button({ (actions.addAndCheck ?: actions.addAndOpen)(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) {
                 SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, "Check this ebook")
@@ -498,7 +501,7 @@ fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox
     // beside it when TorBox is the way forward, so the row is never a dead end.
     if (!formats.audio && !formats.ebook) {
         Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (needsTorBox) "Needs TorBox" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (needsTorBox) "No free recording" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (needsTorBox && connect != null) FilledTonalButton(connect, Modifier.padding(start = 8.dp).heightIn(min = 36.dp).testTag("shelf-connect-torbox"),
                 contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Connect") }
         }

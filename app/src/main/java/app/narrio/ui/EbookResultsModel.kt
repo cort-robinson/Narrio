@@ -149,12 +149,10 @@ fun ebookTitle(title: String, book: Audiobook): String = title.replace(FORMAT_TA
 /** "Lantern Keeper [EPUB]": a release's format tag is the app's business, not part of the title. */
 private val FORMAT_TAG = Regex("""\s*[\[(](?:EPUB|PDF|TXT|MOBI|AZW3?|FB2)[\])]""", RegexOption.IGNORE_CASE)
 
-/** The one doubt about a possible match that leads the ebook sheet. */
-const val POSSIBLE_MATCH_CAUTION = "May be a different book. Open it to check."
-
-/** "Mara Ellison · Project Gutenberg": a possible match always says whose book it claims to be, so there's something to check. */
-fun possibleMatchSource(choice: EbookChoice, book: Audiobook): String =
-    listOf(choice.source, ebookChoiceDetail(choice, book).ifBlank { "author not listed" }).filter(String::isNotBlank).joinToString(" · ")
+/** Why a possible match that leads the ebook sheet is only possible, in words a listener can check against. */
+fun possibleMatchCaution(choice: EbookChoice): String =
+    if (choice.edition.author.isBlank()) "No author is listed, so it may be a different book. Open it to check."
+    else "Its title or author differs a little from this book's. Open it to check."
 
 /** Where a choice is from, unless its note already says it comes with the recording. */
 fun ebookChoiceSource(choice: EbookChoice, recording: Boolean): String? =
