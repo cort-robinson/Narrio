@@ -219,14 +219,14 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                     val page = MaterialTheme.colorScheme.background
                     Box(Modifier.fillMaxWidth().height(12.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(page, page.copy(alpha = 0f)))))
                 }
-                // The mini-player stays docked under a book's details; it brings its own navigation-bar room.
-                is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, if (hasPlayback) shellInsets.padding(bottom = barHeight) else shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
+                // A book's page keeps the tabs (and the mini-player above them), so going back never moves either.
+                is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.padding(bottom = barHeight), scrollFor(it.id)) }
                 Listening -> PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
                 is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
             }
         }
-        // While a book plays, its controls stay at the bottom of every screen: above the tabs at home, and
-        // docked under a book's details. The Listening room and the reader carry their own.
+        // While a book plays, its controls stay at the bottom of every screen, above the tabs. The Listening room and
+        // the reader carry their own.
         Column(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
             transition.AnimatedVisibility({ it == Home || it is Details },
@@ -239,11 +239,11 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                         val fade = 20.dp.toPx()
                         drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(page.copy(alpha = 0f), page), startY = -fade, endY = 0f),
                             topLeft = androidx.compose.ui.geometry.Offset(0f, -fade), size = androidx.compose.ui.geometry.Size(size.width, fade))
-                    }, aboveSystemBar = current is Details)
+                    })
                 }
             }
-            // The tabs grow in under the mini-player, so it rises with them instead of jumping up.
-            transition.AnimatedVisibility({ it == Home },
+            // The tabs stay on home and a book's page alike, so moving between them leaves the bottom of the screen still.
+            transition.AnimatedVisibility({ it == Home || it is Details },
                 enter = expandVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized), expandFrom = Alignment.Top) + fadeIn(),
                 exit = shrinkVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate), shrinkTowards = Alignment.Top) + fadeOut()) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {

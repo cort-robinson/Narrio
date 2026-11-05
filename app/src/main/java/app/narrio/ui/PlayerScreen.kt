@@ -85,11 +85,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
             })
         .graphicsLayer { translationY = lift.value * .35f; alpha = 1f - (lift.value / 160f).coerceIn(0f, 1f) * .6f },
         color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, interactionSource = interaction) {
-        // Docked under a book's page it keeps clear of the system bar itself; at home the tabs below do. The change
-        // eases over the tabs' own entrance, so the mini-player rises with them instead of dipping first.
-        val systemBar = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-        val dock by animateDpAsState(if (aboveSystemBar) systemBar else 0.dp, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "dock")
-        Column(Modifier.padding(bottom = dock)) {
+        Column(if (aboveSystemBar) Modifier.navigationBarsIgnoringVisibilityPadding() else Modifier) {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BookCover(book, Modifier.size(48.dp))
                 Column(Modifier.weight(1f)) {
@@ -376,7 +372,9 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
-            PlayButton(state, if (dense) 64.dp else 82.dp, if (dense) 34.dp else 42.dp) { vm.graph.playback.service?.toggle() }
+            // While Listen's audio is still being found, the room is loading, not paused: the button says so from its first frame.
+            val starting by vm.startingBook.collectAsStateWithLifecycle()
+            PlayButton(if (starting != null) state.copy(buffering = true) else state, if (dense) 64.dp else 82.dp, if (dense) 34.dp else 42.dp) { vm.graph.playback.service?.toggle() }
             SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
         }
         Spacer(Modifier.height(if (dense) 4.dp else 20.dp))

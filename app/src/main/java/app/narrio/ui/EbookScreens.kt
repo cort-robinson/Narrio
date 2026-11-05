@@ -397,9 +397,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
         }
         // Like the listening card, the secondary row keeps its height while searching so the sheet never shifts.
         // Other choices appear once the search has settled, so the count never ticks up under the listener.
-        // While sources answer, the row other editions may need is held, so the sheet doesn't jump when they arrive.
-        if (!search.complete) Spacer(Modifier.height(48.dp))
-        else if (others == 0) Spacer(Modifier.height(14.dp))
+        // The card grows smoothly (it animates its size) when other editions arrive, rather than holding empty space.
+        if (!search.complete || others == 0) Spacer(Modifier.height(14.dp))
         else Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             val turn by animateFloatAsState(if (showingChoices) 180f else 0f, tween(Motion.MEDIUM, easing = Motion.Emphasized), label = "choices")
             TextButton(toggleChoices, Modifier.testTag("ebook-other-choices-toggle").semantics { stateDescription = if (showingChoices) "Expanded" else "Collapsed" }) {
@@ -500,7 +499,8 @@ fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox
     if (!formats.audio && !formats.ebook) {
         Row(modifier, verticalAlignment = Alignment.CenterVertically) {
             Text(if (needsTorBox) "Needs TorBox" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (needsTorBox && connect != null) TextButton(connect, Modifier.heightIn(min = 40.dp).testTag("shelf-connect-torbox")) { Text("Connect") }
+            if (needsTorBox && connect != null) FilledTonalButton(connect, Modifier.padding(start = 8.dp).heightIn(min = 36.dp).testTag("shelf-connect-torbox"),
+                contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Connect") }
         }
         return
     }

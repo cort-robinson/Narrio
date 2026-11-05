@@ -134,7 +134,10 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
         pinned = pinned.next(streamed?.best, interacted) { id -> streamed?.groups.orEmpty().any { group -> group.recordings.any { it.id == id } || group.possible.any { it.id == id } } }
     }
     // A book never listened to plays its best match (or the listener's pick); a book with a recording plays that.
+    // Before the pin catches up (it updates a frame after the search), nothing pinned means the search's own best, as
+    // the pin would adopt; otherwise the frame the search finishes would read as "No free recording found".
     val best = if (current != null) null else chosen?.takeIf { it.id != pinned.shown?.recording?.id } ?: pinned.shown?.recording
+        ?: streamed?.best?.recording
     val onPhone: (Audiobook) -> Boolean = { recording -> downloadsHere.any { it.complete && sameRecording(it.book, recording) } }
     // Change answers the tap at once; the chooser, slower to build the first time, follows and clears it once drawn.
     var chooserOpening by remember(book.id) { mutableStateOf<ChooserView?>(null) }
@@ -204,6 +207,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // While this book plays, its length gives way to the time left, matching the mini-player docked below.
             val left = playback.takeIf { it.book?.id == book.id }?.let { state -> state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 } }
             BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left,
+                reserveTime = current == null && best == null && streamed?.complete == false,
                 scrolled = { if (listState.firstVisibleItemIndex > 0) Int.MAX_VALUE else listState.firstVisibleItemScrollOffset }, titleInBar = { titleGone })
         }
         selected.error?.let { item(key = "error") { RecoveryState("Couldn't load this book", it) { vm.open(book) } } }
@@ -296,7 +300,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null, scrolled: () -> Int = { 0 },
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null, reserveTime: Boolean = false, scrolled: () -> Int = { 0 },
                          titleInBar: () -> Boolean = { false }) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
@@ -317,8 +321,8 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         if (line.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary) }
         val length = (recording?.durationMs?.takeIf { it > 0 } ?: book.durationMs).takeIf { it > 0 }
         val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
-        // The line keeps its height before the length is known, so nothing below moves when it arrives.
-        Text(time.orEmpty(), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
+        // While a recording is being found, the line keeps its height so nothing below moves when the length arrives.
+        if (time != null || reserveTime) Text(time.orEmpty(), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
     }
     // A short window, such as a folding phone's cover screen, sets a smaller cover beside the title, so the actions and
     // the description start above the mini-player.
@@ -326,7 +330,7 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
     val coverSize = if (short) 128.dp else 240.dp
     // The cover fades as it scrolls under the top bar, so no sliver of it is left showing there.
     val coverPx = with(LocalDensity.current) { coverSize.toPx() }
-    val fading = Modifier.graphicsLayer { alpha = 1f - (scrolled() / (coverPx / 2)).coerceIn(0f, 1f) }
+    val fading = Modifier.graphicsLayer { alpha = 1f - (scrolled() / coverPx).coerceIn(0f, 1f) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Wide panes put the book beside its identity instead of stretching a phone column. Audiobook art is square,
         // so the page's cover is too.

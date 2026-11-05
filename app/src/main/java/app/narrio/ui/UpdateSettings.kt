@@ -3,11 +3,14 @@ package app.narrio.ui
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
@@ -41,36 +44,38 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
+        // Android's install permission matters only when Narrio would install something: automatically, or an update
+        // that's waiting. Then it's a quiet note under the switch with its fix, and the longer explanation waits.
+        val permissionMatters = state.permissionNeeded && (state.automatic || state.available != null)
+        val muted = MaterialTheme.colorScheme.onSurfaceVariant
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Automatic updates", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            Column(Modifier.weight(1f)) {
+                Text("Automatic updates", style = MaterialTheme.typography.titleSmall)
+                if (permissionMatters) Text("Needs Android's permission to install", style = MaterialTheme.typography.bodySmall, color = muted)
+            }
             Switch(state.automatic, automatic, Modifier.semantics { contentDescription = "Automatic app updates" })
         }
-        // Android's install permission matters only when Narrio would install something: automatically, or an update
-        // that's waiting. Then it sits right under the switch it qualifies, with its fix.
-        val permissionMatters = state.permissionNeeded && (state.automatic || state.available != null)
-        if (permissionMatters) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Updates can't install until Android allows it.", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error)
-            TextButton(allow, enabled = !busy) { Text("Allow app updates") }
-        }
-        Text(if (state.automatic && automaticInstallSupported) "Downloads use Wi-Fi. Updates install while Narrio is closed and playback is paused. Android may ask you to confirm."
+        if (permissionMatters) FilledTonalButton(allow, enabled = !busy) { Text("Allow app updates") }
+        else Text(if (state.automatic && automaticInstallSupported) "Downloads use Wi-Fi. Updates install while Narrio is closed and playback is paused. Android may ask you to confirm."
             else if (state.automatic) "Downloads use Wi-Fi. When an update is ready, pause playback and tap Install update. Android will ask you to confirm."
             else "Automatic checks, downloads, and installation are off. You can check for updates here.",
-            style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            style = MaterialTheme.typography.bodyMedium, color = muted)
         val status = when (state.phase) {
             UpdatePhase.CHECKING -> "Checking for updates…"
             UpdatePhase.DOWNLOADING -> "Downloading ${state.available?.version} · ${(state.progress * 100).toInt()}%"
             UpdatePhase.INSTALLING -> "Installing update…"
             UpdatePhase.CONFIRMATION -> "Android needs your confirmation to finish the update."
             UpdatePhase.READY -> "${state.available?.version} is ready to install."
-            // After a failed check the error says what happened; while the permission is missing, its line above does.
+            // After a failed check, the error below says what happened.
             UpdatePhase.IDLE -> state.available?.let { "${it.version} is available." }
-                ?: if (state.error != null || permissionMatters) null else if (state.lastChecked > 0) "You're up to date." else "Not checked yet."
+                ?: if (state.error != null) null else if (state.lastChecked > 0) "You're up to date." else "Not checked yet."
         }
-        // The status and its one action share a line.
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(status.orEmpty(), Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.titleSmall)
-            TextButton(check, enabled = !busy && state.phase != UpdatePhase.CONFIRMATION) { Text("Check for updates") }
+        // Checking is a row like the others in Settings, with where things stand beneath it.
+        val canCheck = !busy && state.phase != UpdatePhase.CONFIRMATION
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = canCheck, role = Role.Button, onClick = check)
+            .heightIn(min = 48.dp).padding(vertical = 6.dp).semantics(mergeDescendants = true) { }) {
+            Text("Check for updates", style = MaterialTheme.typography.titleSmall, color = if (canCheck) MaterialTheme.colorScheme.onSurface else muted)
+            status?.let { Text(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.bodySmall, color = muted) }
         }
         if (state.phase == UpdatePhase.DOWNLOADING) LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
         if (state.phase == UpdatePhase.CHECKING || state.phase == UpdatePhase.INSTALLING) LinearProgressIndicator(Modifier.fillMaxWidth())

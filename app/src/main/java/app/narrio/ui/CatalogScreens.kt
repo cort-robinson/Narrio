@@ -51,6 +51,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val focus = LocalFocusManager.current
     val browse = query.isBlank() && (category == "All" || category == vm.homeCategory)
     // A book already on the shelf wears the cover it has there (its recording's own), so it looks the same everywhere.
+    val shelfIds = remember(shelf) { shelf.map { it.bookId }.toSet() }
     val shelfCovers = remember(shelf) { shelf.associate { it.bookId to runCatching { it.book().coverUrl }.getOrDefault("") }.filterValues(String::isNotBlank) }
     // Short windows, such as a folding phone's cover screen, tighten the gaps so more books show.
     val short = LocalConfiguration.current.screenHeightDp < SHORT_WINDOW_DP
@@ -90,7 +91,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     layout(constraints.maxWidth, row.height) { row.place(-bleed, 0) }
                 }, contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // All, then Classics, whose free public recordings play without TorBox; the check shows where Discover opened.
-                    items(AppleBooks.genres.keys.sortedBy { when (it) { "All" -> 0; "Classics" -> 1; else -> 2 } }) { FilterChip(category == it, { vm.search(cat = it) }, { Text(it) },
+                    items(AppleBooks.genres.keys.sortedBy { when (it) { "All" -> 0; "Classics" -> 1; else -> 2 } }) { FilterChip(category == it, { vm.search(cat = it) }, { Text(if (it == "All") "All genres" else it) },
                         leadingIcon = { AnimatedVisibility(category == it, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { Icon(Icons.Rounded.Check, null, Modifier.size(FilterChipDefaults.IconSize)) } }) }
                 }
             }
@@ -130,6 +131,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     extra = when {
                         playing.book?.id == book.id -> ({ Text(playingLine(playing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) })
                         book.id in catalog.free -> ({ FreeMark() })
+                        book.id in shelfIds -> ({ Text("On your shelf", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) })
                         else -> null
                     })
             }
@@ -232,8 +234,9 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("My shelf", Modifier.weight(1f), style = MaterialTheme.typography.displaySmall)
                 // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
-                if (shelf.isNotEmpty()) TextButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
-                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Import an ebook")
+                // A quiet icon: the shelf is for resuming, and adding a file is the rare thing here.
+                if (shelf.isNotEmpty()) IconButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
+                    Icon(Icons.Rounded.UploadFile, "Add an ebook from your phone", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))

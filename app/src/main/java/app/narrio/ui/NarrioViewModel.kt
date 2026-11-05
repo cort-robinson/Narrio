@@ -504,28 +504,46 @@ class NarrioViewModel @JvmOverloads constructor(
      */
     fun listenTo(recording: Audiobook, format: String? = null, delivery: String? = null, start: StartChoice? = advanced.startChoice.value) = viewModelScope.launch {
         val book = parentBook() ?: return@launch
-        val entry = graph.library.find(book.id)
-        val mine = currentFor(book, entry)?.takeIf { sameRecording(it.recording, recording) }
-        val described = adopt(recording, book)
-        // Another recording than the listener's own starts where they chose: near their place, its own, or the beginning.
-        val place = if (mine == null) advanced.switchPlace(book, start) else null
-        fun play(target: Audiobook, source: AudioSource, how: String) { if (format != null) chooseFormat(described, format); start(target, source, how, place) }
-        mine?.offline?.takeIf { format == null || it.source.format == format }?.let { play(described, it.source, it.source.delivery); return@launch }
-        val earlier = mine?.source ?: earlierPlay(book.id, recording)?.let { runCatching { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }.getOrNull() }
-        earlier?.takeIf { format == null || it.format == format }?.let { play(described, it, delivery ?: it.delivery); return@launch }
-        val wanted = format ?: savedFormat(book.id)
-        val copies = downloads.value.filter { it.complete && it.book.id == book.id && sameRecording(it.book, recording) }
-        val copy = copies.firstOrNull { it.source.format == wanted } ?: copies.firstOrNull()?.takeIf { format == null }
-        if (copy != null) { play(described, copy.source, copy.source.delivery); return@launch }
-        val playing = prepared(entry, recording, described) ?: described
-        val ready = readyFormats(playing).let { formats -> playing.sources.filter { it.format in formats } }
-        val source = if (format != null) ready.firstOrNull { it.format == format }
-            else ready.firstOrNull { it.format == wanted } ?: ready.firstOrNull { it.format == entry?.pendingFormat } ?: ready.firstOrNull { it.format == "M4B" } ?: ready.firstOrNull()
-        if (!SourceQuality.ready(playing) || source == null) {
-            messages.emit(if (format != null) "$format isn't ready for this recording yet. Get it ready, or choose a format that plays now." else "This recording needs time to get ready first.")
-            return@launch
-        }
-        play(playing, source, delivery ?: if (playing.provider == "archive") "archive" else "torbox")
+        if (busy.value) return@launch
+        // The Listening room opens on the tap; working out which audio to play happens behind its loading state.
+        openForStart(book)
+        var handedOff = false
+        try {
+            val entry = graph.library.find(book.id)
+            val mine = currentFor(book, entry)?.takeIf { sameRecording(it.recording, recording) }
+            val described = adopt(recording, book)
+            // Another recording than the listener's own starts where they chose: near their place, its own, or the beginning.
+            val place = if (mine == null) advanced.switchPlace(book, start) else null
+            fun play(target: Audiobook, source: AudioSource, how: String) { handedOff = true; if (format != null) chooseFormat(described, format); start(target, source, how, place) }
+            mine?.offline?.takeIf { format == null || it.source.format == format }?.let { play(described, it.source, it.source.delivery); return@launch }
+            val earlier = mine?.source ?: earlierPlay(book.id, recording)?.let { runCatching { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }.getOrNull() }
+            earlier?.takeIf { format == null || it.format == format }?.let { play(described, it, delivery ?: it.delivery); return@launch }
+            val wanted = format ?: savedFormat(book.id)
+            val copies = downloads.value.filter { it.complete && it.book.id == book.id && sameRecording(it.book, recording) }
+            val copy = copies.firstOrNull { it.source.format == wanted } ?: copies.firstOrNull()?.takeIf { format == null }
+            if (copy != null) { play(described, copy.source, copy.source.delivery); return@launch }
+            val playing = prepared(entry, recording, described) ?: described
+            val ready = readyFormats(playing).let { formats -> playing.sources.filter { it.format in formats } }
+            val source = if (format != null) ready.firstOrNull { it.format == format }
+                else ready.firstOrNull { it.format == wanted } ?: ready.firstOrNull { it.format == entry?.pendingFormat } ?: ready.firstOrNull { it.format == "M4B" } ?: ready.firstOrNull()
+            if (!SourceQuality.ready(playing) || source == null) {
+                messages.emit(if (format != null) "$format isn't ready for this recording yet. Get it ready, or choose a format that plays now." else "This recording needs time to get ready first.")
+                return@launch
+            }
+            play(playing, source, delivery ?: if (playing.provider == "archive") "archive" else "torbox")
+        } finally { if (!handedOff) closeAfterStart(book) }
+    }
+
+    /** Opens the Listening room for [book] as it starts, unless another book still plays (it waits, so that book never shows). */
+    private fun openForStart(book: Audiobook) {
+        if (playback.value.book.let { it == null || it.id == book.id }) { startingBook.value = book; playerOpen.value = true }
+    }
+
+    /** A start that didn't happen leaves the room only if it opened for this book; a book already playing keeps it. */
+    private fun closeAfterStart(book: Audiobook) {
+        if (startingBook.value?.id != book.id) return
+        startingBook.value = null
+        if (playback.value.book?.id != book.id) playerOpen.value = false
     }
 
     /** Listens to the page's automatic or chosen recording. */
@@ -889,21 +907,20 @@ class NarrioViewModel @JvmOverloads constructor(
     fun start(book: Audiobook, source: AudioSource, delivery: String, place: ((AudioSource) -> StartAt?)? = null) = viewModelScope.launch {
         if (busy.value) return@launch
         busy.value = true; starting.value = true
-        // The Listening room opens on the tap and shows its one loading state while the audio is found and loaded;
-        // while another book still plays, it waits so that book never shows in this one's place.
-        val wasOpen = playerOpen.value
-        if (playback.value.book.let { it == null || it.id == book.id }) { startingBook.value = book; playerOpen.value = true }
+        // The Listening room opens on the tap (Listen opened it already) and shows its one loading state while the
+        // audio is found and loaded.
+        openForStart(book)
         try {
             val resolved = try { playableSource(book, source, delivery)?.let { graph.releaseFiles.apply(book, it) } }
-                catch (failed: Exception) { if (playback.value.book?.id != book.id) playerOpen.value = wasOpen; throw failed }
-            if (resolved == null) { if (playback.value.book?.id != book.id) playerOpen.value = wasOpen; return@launch }
+                catch (failed: Exception) { closeAfterStart(book); throw failed }
+            if (resolved == null) { closeAfterStart(book); return@launch }
             // Loading replaces the row's book, so the recording being got ready is pinned down first.
             graph.library.find(book.id)?.let { rememberOlderShelf(it) }
             val at = place?.invoke(resolved)
             try {
                 if (at == null || at.approximate) awaitService().load(book, resolved, near = at?.cursor)
                 else awaitService().load(book, resolved, partId = at.cursor.partId, positionMs = at.cursor.positionMs)
-            } catch (failed: Exception) { if (playback.value.book?.id != book.id) playerOpen.value = wasOpen; throw failed }
+            } catch (failed: Exception) { closeAfterStart(book); throw failed }
             playerOpen.value = true
             // Only the prepared recording itself completes its preparation; another one (or phone audio) leaves it pending.
             if (resolved.delivery != LocalAudio.DELIVERY && graph.preparations.played(book.id, resolved)) app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
