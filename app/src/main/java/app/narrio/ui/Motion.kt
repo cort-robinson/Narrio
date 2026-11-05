@@ -152,13 +152,13 @@ fun SkeletonBookRow(modifier: Modifier = Modifier) {
         val shift by rememberInfiniteTransition(label = "skeleton").animateFloat(-1f, 2f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "shift")
         Brush.linearGradient(listOf(base, glow, base), start = Offset(shift * 600f, 0f), end = Offset(shift * 600f + 600f, 200f))
     } else Brush.linearGradient(listOf(base, base))
+    // Shaped like BookRow: a square cover beside the title, author and one short mark, so nothing shifts when books arrive.
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Box(Modifier.size(76.dp, 112.dp).clip(RoundedCornerShape(8.dp)).background(brush))
-        Column(Modifier.weight(1f).padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.fillMaxWidth(.82f).height(16.dp).clip(RoundedCornerShape(6.dp)).background(brush))
-            Box(Modifier.fillMaxWidth(.46f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(brush))
-            Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(6.dp)).background(brush))
-            Box(Modifier.fillMaxWidth(.7f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(brush))
+        Box(Modifier.size(76.dp).clip(RoundedCornerShape(8.dp)).background(brush))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Box(Modifier.padding(vertical = 4.dp).fillMaxWidth(.72f).height(16.dp).clip(RoundedCornerShape(6.dp)).background(brush))
+            Box(Modifier.padding(vertical = 2.dp).fillMaxWidth(.42f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(brush))
+            Box(Modifier.padding(vertical = 3.dp).fillMaxWidth(.3f).height(10.dp).clip(RoundedCornerShape(6.dp)).background(brush))
         }
     }
 }

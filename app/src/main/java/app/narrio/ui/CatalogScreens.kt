@@ -113,9 +113,10 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 ContinueRow(going, vm::continueBook, { vm.open(it.book()) }, Modifier.animateItem(fadeInSpec = androidx.compose.animation.core.tween(240, delayMillis = 160)))
             } }
         }
-        if (catalog.loading && catalog.books.isEmpty()) {
-            items(4, key = { "skeleton$it" }) { SkeletonBookRow(Modifier.animateItem()) }
-        } else if (catalog.books.isNotEmpty()) {
+        val freeHere = catalog.books.count { it.id in catalog.free }
+        val canFilterFree = query.isNotBlank() && !connected && freeHere > 0 && !catalog.loading
+        // The heading shows while books load too, so it is already in place and the rows below it don't move when they arrive.
+        if (catalog.loading || catalog.books.isNotEmpty()) {
             if (query.isBlank()) item(key = "browse-title") {
                 Column(Modifier.animateItem()) {
                     Text(browseTitle(category), style = MaterialTheme.typography.headlineSmall)
@@ -128,8 +129,6 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     }
                 }
             }
-            val freeHere = catalog.books.count { it.id in catalog.free }
-            val canFilterFree = query.isNotBlank() && !connected && freeHere > 0 && !catalog.loading
             if (query.isNotBlank()) item(key = "results-title") {
                 // Once free recordings are marked, the count says how many, and that count narrows the list to them.
                 val count = "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}"
@@ -142,6 +141,10 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                         leadingIcon = { Icon(Icons.Rounded.Headphones, null, Modifier.size(16.dp)) }, modifier = Modifier.testTag("free-only"))
                 }
             }
+        }
+        if (catalog.loading && catalog.books.isEmpty()) {
+            items(4, key = { "skeleton$it" }) { SkeletonBookRow(Modifier.animateItem()) }
+        } else if (catalog.books.isNotEmpty()) {
             val listed = if (canFilterFree && freeOnly) catalog.books.filter { it.id in catalog.free } else catalog.books
             val nudgeAfter = if (nudge) minOf(NUDGE_AFTER, listed.size) else listed.size
             listed.forEachIndexed { index, book -> item(key = book.id) {
