@@ -259,11 +259,6 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         item(key = "heading") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("My shelf", Modifier.weight(1f), style = MaterialTheme.typography.displaySmall)
-                // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
-                // Its one action shows as its own icon, so it never reads as another row's menu.
-                if (shelf.isNotEmpty()) TextButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
-                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add ebook file")
-                }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
             if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),
@@ -308,8 +303,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             item(key = "finished-header") { FinishedHeader(finished.size, finishedOpen, finishedCollapsible, { showFinished = !showFinished }, Modifier.animateItem()) }
             if (finishedOpen) items(finished, key = { it.entry.bookId }, itemContent = row)
         }
-        // The Ebooks filter also offers adding one under its list.
-        if (shelf.isNotEmpty() && filter == ShelfFilter.EBOOKS && visible.isNotEmpty()) item(key = "add-file") {
+        // Adding an ebook from the phone is a rare step, so it waits quietly under the list rather than in the header.
+        if (shelf.isNotEmpty() && visible.isNotEmpty()) item(key = "add-file") {
             // A footer action under the last row's divider, so the list holds only books.
             Column(Modifier.animateItem()) {
                 TextButton({ if (!importing.working) addEbook() }, Modifier.padding(top = 8.dp).heightIn(min = 48.dp).testTag("shelf-add-ebook")) {

@@ -348,12 +348,12 @@ class NarrioViewModel @JvmOverloads constructor(
     /** The category browsing was on before a typed search, so clearing the search goes back to it. */
     private var lastBrowse = homeCategory
     private val freeReadings = mutableMapOf<List<String>, Set<String>>()
-    private suspend fun freeReadingsOf(books: List<Audiobook>): Set<String> {
+    private suspend fun freeReadingsOf(books: List<Audiobook>, waitMs: Long = 6_000): Set<String>? {
         val key = books.map { it.id }
         freeReadings[key]?.let { return it }
-        val found = try { withTimeoutOrNull(4_000) { graph.catalog.freeReadings(books) } }
+        val found = try { withTimeoutOrNull(waitMs) { graph.catalog.freeReadings(books) } }
             catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
-        return found?.also { freeReadings[key] = it }.orEmpty()
+        return found?.also { freeReadings[key] = it }
     }
     fun search(value: String = query.value, cat: String = if (query.value.isBlank()) category.value else lastBrowse) {
         val browseCategory = if (value.isBlank()) cat.also { lastBrowse = it } else "All"
@@ -365,13 +365,16 @@ class NarrioViewModel @JvmOverloads constructor(
             delay(if (value.isBlank()) 0 else 350)
             try {
                 val books = graph.books.search(value, browseCategory)
-                // Without TorBox, browsing leads with the books that play free; a slow check leaves the chart's order.
-                val free = if (value.isBlank() && !connected.value) freeReadingsOf(books) else emptySet()
-                catalog.value = CatalogState(books.sortedByDescending { it.id in free }, false, query = value, free = free)
-                // A typed search keeps its order, and marks the free readings once they're known, as browsing does.
-                if (value.isNotBlank() && !connected.value) {
-                    val found = freeReadingsOf(books)
-                    if (found.isNotEmpty() && catalog.value.query == value && catalog.value.books == books) catalog.value = catalog.value.copy(free = found)
+                // Without TorBox, browsing leads with the books that play free; the list waits briefly for that check so
+                // it appears once, in that order.
+                val browseFree = if (value.isBlank() && !connected.value) freeReadingsOf(books) else emptySet()
+                val shown = books.sortedByDescending { it.id in browseFree.orEmpty() }
+                catalog.value = CatalogState(shown, false, query = value, free = browseFree.orEmpty())
+                // A typed search keeps its order, and a slow browse check never reorders rows already on screen: either
+                // only adds its marks once they're known.
+                if (!connected.value && (value.isNotBlank() || browseFree == null)) {
+                    val found = freeReadingsOf(books, 20_000).orEmpty()
+                    if (found.isNotEmpty() && catalog.value.query == value && catalog.value.books == shown) catalog.value = catalog.value.copy(free = found)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { catalog.value = CatalogState(emptyList(), false, friendly(error)) }

@@ -208,7 +208,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "intro") {
                 Text(if (formats.ebook) "Choose an edition" else "Find ebook", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(if (narrated) "Add the book's text to read along as you listen. Words light up once the audio is prepared."
+                Text(if (narrated) "Add the book's text to read along as you listen. Read now; for streamed books, word highlights are prepared while your phone charges on Wi-Fi."
                      else "Pick the edition you want to read. It's saved on this phone with the book.", style = MaterialTheme.typography.bodyMedium, color = muted)
             }
             if (formats.editions.isNotEmpty()) {

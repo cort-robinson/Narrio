@@ -87,7 +87,7 @@ internal const val FREE_MARKED_AND_TORBOX = "Free recordings are marked. A paid 
 
 internal const val TORBOX_PITCH = "A paid service that finds and streams many more audiobooks. Books marked “Free to listen” play without it."
 /** Opened from a book's page, the sheet says what connecting does for that book. */
-internal const val TORBOX_FOR_BOOK = "Connect your paid TorBox account to search for this book. A recording may not be available."
+internal const val TORBOX_FOR_BOOK = "Connect your paid TorBox account to search for this book."
 
 internal fun connectError(error: Exception) = if (error is ProviderException) error.message.orEmpty() else "Couldn't save the key on this phone. Try again."
 
@@ -140,9 +140,9 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
         OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
             Text("Open TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
-        Text("2. Copy your API key (Settings → API Key).", style = MaterialTheme.typography.bodyMedium)
+        Text("2. In TorBox, go to Settings → API Key and copy it.", style = MaterialTheme.typography.bodyMedium)
         Text("3. Come back and paste it here.", style = MaterialTheme.typography.bodyMedium)
-        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Paste your key") }, singleLine = true,
+        OutlinedTextField(key, ::change, Modifier.fillMaxWidth().testTag("torbox-key"), label = { Text("Paste your API key") }, singleLine = true,
             enabled = !state.connecting, isError = state.error != null,
             visualTransformation = if (shown) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
