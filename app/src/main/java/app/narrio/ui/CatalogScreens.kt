@@ -267,6 +267,17 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         item(key = "heading") {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("My shelf", Modifier.weight(1f), style = MaterialTheme.typography.displaySmall)
+                // Adding an ebook file makes a new shelf book; it's rare, so it waits in the menu at any shelf size.
+                if (shelf.isNotEmpty()) {
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton({ menu = true }, Modifier.testTag("shelf-more")) { Icon(Icons.Rounded.MoreVert, "More shelf options") }
+                        DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem({ Text("Add an ebook from your phone") }, { menu = false; if (!importing.working) addEbook() },
+                                leadingIcon = { Icon(Icons.Rounded.UploadFile, null) }, modifier = Modifier.testTag("shelf-add-ebook-header"))
+                        }
+                    }
+                }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))
             if (searchable) ShelfSearchField(typed, vm::setShelfQuery, Modifier.padding(top = 16.dp),

@@ -73,6 +73,9 @@ fun RecordingChooser(
     val everything = chooserRows(current?.recording, search, showAll = true)
     val automatic = (current?.recording ?: chosen ?: pinned.shown?.recording)?.let { wanted -> everything.firstOrNull { sameRecording(it, wanted) } ?: wanted } ?: everything.firstOrNull()
     val picked = pickedKey?.let { key -> everything.firstOrNull { recordingKey(it) == key } } ?: automatic
+    // The reading the sheet opened on, so a pick (which becomes the page's choice at once) still reads as a switch from it.
+    var openedOn by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(automatic?.let(::recordingKey)) { if (openedOn == null && pickedKey == null) openedOn = automatic?.let(::recordingKey) }
     // The pick always shows, even when it isn't one of the distinct versions.
     val hidden = hiddenMatches(current?.recording, search)
     // A single extra match isn't worth a toggle; it simply shows.
@@ -140,7 +143,7 @@ fun RecordingChooser(
                 item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
                     ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close,
-                        switched = automatic != null && !sameRecording(picked, automatic))
+                        switched = pickedKey != null && pickedKey != openedOn)
                 }
                 item(key = "advanced") {
                     SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",

@@ -115,7 +115,8 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     val state by vm.playback.collectAsStateWithLifecycle()
     // Until its audio has loaded, the room shows the book Listen is starting, in its loading state.
     val starting by vm.startingBook.collectAsStateWithLifecycle()
-    val book = state.book ?: starting ?: return
+    // A start in progress shows the recording being started, even over the one still loaded from before.
+    val book = starting ?: state.book ?: return
     // While Listen's audio loads, the cover already sits at its playing size, so nothing grows once it starts.
     val leaning = state.playing || state.buffering || starting != null
     var speedOpen by remember { mutableStateOf(false) }
