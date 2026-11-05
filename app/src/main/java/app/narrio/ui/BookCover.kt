@@ -68,7 +68,8 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         val previous = lastLoaded?.takeIf { !failed && it != book.coverUrl && it in loadedCovers }
         val fallback = reveal < 1f && previous == null && drawn
         // A large cover still on its way holds a quiet book mark, so the shape never reads as a broken image.
-        if (large && !drawn && !coverLoaded && previous == null) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) { CoverPlaceholderMark() }
+        // Any art bridging the change draws over it, so the mark shows only while nothing else does.
+        if (large && !drawn && !coverLoaded) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) { CoverPlaceholderMark() }
         if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))

@@ -183,7 +183,7 @@ class ConnectTorBoxTest {
         }
         compose.onNodeWithTag("torbox-nudge").assertIsDisplayed()
         // Which hint shows depends on whether LibriVox answered the free check in time.
-        compose.onNode(hasAnyAncestor(hasTestTag("torbox-nudge")) and (hasText(FREE_AND_TORBOX) or hasText(FREE_MARKED_AND_TORBOX))).assertIsDisplayed()
+        compose.onNode(hasAnyAncestor(hasTestTag("torbox-nudge")) and (hasText(FREE_AND_TORBOX) or hasText(FREE_MARKED_AND_TORBOX) or hasText(ALL_FREE_AND_TORBOX))).assertIsDisplayed()
         compose.runOnIdle { vm.connected.value = true }
         compose.onNodeWithTag("torbox-nudge").assertDoesNotExist()
         compose.runOnIdle { vm.connected.value = false }

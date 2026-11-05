@@ -361,10 +361,12 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             possible != null -> Column(Modifier.testTag("ebook-choice:${possible.edition.id}")) {
                 Text(ebookChoiceTitle(possible, search.book), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(possible.source, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
+                // Like a confirmed match's reason line: why this text should follow the narration.
+                if (trusted) Text("Likely the text this reading follows", style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 ebookChoiceNotes(possible, narrated).filter { it.kind == ChoiceNoteKind.CAUTION }.forEach {
                     Text(it.text, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
-                if (!trusted) Text(possibleMatchCaution(possible), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
+                if (!trusted) Text("${possibleMatchCaution(possible)} Read a little, then keep it or remove it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
             }
             else -> {
                 val copy = ebookNoMatchCopy(search, tally)
@@ -387,7 +389,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             possible != null && trusted -> Button({ actions.addAndOpen(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) { SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, openLabel) }
             // Checking is the next step; the reader then asks to keep or remove it, so the doubt never commits the listener.
             possible != null -> Button({ (actions.addAndCheck ?: actions.addAndOpen)(possible.edition) }, button.testTag("best-ebook-action"), enabled = !busy) {
-                SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, "Check this ebook")
+                SlotLabel(Icons.AutoMirrored.Rounded.MenuBook, "Open and check")
             }
             // The header already says it's searching; the action's place is held so nothing shifts when one is found.
             !search.complete && tally.active > 0 -> Spacer(button)
@@ -497,15 +499,16 @@ private fun AddingStep(step: String, modifier: Modifier = Modifier) {
 }
 
 /** Format marks for a shelf row: quiet icons and words, no extra container around the row. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox: Boolean = false, connect: (() -> Unit)? = null) {
     // A book saved before choosing a recording or ebook says what it's waiting for: a quiet status, with Connect
     // beside it when TorBox is the way forward, so the row is never a dead end.
     if (!formats.audio && !formats.ebook) {
-        // The status, then its action on a line of its own, so neither wraps beside the other.
-        Column(modifier) {
+        // The status and its action read as one line, moving the action below only when the row is too narrow.
+        FlowRow(modifier, itemVerticalAlignment = Alignment.CenterVertically) {
             Text(if (needsTorBox) "No free recording" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (needsTorBox && connect != null) TextButton(connect, Modifier.offset(x = (-12).dp).heightIn(min = 40.dp).testTag("shelf-connect-torbox")) { Text("Connect TorBox") }
+            if (needsTorBox && connect != null) TextButton(connect, Modifier.heightIn(min = 40.dp).testTag("shelf-connect-torbox"), contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Connect TorBox") }
         }
         return
     }

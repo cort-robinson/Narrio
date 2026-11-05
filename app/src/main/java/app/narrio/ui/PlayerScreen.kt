@@ -95,7 +95,7 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Time left in the book, in the shelf's words; elapsed time when the length isn't known yet.
                         val left = (state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 })?.let { "${timeLeftLabel(it)} left" }
-                        Text(if (state.buffering) "Buffering…" else "${state.placeTitle ?: book.author} · ${left ?: formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (state.buffering) "Loading…" else "${state.placeTitle ?: book.author} · ${left ?: formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 // One skip fits here: back 10 s, to catch what was just missed.
@@ -370,7 +370,7 @@ private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> U
         SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (state.durationMs > 0) "${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))} left" else "Loading audio…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (state.durationMs > 0) "${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))} left" else "Loading…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TimeLeftLine(state, Modifier.padding(top = if (dense) 0.dp else 4.dp), dense)
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))

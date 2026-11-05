@@ -57,7 +57,7 @@ class EbookResultsModelTest {
         ), complete = true)
         val choices = ebookChoices(search, book, shownId = null)
         assertEquals(listOf("book.epub", "sample", "maybe"), choices.map { it.edition.id })
-        assertEquals("Came with this recording", choices.first().source)
+        assertEquals("Free ebook · From this recording's files", choices.first().source)
         // Coming with the recording is the reason to try it, said once: no check note, no source line, and the book's name, not the file's.
         assertEquals(listOf(ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")), ebookChoiceNotes(choices.first(), recording = true))
         assertNull(ebookChoiceSource(choices.first(), recording = true))

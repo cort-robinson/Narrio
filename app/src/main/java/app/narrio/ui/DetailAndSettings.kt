@@ -111,7 +111,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Where Narrio looks for books", openAddons, Modifier.testTag("sources-entry"))
+                SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Choose which sites Narrio searches", openAddons, Modifier.testTag("sources-entry"))
             }
         }
         // The everyday listening and reading switches.

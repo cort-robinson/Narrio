@@ -100,7 +100,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             }
         }
         // While a book plays the listener is already listening; the hint waits for a quieter moment.
-        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty(), compact = true) }
+        val allFree = catalog.books.isNotEmpty() && catalog.books.all { it.id in catalog.free }
+        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty(), compact = true, allFree = allFree) }
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {
@@ -115,6 +116,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             if (query.isBlank()) item(key = "browse-title") {
                 Column(Modifier.animateItem()) {
                     Text(browseTitle(category), style = MaterialTheme.typography.headlineSmall)
+                    // When every book here has a free reading, the heading says so once instead of every row repeating it.
+                    AnimatedVisibility(allFree, enter = fadeIn(), exit = fadeOut()) { FreeMark(Modifier.padding(top = 4.dp), "All free to listen") }
                     // Once the TorBox hint is gone, the list itself still says what most of it needs.
                     if (!connected && category != "Classics" && !(torBoxNudge.visible(connected) && playing.book == null)) Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Most of these need TorBox.", Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -133,7 +136,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     // The book in the mini-player says so in words where it appears in the list, as on the shelf.
                     extra = when {
                         playing.book?.id == book.id -> ({ Text(playingLine(playing), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) })
-                        book.id in catalog.free -> ({ FreeMark() })
+                        book.id in catalog.free && !(allFree && query.isBlank()) -> ({ FreeMark() })
                         book.id in shelfIds -> ({ Text("On your shelf", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) })
                         else -> null
                     })
@@ -144,10 +147,12 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     }
 }
 
-/** "Playing · 10 h 22 m left", or "Paused · …": the book in the mini-player, wherever it's listed. */
+/** "Playing · 10 h 22 m left", "Loading · …" or "Paused · …": the book in the mini-player, in its words, wherever it's listed. */
 internal fun playingLine(playing: app.narrio.playback.ListeningState): String {
+    // Until the stream reports its length, the book's own length stands in, so the line never loses its time.
     val left = playing.bookTime?.remainingMs ?: (playing.durationMs - playing.positionMs).takeIf { playing.durationMs > 0 }
-    val state = if (playing.playing) "Playing" else "Paused"
+        ?: playing.book?.durationMs?.takeIf { it > 0 }?.let { it - playing.positionMs }
+    val state = when { playing.playing -> "Playing"; playing.buffering -> "Loading"; else -> "Paused" }
     return left?.let { "$state · ${timeLeftLabel(it)} left" } ?: state
 }
 
@@ -156,10 +161,10 @@ internal const val SHORT_WINDOW_DP = 800
 
 /** A book LibriVox has a free reading of. */
 @Composable
-private fun FreeMark() {
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun FreeMark(modifier: Modifier = Modifier, label: String = "Free to listen") {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Rounded.Headphones, null, Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
-        Text("Free to listen", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
     }
 }
 
@@ -187,7 +192,8 @@ internal fun browseTitle(category: String) = when (category) {
 fun BookRow(book: Audiobook, open: () -> Unit, modifier: Modifier = Modifier, recording: Boolean = true, extra: (@Composable ColumnScope.() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     val interaction = remember { MutableInteractionSource() }
     Row(modifier.fillMaxWidth().pressScale(interaction, .985f).clip(RoundedCornerShape(12.dp)).clickable(interaction, LocalIndication.current, onClick = open),
-        horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Cover, title and controls share one top edge, so rows of different heights still line up.
+        horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
         BookCover(book, Modifier.size(76.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(book.title, style = MaterialTheme.typography.titleMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -278,7 +284,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             Column(Modifier.animateItem()) {
                 val here = playing.book?.id == entry.bookId
                 // The book in the mini-player shows its live place, so the row and the player never disagree.
-                val live = if (!here) null else playingLine(playing).takeIf { it.contains("left") }
+                val live = if (!here) null else playingLine(playing)
                 ShelfRow(entry, book, bookFormats, here, live, !connected && entry.bookId in needsTorBox, { vm.continueBook(entry) }, { vm.open(book) },
                     { vm.setFinished(entry.bookId, it) }, removeBook = { remove = book }, connect = vm::requestTorBoxConnect)
                 downloads.filter { it.book.id == entry.bookId }.forEach { download -> Spacer(Modifier.height(14.dp)); OfflineStatus(vm, download) }
@@ -317,7 +323,9 @@ private fun ShelfRow(entry: ShelfEntry, book: Audiobook, formats: BookFormats, n
     BookRow(book, details, recording = false, extra = {
         FormatMarks(formats, Modifier.padding(top = 2.dp), needsTorBox, connect)
         if (finished) FinishedMark(Modifier.padding(top = 6.dp))
+        // A book just started has no saved place yet; its live line stands in, so the row never goes blank.
         else placeSummary(formats)?.let { place -> ShelfProgress(place, Modifier.padding(top = 6.dp), live = live) }
+            ?: live?.let { Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary) }
     }) {
         // Continue and the overflow sit together at the row's edge, so a shelf entry is one line of controls.
         Row(verticalAlignment = Alignment.CenterVertically) {

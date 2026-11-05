@@ -314,7 +314,7 @@ class LibraryFormatsExperienceTest {
         compose.waitUntil(10_000) { shown("Possible match") }
         // With no sure match, the possible one leads the card with the same action and its one doubt.
         sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
-        compose.onNodeWithText("No author is listed, so it may be a different book.").assertExists()
+        compose.onNodeWithText("No author is listed, so it may be a different book.", substring = true).assertExists()
         capture("ebook-chooser-possible-day")
         // Nothing else was found, so there's no list to open.
         compose.onNodeWithTag("ebook-other-choices-toggle").assertDoesNotExist()
@@ -402,7 +402,7 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithTag("find-ebook-action").performClick()
         compose.waitUntil(10_000) { shown("Possible match") }
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasTestTag("best-ebook-action"))
-        compose.onNodeWithTag("best-ebook-action").assertTextContains("Check this ebook").performClick()
+        compose.onNodeWithTag("best-ebook-action").assertTextContains("Open and check").performClick()
         compose.waitUntil(10_000) { vm.reader.value != null }
         compose.runOnIdle { assertEquals(audioOnly.id, vm.checkingEdition.value?.book?.id) }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("check-ebook").fetchSemanticsNodes().isNotEmpty() }

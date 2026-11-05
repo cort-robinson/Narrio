@@ -120,7 +120,7 @@ data class EbookChoice(val edition: BookTextSource, val providerId: String, val 
  * best match, then confirmed before possible, then the likeliest to follow the narration, keeping source order for ties.
  */
 fun ebookChoices(search: StreamedEbookSearch, book: Audiobook, shownId: String?): List<EbookChoice> = search.groups.flatMap { group ->
-    val source = if (group.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "Came with this recording" else group.name
+    val source = if (group.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "Free ebook · From this recording's files" else group.name
     group.editions.map { EbookChoice(it, group.providerId, source, true, NarrationMatch.judge(book, it, group.providerId, confirmed = true)) } +
         group.possible.map { EbookChoice(it, group.providerId, source, false, NarrationMatch.judge(book, it, group.providerId, confirmed = false)) }
 }.distinctBy { it.edition.id }.filter { it.edition.id != shownId }
