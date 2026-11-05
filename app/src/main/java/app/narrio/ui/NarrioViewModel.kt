@@ -505,8 +505,9 @@ class NarrioViewModel @JvmOverloads constructor(
     fun listenTo(recording: Audiobook, format: String? = null, delivery: String? = null, start: StartChoice? = advanced.startChoice.value) = viewModelScope.launch {
         val book = parentBook() ?: return@launch
         if (busy.value) return@launch
-        // The Listening room opens on the tap; working out which audio to play happens behind its loading state.
-        openForStart(book)
+        // The Listening room opens on the tap, already showing the chosen recording (its own cover and reader) under the
+        // book's id; working out which audio to play happens behind its loading state.
+        openForStart(SourceQuality.describe(recording, book).copy(id = book.id))
         var handedOff = false
         try {
             val entry = graph.library.find(book.id)

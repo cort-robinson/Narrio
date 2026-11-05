@@ -267,7 +267,9 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
                 }
             }
             item(key = "advanced") {
-                SearchOtherSourcesRow("Find another edition", expanded = advanced, open = { advanced = !advanced }, modifier = Modifier.testTag("ebook-advanced"))
+                // With no sure match, what's wanted may be a different ebook, not another edition of this one.
+                SearchOtherSourcesRow(if (pinned.shown == null) "Find a different ebook" else "Find another edition", expanded = advanced, open = { advanced = !advanced },
+                    modifier = Modifier.testTag("ebook-advanced"))
             }
             if (advanced) {
                 item(key = "search-words") { EbookSearchWords(book, state.words, busy, search = { words -> actions.searchWith(customEbookWords(words, book)); scrollTo(bestIndex) }) }
@@ -502,8 +504,7 @@ fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox
     if (!formats.audio && !formats.ebook) {
         Row(modifier, verticalAlignment = Alignment.CenterVertically) {
             Text(if (needsTorBox) "No free recording" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (needsTorBox && connect != null) FilledTonalButton(connect, Modifier.padding(start = 8.dp).heightIn(min = 36.dp).testTag("shelf-connect-torbox"),
-                contentPadding = PaddingValues(horizontal = 14.dp)) { Text("Connect") }
+            if (needsTorBox && connect != null) TextButton(connect, Modifier.padding(start = 4.dp).heightIn(min = 40.dp).testTag("shelf-connect-torbox")) { Text("Connect TorBox") }
         }
         return
     }

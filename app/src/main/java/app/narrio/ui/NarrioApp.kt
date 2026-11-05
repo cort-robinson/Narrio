@@ -217,7 +217,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                     HomeDestinations(vm, destination)
                     // Scrolled rows fade out under the status bar rather than being cut through at its edge.
                     val page = MaterialTheme.colorScheme.background
-                    Box(Modifier.fillMaxWidth().height(12.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(page, page.copy(alpha = 0f)))))
+                    Box(Modifier.fillMaxWidth().height(24.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page, .4f to page, 1f to page.copy(alpha = 0f))))
                 }
                 // A book's page keeps the tabs (and the mini-player above them), so going back never moves either.
                 is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.padding(bottom = barHeight), scrollFor(it.id)) }
@@ -231,8 +231,9 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             .onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
             // The bottom bar draws above the screens, so when the Listening room or the reader rises it fades away at
             // once rather than sliding over them.
+            // Coming back, it waits for the room to drop most of the way, so it never draws over the sheet as it leaves.
             transition.AnimatedVisibility({ it == Home || it is Details },
-                enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
+                enter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = Motion.MEDIUM * 2 / 3)),
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
                 AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     // A short fade above it, so a page scrolling underneath trails off rather than being cut through.
@@ -246,7 +247,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             }
             // The tabs stay on home and a book's page alike, so moving between them leaves the bottom of the screen still.
             transition.AnimatedVisibility({ it == Home || it is Details },
-                enter = expandVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized), expandFrom = Alignment.Top) + fadeIn(),
+                enter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = Motion.MEDIUM * 2 / 3)),
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                     navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }

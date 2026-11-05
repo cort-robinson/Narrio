@@ -234,10 +234,16 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("My shelf", Modifier.weight(1f), style = MaterialTheme.typography.displaySmall)
                 // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
-                // A quiet icon: the shelf is for resuming, and adding a file is the rare thing here.
-                if (shelf.isNotEmpty()) TextButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header"),
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add ebook file")
+                // Adding a file is the rare thing on a shelf for resuming, so it waits in the menu, named as in Find ebook.
+                if (shelf.isNotEmpty()) {
+                    var menu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton({ menu = true }, Modifier.testTag("shelf-more")) { Icon(Icons.Rounded.MoreVert, "More shelf options") }
+                        DropdownMenu(menu, { menu = false }) {
+                            DropdownMenuItem({ Text("Add an ebook from your phone") }, { menu = false; if (!importing.working) addEbook() },
+                                leadingIcon = { Icon(Icons.Rounded.UploadFile, null) }, modifier = Modifier.testTag("shelf-add-ebook-header"))
+                        }
+                    }
                 }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))

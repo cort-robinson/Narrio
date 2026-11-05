@@ -50,16 +50,16 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
         // and turning it on asks Android for that permission (Narrio remembers the choice meanwhile).
         val blocked = state.permissionNeeded
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
+        // Without Android's permission there's nothing to switch yet: the row says what's needed and offers it. Once
+        // allowed, the switch appears.
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Automatic updates", style = MaterialTheme.typography.titleSmall)
-                if (blocked && state.automatic) Text("Turns on once Android lets Narrio install updates", style = MaterialTheme.typography.bodySmall, color = muted)
+                if (blocked) Text("Android needs to let Narrio install updates", style = MaterialTheme.typography.bodySmall, color = muted)
             }
-            Switch(state.automatic && !blocked, { on -> if (on && blocked) { automatic(true); allow() } else automatic(on) },
-                Modifier.semantics { contentDescription = "Automatic app updates" })
+            if (blocked) FilledTonalButton(allow, enabled = !busy) { Text("Allow updates") }
+            else Switch(state.automatic, automatic, Modifier.semantics { contentDescription = "Automatic app updates" })
         }
-        // An update waiting to install by hand needs the same permission; then it's the one action offered.
-        if (blocked && state.available != null && !state.automatic) FilledTonalButton(allow, enabled = !busy) { Text("Allow app updates") }
         if (!blocked) Text(if (state.automatic && automaticInstallSupported) "Downloads use Wi-Fi. Updates install while Narrio is closed and playback is paused. Android may ask you to confirm."
             else if (state.automatic) "Downloads use Wi-Fi. When an update is ready, pause playback and tap Install update. Android will ask you to confirm."
             else "Automatic checks, downloads, and installation are off. You can check for updates here.",

@@ -52,8 +52,9 @@ object Motion {
     /** Material shared axis X: deeper content arrives from the trailing edge. */
     fun sharedAxisX(forward: Boolean): ContentTransform {
         val direction = if (forward) 1 else -1
-        return (slideInHorizontally(tween(MEDIUM, easing = Emphasized)) { direction * it / 7 } + fadeIn(tween(210, delayMillis = 60, easing = EmphasizedDecelerate)))
-            .togetherWith(slideOutHorizontally(tween(MEDIUM, easing = Emphasized)) { -direction * it / 7 } + fadeOut(tween(90, easing = EmphasizedAccelerate)))
+        // Long enough to see the page leave and the next arrive, so going back never reads as a cut.
+        return (slideInHorizontally(tween(MEDIUM, easing = Emphasized)) { direction * it / 5 } + fadeIn(tween(240, delayMillis = 60, easing = EmphasizedDecelerate)))
+            .togetherWith(slideOutHorizontally(tween(MEDIUM, easing = Emphasized)) { -direction * it / 5 } + fadeOut(tween(150, easing = EmphasizedAccelerate)))
     }
 
     /**
