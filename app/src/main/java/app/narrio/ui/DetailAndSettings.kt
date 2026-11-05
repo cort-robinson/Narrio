@@ -105,10 +105,11 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // TorBox leads: it gates every source beyond LibriVox. Where books come from and how the app looks follow as rows,
     // then everyday switches, then the app itself.
-    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         // The title stays pinned, so rows scroll under it rather than being cut against the status bar.
         stickyHeader(key = "title") {
-            Text("Settings", Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(bottom = 8.dp), style = MaterialTheme.typography.displaySmall)
+            // Its own top space keeps it clear of the status bar's fade while pinned.
+            Text("Settings", Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top = 24.dp, bottom = 8.dp), style = MaterialTheme.typography.displaySmall)
         }
         item(key = "torbox") {
             Text("Where books come from", style = MaterialTheme.typography.headlineSmall)
