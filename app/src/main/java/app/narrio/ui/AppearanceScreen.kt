@@ -46,13 +46,12 @@ import kotlin.math.roundToInt
 
 @Composable
 fun AppearanceEntry(settings: AppearanceSettings, open: () -> Unit) {
-    Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp))
-        .clickable(role = Role.Button, onClick = open).padding(16.dp),
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClick = open).padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Icon(Icons.Rounded.Palette, null, tint = MaterialTheme.colorScheme.primary)
         Column(Modifier.weight(1f)) {
             Text("Appearance", style = MaterialTheme.typography.titleMedium)
-            Text("${settings.paletteName} · ${settings.mode.label}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${settings.mode.label} · ${settings.paletteName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Icon(Icons.Rounded.ChevronRight, null)
     }

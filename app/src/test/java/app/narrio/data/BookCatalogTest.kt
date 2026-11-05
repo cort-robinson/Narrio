@@ -1,5 +1,6 @@
 package app.narrio.data
 
+import app.narrio.domain.Audiobook
 import kotlinx.coroutines.*
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.*
@@ -85,6 +86,16 @@ class BookCatalogTest {
         val first = BookDetails("Project Hail Mary [Unabridged]", listOf("Andy Weir"), emptyList(), "Story", "https://cover", "", "Audible", "https://audible")
         val second = first.copy(title = "Project Hail Mary", authors = listOf("Weir, Andy"), provider = "Google Books", url = "https://google")
         assertEquals(BookCatalog.collapse(listOf(first, second), 1).single().id, BookCatalog.collapse(listOf(second), 2).single().id)
+    }
+
+    @Test fun typedSearchesListTheBookAndItsEditionsBeforeBooksBorrowingItsName() {
+        fun book(title: String, author: String) = Audiobook("catalog:$title", title, author, provider = "catalog")
+        val found = listOf(book("A Proper Darcy Christmas: A Pride and Prejudice Romance", "Pamela Aidan"), book("Pride and Prejudice", "Jane Austen"),
+            book("Love Will Grow: A Pride and Prejudice Story", "P O Dixon"), book("The Annotated Pride and Prejudice", "Jane Austen"))
+        assertEquals(listOf("Pride and Prejudice", "The Annotated Pride and Prejudice", "A Proper Darcy Christmas: A Pride and Prejudice Romance", "Love Will Grow: A Pride and Prejudice Story"),
+            BookCatalog.rankTyped(found, "pride and prejudice").map { it.title })
+        // Without an exact title, the catalog's order stands.
+        assertEquals(found, BookCatalog.rankTyped(found, "darcy"))
     }
 
     @Test fun googleFallbackAddsDescriptionAndSecureArtworkAfterPrimaryOutage() = server { server, catalog ->

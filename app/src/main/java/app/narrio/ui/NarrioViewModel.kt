@@ -17,9 +17,13 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 /** [query] is the search [books] answer, which can trail the field while the next search loads. */
-data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null, val query: String = "")
+/** [free] holds the books LibriVox has a free reading of, checked while browsing without TorBox. */
+data class CatalogState(val books: List<Audiobook> = emptyList(), val loading: Boolean = true, val error: String? = null, val notice: String? = null, val query: String = "",
+                        val free: Set<String> = emptySet())
 data class SelectionState(val book: Audiobook? = null, val loading: Boolean = false, val error: String? = null, val metadataLoading: Boolean = false)
 data class EbookWebsiteRequest(val book: Audiobook, val link: EbookSearchLink)
+/** A possible ebook match added to be checked: the reader asks whether to keep [edition] for [book]. */
+data class CheckingEdition(val book: Audiobook, val edition: EbookEdition)
 data class EbookWebsiteState(val request: EbookWebsiteRequest? = null, val working: Boolean = false, val step: String = "", val error: String? = null)
 /**
  * [recordings] are verified and confidently matched, best first; [possible] need the listener's review.
@@ -125,7 +129,12 @@ class NarrioViewModel @JvmOverloads constructor(
     val catalog = MutableStateFlow(CatalogState())
     val selection = MutableStateFlow(SelectionState())
     val query = MutableStateFlow("")
-    val category = MutableStateFlow("All")
+    /**
+     * Where Discover opens: without TorBox, Classics, whose free public recordings play at once, so a first tap isn't a
+     * dead end; with it, everything.
+     */
+    val homeCategory = if (graph.credentials.read() != null) "All" else "Classics"
+    val category = MutableStateFlow(homeCategory)
     val destination = MutableStateFlow(0)
     val playerOpen = MutableStateFlow(false)
     val preparation = MutableStateFlow<Preparation?>(null)
@@ -133,6 +142,8 @@ class NarrioViewModel @JvmOverloads constructor(
     val busy = MutableStateFlow(false)
     /** True only while a tapped Listen is loading its audio, so the button can say so. */
     val starting = MutableStateFlow(false)
+    /** The book Listen is starting, shown by the Listening room while its audio is found and loaded. */
+    val startingBook = MutableStateFlow<Audiobook?>(null)
     val connected = MutableStateFlow(graph.credentials.read() != null)
     private val torBoxConnector = TorBoxConnector(viewModelScope, torBoxSave) { torBoxConnected() }
     /** The Connect TorBox sheet and its attempt; see [requestTorBoxConnect]. */
@@ -158,6 +169,12 @@ class NarrioViewModel @JvmOverloads constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val downloads = graph.offline.books
     val wifiOnly = MutableStateFlow(graph.preferences.getBoolean("downloadWifi", true))
+    /** Books whose last search found no free recording, so the shelf can say what they need without searching again. */
+    val needsTorBox = MutableStateFlow(graph.preferences.getStringSet("needsTorBox", emptySet()).orEmpty().toSet())
+    fun noteNeedsTorBox(bookId: String, needs: Boolean) {
+        val next = if (needs) needsTorBox.value + bookId else needsTorBox.value - bookId
+        if (next != needsTorBox.value) { needsTorBox.value = next; graph.preferences.edit().putStringSet("needsTorBox", next).apply() }
+    }
     val messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     /** Asks the shell to request notification permission (once per install), so a TorBox preparation can say when it's ready. */
     val notificationsWanted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -328,8 +345,18 @@ class NarrioViewModel @JvmOverloads constructor(
     /** Leaving read along for the Listening room starts the audio where reading left the shared place. */
     private fun returnToListening() = viewModelScope.launch { graph.playback.service?.alignToSharedPosition() }
 
-    fun search(value: String = query.value, cat: String = category.value) {
-        val browseCategory = if (value.isBlank()) cat else "All"
+    /** The category browsing was on before a typed search, so clearing the search goes back to it. */
+    private var lastBrowse = homeCategory
+    private val freeReadings = mutableMapOf<List<String>, Set<String>>()
+    private suspend fun freeReadingsOf(books: List<Audiobook>, waitMs: Long = 6_000): Set<String>? {
+        val key = books.map { it.id }
+        freeReadings[key]?.let { return it }
+        val found = try { withTimeoutOrNull(waitMs) { graph.catalog.freeReadings(books) } }
+            catch (cancelled: CancellationException) { throw cancelled } catch (_: Exception) { null }
+        return found?.also { freeReadings[key] = it }
+    }
+    fun search(value: String = query.value, cat: String = if (query.value.isBlank()) category.value else lastBrowse) {
+        val browseCategory = if (value.isBlank()) cat.also { lastBrowse = it } else "All"
         query.value = value; category.value = browseCategory
         searchJob?.cancel()
         // The last results stay on screen while the next ones load, so typing never blanks the list.
@@ -337,7 +364,18 @@ class NarrioViewModel @JvmOverloads constructor(
         searchJob = viewModelScope.launch {
             delay(if (value.isBlank()) 0 else 350)
             try {
-                catalog.value = CatalogState(graph.books.search(value, browseCategory), false, query = value)
+                val books = graph.books.search(value, browseCategory)
+                // Without TorBox, browsing leads with the books that play free; the list waits briefly for that check so
+                // it appears once, in that order.
+                val browseFree = if (value.isBlank() && !connected.value) freeReadingsOf(books) else emptySet()
+                val shown = books.sortedByDescending { it.id in browseFree.orEmpty() }
+                catalog.value = CatalogState(shown, false, query = value, free = browseFree.orEmpty())
+                // A typed search keeps its order, and a slow browse check never reorders rows already on screen: either
+                // only adds its marks once they're known.
+                if (!connected.value && (value.isNotBlank() || browseFree == null)) {
+                    val found = freeReadingsOf(books, 20_000).orEmpty()
+                    if (found.isNotEmpty() && catalog.value.query == value && catalog.value.books == shown) catalog.value = catalog.value.copy(free = found)
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { catalog.value = CatalogState(emptyList(), false, friendly(error)) }
         }
@@ -474,28 +512,47 @@ class NarrioViewModel @JvmOverloads constructor(
      */
     fun listenTo(recording: Audiobook, format: String? = null, delivery: String? = null, start: StartChoice? = advanced.startChoice.value) = viewModelScope.launch {
         val book = parentBook() ?: return@launch
-        val entry = graph.library.find(book.id)
-        val mine = currentFor(book, entry)?.takeIf { sameRecording(it.recording, recording) }
-        val described = adopt(recording, book)
-        // Another recording than the listener's own starts where they chose: near their place, its own, or the beginning.
-        val place = if (mine == null) advanced.switchPlace(book, start) else null
-        fun play(target: Audiobook, source: AudioSource, how: String) { if (format != null) chooseFormat(described, format); start(target, source, how, place) }
-        mine?.offline?.takeIf { format == null || it.source.format == format }?.let { play(described, it.source, it.source.delivery); return@launch }
-        val earlier = mine?.source ?: earlierPlay(book.id, recording)?.let { runCatching { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }.getOrNull() }
-        earlier?.takeIf { format == null || it.format == format }?.let { play(described, it, delivery ?: it.delivery); return@launch }
-        val wanted = format ?: savedFormat(book.id)
-        val copies = downloads.value.filter { it.complete && it.book.id == book.id && sameRecording(it.book, recording) }
-        val copy = copies.firstOrNull { it.source.format == wanted } ?: copies.firstOrNull()?.takeIf { format == null }
-        if (copy != null) { play(described, copy.source, copy.source.delivery); return@launch }
-        val playing = prepared(entry, recording, described) ?: described
-        val ready = readyFormats(playing).let { formats -> playing.sources.filter { it.format in formats } }
-        val source = if (format != null) ready.firstOrNull { it.format == format }
-            else ready.firstOrNull { it.format == wanted } ?: ready.firstOrNull { it.format == entry?.pendingFormat } ?: ready.firstOrNull { it.format == "M4B" } ?: ready.firstOrNull()
-        if (!SourceQuality.ready(playing) || source == null) {
-            messages.emit(if (format != null) "$format isn't ready for this recording yet. Get it ready, or choose a format that plays now." else "This recording needs time to get ready first.")
-            return@launch
-        }
-        play(playing, source, delivery ?: if (playing.provider == "archive") "archive" else "torbox")
+        if (busy.value) return@launch
+        // The Listening room opens on the tap, already showing the chosen recording (its own cover and reader) under the
+        // book's id; working out which audio to play happens behind its loading state.
+        openForStart(SourceQuality.describe(recording, book).copy(id = book.id))
+        var handedOff = false
+        try {
+            val entry = graph.library.find(book.id)
+            val mine = currentFor(book, entry)?.takeIf { sameRecording(it.recording, recording) }
+            val described = adopt(recording, book)
+            // Another recording than the listener's own starts where they chose: near their place, its own, or the beginning.
+            val place = if (mine == null) advanced.switchPlace(book, start) else null
+            fun play(target: Audiobook, source: AudioSource, how: String) { handedOff = true; if (format != null) chooseFormat(described, format); start(target, source, how, place) }
+            mine?.offline?.takeIf { format == null || it.source.format == format }?.let { play(described, it.source, it.source.delivery); return@launch }
+            val earlier = mine?.source ?: earlierPlay(book.id, recording)?.let { runCatching { NarrioJson.decodeFromString<AudioSource>(it.sourceJson) }.getOrNull() }
+            earlier?.takeIf { format == null || it.format == format }?.let { play(described, it, delivery ?: it.delivery); return@launch }
+            val wanted = format ?: savedFormat(book.id)
+            val copies = downloads.value.filter { it.complete && it.book.id == book.id && sameRecording(it.book, recording) }
+            val copy = copies.firstOrNull { it.source.format == wanted } ?: copies.firstOrNull()?.takeIf { format == null }
+            if (copy != null) { play(described, copy.source, copy.source.delivery); return@launch }
+            val playing = prepared(entry, recording, described) ?: described
+            val ready = readyFormats(playing).let { formats -> playing.sources.filter { it.format in formats } }
+            val source = if (format != null) ready.firstOrNull { it.format == format }
+                else ready.firstOrNull { it.format == wanted } ?: ready.firstOrNull { it.format == entry?.pendingFormat } ?: ready.firstOrNull { it.format == "M4B" } ?: ready.firstOrNull()
+            if (!SourceQuality.ready(playing) || source == null) {
+                messages.emit(if (format != null) "$format isn't ready for this recording yet. Get it ready, or choose a format that plays now." else "This recording needs time to get ready first.")
+                return@launch
+            }
+            play(playing, source, delivery ?: if (playing.provider == "archive") "archive" else "torbox")
+        } finally { if (!handedOff) closeAfterStart(book) }
+    }
+
+    /** Opens the Listening room for [book] as it starts, unless another book still plays (it waits, so that book never shows). */
+    private fun openForStart(book: Audiobook) {
+        if (playback.value.book.let { it == null || it.id == book.id }) { startingBook.value = book; playerOpen.value = true }
+    }
+
+    /** A start that didn't happen leaves the room only if it opened for this book; a book already playing keeps it. */
+    private fun closeAfterStart(book: Audiobook) {
+        if (startingBook.value?.id != book.id) return
+        startingBook.value = null
+        if (playback.value.book?.id != book.id) playerOpen.value = false
     }
 
     /** Listens to the page's automatic or chosen recording. */
@@ -522,6 +579,18 @@ class NarrioViewModel @JvmOverloads constructor(
      * Opens a book's one page, whichever way the listener arrives. A book without a recording of its own looks for
      * one right away; one with a recording keeps it, and looks for others when the recording chooser opens.
      */
+    /** From the Listening room to the playing book's page, as the shelf opens it. */
+    /** A book whose page should open its recording chooser on arrival, as when the narrator line in the player is tapped. */
+    val chooserRequest = MutableStateFlow<String?>(null)
+    fun changePlayingRecording() { playback.value.book?.let { chooserRequest.value = it.id; openPlayingBook() } }
+
+    fun openPlayingBook() = viewModelScope.launch {
+        val book = playback.value.book ?: return@launch
+        // Its page may already be under the player; then the player simply settles back onto it.
+        if (selection.value.book?.id == book.id) { playerOpen.value = false; return@launch }
+        open(graph.library.find(book.id)?.book() ?: book)
+    }
+
     fun open(book: Audiobook, keepSources: Boolean = false) {
         playerOpen.value = false
         reader.value = null
@@ -600,6 +669,7 @@ class NarrioViewModel @JvmOverloads constructor(
         if (playback.value.book?.id == book.id) graph.playback.service?.forget()
         downloads.value.filter { it.book.id == book.id }.forEach { graph.offline.remove(it.source) }
         advanced.forget(book.id)
+        noteNeedsTorBox(book.id, false)
         graph.followAlong.remove(book.id)
         graph.listeningRecordings.remove(book.id)
         graph.library.remove(book.id); graph.preparations.forget(book.id); app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
@@ -735,8 +805,25 @@ class NarrioViewModel @JvmOverloads constructor(
     }
 
     /** Adds a found ebook as the book's edition; [then] runs once it's added, such as opening it to read. */
-    fun addEbook(book: Audiobook, candidate: BookTextSource, then: () -> Unit = {}) =
-        editionWork(book, candidate.id, then) {
+    /** The possible match being checked in the reader, until the listener keeps or removes it. */
+    val checkingEdition = MutableStateFlow<CheckingEdition?>(null)
+
+    /** Adds a possible match and opens it with [open], where the reader asks whether it's the right book. */
+    fun addEbookToCheck(book: Audiobook, candidate: BookTextSource, open: () -> Unit) =
+        addEbook(book, candidate, toCheck = true, then = open)
+
+    fun keepCheckedEbook() { checkingEdition.value = null }
+
+    /** The checked ebook was the wrong book: it's removed, the reader closes, and Find ebook is there to try another. */
+    fun removeCheckedEbook() {
+        val checking = checkingEdition.value ?: return
+        checkingEdition.value = null
+        closeReader()
+        removeEbookEdition(checking.book, checking.edition)
+    }
+
+    fun addEbook(book: Audiobook, candidate: BookTextSource, toCheck: Boolean = false, then: () -> Unit = {}) =
+        editionWork(book, candidate.id, then, check = toCheck) {
             try { readingLibrary.value.addEdition(book, candidate) { step -> ebookSearch.update { if (it.bookId == book.id && it.adding == candidate.id) it.copy(step = step) else it } } }
             catch (check: BrowserCheckException) {
                 // The website asks the reader to verify; its own page then offers the download Narrio intercepts.
@@ -815,14 +902,14 @@ class NarrioViewModel @JvmOverloads constructor(
     }
     fun dismissEbookImport() { ebookImport.value = EbookImportState() }
 
-    private fun editionWork(book: Audiobook, adding: String, then: () -> Unit = {}, action: suspend () -> EbookEdition) = viewModelScope.launch {
+    private fun editionWork(book: Audiobook, adding: String, then: () -> Unit = {}, check: Boolean = false, action: suspend () -> EbookEdition) = viewModelScope.launch {
         if (ebookSearch.value.adding != null) return@launch
         if (ebookSearch.value.bookId != book.id) ebookSearch.value = EbookSearchState(book.id)
         ebookSearch.update { it.copy(adding = adding, added = null, error = null) }
         try {
             val edition = action()
             ebookSearch.update { if (it.bookId == book.id) it.copy(added = edition.id) else it }
-            messages.emit("Ebook added. Read opens it.")
+            if (check) checkingEdition.value = CheckingEdition(book, edition) else messages.emit("Ebook added. Read opens it.")
             then()
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { ebookSearch.update { if (it.bookId == book.id) it.copy(error = textError(error)) else it } }
@@ -833,20 +920,27 @@ class NarrioViewModel @JvmOverloads constructor(
     fun start(book: Audiobook, source: AudioSource, delivery: String, place: ((AudioSource) -> StartAt?)? = null) = viewModelScope.launch {
         if (busy.value) return@launch
         busy.value = true; starting.value = true
+        // The Listening room opens on the tap (Listen opened it already) and shows its one loading state while the
+        // audio is found and loaded.
+        openForStart(book)
         try {
-            val resolved = playableSource(book, source, delivery)?.let { graph.releaseFiles.apply(book, it) } ?: return@launch
+            val resolved = try { playableSource(book, source, delivery)?.let { graph.releaseFiles.apply(book, it) } }
+                catch (failed: Exception) { closeAfterStart(book); throw failed }
+            if (resolved == null) { closeAfterStart(book); return@launch }
             // Loading replaces the row's book, so the recording being got ready is pinned down first.
             graph.library.find(book.id)?.let { rememberOlderShelf(it) }
             val at = place?.invoke(resolved)
-            if (at == null || at.approximate) awaitService().load(book, resolved, near = at?.cursor)
-            else awaitService().load(book, resolved, partId = at.cursor.partId, positionMs = at.cursor.positionMs)
+            try {
+                if (at == null || at.approximate) awaitService().load(book, resolved, near = at?.cursor)
+                else awaitService().load(book, resolved, partId = at.cursor.partId, positionMs = at.cursor.positionMs)
+            } catch (failed: Exception) { closeAfterStart(book); throw failed }
+            playerOpen.value = true
             // Only the prepared recording itself completes its preparation; another one (or phone audio) leaves it pending.
             if (resolved.delivery != LocalAudio.DELIVERY && graph.preparations.played(book.id, resolved)) app.narrio.preparation.PreparationNotifications.clear(getApplication(), book.id)
             if (book.provider != "catalog") graph.listeningRecordings.played(book, resolved.id)
-            playerOpen.value = true
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) { messages.emit(friendly(error)) }
-        finally { busy.value = false; starting.value = false }
+        finally { busy.value = false; starting.value = false; startingBook.value = null }
     }
 
     private suspend fun playableSource(book: Audiobook, source: AudioSource, delivery: String): AudioSource? {

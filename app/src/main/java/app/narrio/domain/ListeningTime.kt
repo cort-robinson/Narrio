@@ -1,6 +1,5 @@
 package app.narrio.domain
 
-import kotlin.math.ceil
 
 /** Where the listener is in the whole recording. Only built when every part's length is known; never a guess. */
 data class BookTime(val positionMs: Long, val totalMs: Long) {
@@ -55,9 +54,12 @@ fun chapterStep(chapters: List<Chapter>, partIndex: Int, partCount: Int, positio
         else if (positionMs > 0) PartPlace(partIndex, 0) else null
 }
 
-/** "9 h 41 m", "41 m", or "1 m" for the last seconds; rounds up so a timer never reads 0 while time remains. */
+/**
+ * "9 h 41 m", "41 m", or "1 m" for the last seconds. Whole minutes round down, so time left never reads more than the
+ * book's length a moment after it starts; the last minute still reads "1 m", never 0 while time remains.
+ */
 fun timeLeftLabel(ms: Long): String {
-    val minutes = ceil(ms.coerceAtLeast(0) / 60_000.0).toLong()
+    val minutes = if (ms <= 0) 0L else (ms / 60_000).coerceAtLeast(1)
     return when {
         minutes >= 60 && minutes % 60 == 0L -> "${minutes / 60} h"
         minutes >= 60 -> "${minutes / 60} h ${minutes % 60} m"
@@ -67,7 +69,7 @@ fun timeLeftLabel(ms: Long): String {
 
 /** Screen readers hear "9 hours 41 minutes" rather than "9 H 41 M". */
 fun spokenTimeLeft(ms: Long): String {
-    val minutes = ceil(ms.coerceAtLeast(0) / 60_000.0).toLong()
+    val minutes = if (ms <= 0) 0L else (ms / 60_000).coerceAtLeast(1)
     val hours = minutes / 60; val rest = minutes % 60
     fun unit(n: Long, name: String) = "$n $name${if (n == 1L) "" else "s"}"
     return listOfNotNull(unit(hours, "hour").takeIf { hours > 0 }, unit(rest, "minute").takeIf { rest > 0 || hours == 0L }).joinToString(" ")

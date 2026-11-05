@@ -122,7 +122,8 @@ fun searchSummary(search: StreamedSourceSearch, tally: SearchTally): String = se
 
 /** The same line for any per-source search; ebook sources word it identically. */
 internal fun searchSummary(complete: Boolean, tally: SearchTally): String {
-    val found = "${tally.found} found"
+    // Only possible matches are counted as such, so the line never says "0 found" beside a possible match.
+    val found = if (tally.found == 0 && tally.possible > 0) "${tally.possible} possible ${if (tally.possible == 1) "match" else "matches"}" else "${tally.found} found"
     val torbox = if (tally.needTorBox > 0) " · ${tally.needTorBox} need TorBox" else ""
     return when {
         tally.active == 0 -> "No sources are searching$torbox"
@@ -154,8 +155,8 @@ fun noMatchCopy(search: StreamedSourceSearch, tally: SearchTally): NoMatchCopy {
             else "None of your ${tally.active} sources answered. Check your connection, then try again.")
         tally.failed > 0 -> NoMatchCopy(NoMatchKind.PARTLY_FAILED, "No recording found yet",
             "${tally.failed} of ${tally.active} sources couldn't be checked. Retry ${if (tally.failed == 1) "it" else "them"} below, or search again.")
-        tally.needTorBox > 0 -> NoMatchCopy(NoMatchKind.NEEDS_TORBOX, "No free public recording found",
-            "$searched ${if (tally.active == 1) "has" else "have"} no recording of this book. Connect TorBox to also search ${tally.needTorBox} more ${plural(tally.needTorBox, "source")}.")
+        tally.needTorBox > 0 -> NoMatchCopy(NoMatchKind.NEEDS_TORBOX, "No free recording found",
+            "TorBox, a paid service, can search for a recording of this book. It may not find one.")
         else -> NoMatchCopy(NoMatchKind.NOTHING_FOUND, "No recording found", "Searched $searched. Nothing matched this title and author.")
     }
 }

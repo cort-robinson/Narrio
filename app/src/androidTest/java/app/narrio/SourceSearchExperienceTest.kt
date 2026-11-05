@@ -114,7 +114,8 @@ class SourceSearchExperienceTest {
     private fun revealAdvanced(matcher: SemanticsMatcher) = advanced().performScrollToNode(matcher)
     /** Opens the recording chooser from the page's summary row, then its Advanced view. */
     private fun openAdvanced() {
-        reveal(hasTestTag("recordings-row")); compose.onNodeWithTag("recordings-row").performClick()
+        val entry = if (compose.onAllNodesWithTag("change-recording").fetchSemanticsNodes().isNotEmpty()) "change-recording" else "recordings-row"
+        reveal(hasTestTag(entry)); compose.onNodeWithTag(entry).performClick()
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
         compose.onNodeWithTag("advanced-entry").performClick()
         advanced().assertExists()
@@ -130,7 +131,7 @@ class SourceSearchExperienceTest {
         val fixture = fixture(mapOf("archive" to archive, "torbox-library" to library, "torbox-search" to search, "addon:audiobookbay" to addon, "addon:knaben" to waiting))
 
         // The page waits with one quiet line; Advanced has every source's own section at once, each with its own state.
-        compose.onNodeWithText("Finding audio…").assertIsNotEnabled()
+        compose.onNodeWithText("Finding a recording…").assertIsNotEnabled()
         compose.onNodeWithTag("listening-sources").assertDoesNotExist()
         openAdvanced()
         revealAdvanced(hasTestTag("source-section:addon:knaben"))
@@ -146,20 +147,20 @@ class SourceSearchExperienceTest {
         capture("sources-advanced-in-progress-night")
         backToList()
         compose.onNodeWithTag("recording:${public.id}").assertIsSelected()
-        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        compose.onNodeWithTag("recording-summary").assertTextContains("· Free", substring = true)
         compose.onNodeWithTag("listen-action").assertIsEnabled()
         capture("chooser-in-progress-night")
 
         // The listener is choosing now; the slow source's better release waits in the chooser instead of moving Listen.
         compose.runOnIdle { search.answer() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("better-match").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        compose.onNodeWithTag("recording-summary").assertTextContains("· Free", substring = true)
         capture("chooser-better-match-night")
         compose.onNodeWithTag("better-match").performClick()
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("better-match").fetchSemanticsNodes().isEmpty() }
         compose.runOnIdle { assertEquals(cached.id, fixture.sourceSearch.value.choice?.id) }
         compose.onNodeWithTag("recording:${cached.id}").assertIsSelected()
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Unabridged · Ready now")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Unabridged · Ready now")
 
         // A failed source retries on its own in Advanced; the rest keep their results.
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
@@ -207,7 +208,7 @@ class SourceSearchExperienceTest {
         val empty = Controlled(answers = arrayOf({ emptyList() })).also { it.answer() }
         val offline = fixture(mapOf("archive" to empty), connected = false)
         compose.waitUntil(10_000) { offline.sourceSearch.value.streamed?.complete == true }
-        compose.onNodeWithText("No free public recording found").assertIsDisplayed()
+        compose.onNodeWithText("No free recording found").assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").assertIsDisplayed()
         top(); capture("sources-disconnected-night")
         openAdvanced()
@@ -220,7 +221,7 @@ class SourceSearchExperienceTest {
         val original = settings.providers.value.map { it.id to it.enabled }
         try {
             compose.runOnIdle { originalAppearance = vm.appearance.value; vm.connected.value = false; vm.updateAppearance(vm.appearance.value.copy(mode = ThemeMode.DAY)); vm.navigate(2) }
-            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
+            compose.onNodeWithTag("sources-entry").performScrollTo().performClick()
             compose.onNodeWithText("TorBox isn't connected").assertIsDisplayed()
             compose.onNodeWithTag("addon-options").performScrollToNode(hasTestTag("source-row:torbox-library"))
             capture("source-settings-day")

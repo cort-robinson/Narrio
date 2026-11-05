@@ -62,7 +62,7 @@ class AddonSettingsExperienceTest {
         val original = vm.graph.addons.installed.value.first { it.id == "audiobookbay" }.enabled
         try {
             compose.runOnIdle { vm.navigate(2) }
-            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
+            compose.onNodeWithTag("sources-entry").performScrollTo().performClick()
             // Importing is the rarer task; it sits after the source lists.
             reveal(hasText("Add-on manifest URL")); compose.onNodeWithText("Add-on manifest URL").assertIsDisplayed()
             compose.onNodeWithText("Import add-on").assertIsNotEnabled()
@@ -81,8 +81,8 @@ class AddonSettingsExperienceTest {
             reveal(hasTestTag("source-toggle:addon:annas-archive-ebooks")); compose.onNodeWithText("Anna's Archive").assertIsDisplayed()
             compose.onNodeWithText("Opens inside Narrio").assertDoesNotExist()
             compose.onNodeWithContentDescription("Back to settings").performClick()
-            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").assertIsDisplayed()
-            compose.onNodeWithText("Sources & add-ons · Audiobooks, ebooks & book info").performScrollTo().performClick()
+            compose.onNodeWithTag("sources-entry").assertIsDisplayed()
+            compose.onNodeWithTag("sources-entry").performScrollTo().performClick()
             reveal(hasText("Add-on manifest URL"))
             val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
             File(compose.activity.filesDir, "addon-settings.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }

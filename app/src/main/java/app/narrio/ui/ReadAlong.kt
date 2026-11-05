@@ -372,7 +372,7 @@ fun ReadAlongPanel(vm: NarrioViewModel, readAlong: ReadAlong, playback: Listenin
         Column(Modifier.fillMaxSize().statusBarsIgnoringVisibilityPadding().navigationBarsIgnoringVisibilityPadding().padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
             playback.book?.takeIf { readAlong.playingHere }?.let { book ->
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    BookCover(book, Modifier.width(52.dp).height(76.dp))
+                    BookCover(book, Modifier.size(56.dp))
                     Column(Modifier.weight(1f)) {
                         Text(book.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -410,14 +410,14 @@ private fun ReadAlongControls(vm: NarrioViewModel, readAlong: ReadAlong, playbac
     val confidence = readAlong.place?.confidence ?: MappingConfidence.UNMAPPED
     Column(Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(playback.part?.title ?: "Ready to listen", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(playback.placeTitle ?: playback.book?.title.orEmpty(), Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (chapters != null) ReadAlongOptionsButton(options)
         }
         StatusRow(readAlong, playback, options, showTime = false)
         SeekSlider(playback.positionMs, playback.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: playback.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (playback.durationMs > 0) "−${formatTime((playback.durationMs - (scrub ?: playback.positionMs)).coerceAtLeast(0))}" else "Loading length",
+            Text(if (playback.durationMs > 0) "${formatTime((playback.durationMs - (scrub ?: playback.positionMs)).coerceAtLeast(0))} left" else "Loading…",
                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
@@ -607,11 +607,10 @@ private fun SheetAction(icon: androidx.compose.ui.graphics.vector.ImageVector, t
 }
 
 /**
- * The Listening room's way into read along: Read along when the book has an ebook, otherwise a way to find one
- * using the book's Find ebook sheet.
+ * The Listening room's Find ebook sheet, opened by its tool tray's Find ebook (Read along opens the reader itself).
  */
 @Composable
-fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifier: Modifier = Modifier) {
+fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, finding: MutableState<Boolean> = remember { mutableStateOf(false) }) {
     val formatsFlow = remember(book.id) { vm.readingLibrary.value.observeBook(book) }
     val formats by formatsFlow.collectAsStateWithLifecycle(null)
     val search by vm.ebookSearch.collectAsStateWithLifecycle()
@@ -619,31 +618,17 @@ fun ReadAlongEntry(vm: NarrioViewModel, book: Audiobook, dense: Boolean, modifie
     val connected by vm.connected.collectAsStateWithLifecycle()
     val addons by vm.graph.addons.installed.collectAsStateWithLifecycle()
     val searchLinks = remember(book.title, book.author, addons) { vm.graph.addons.ebookSearchLinks(book) }
-    var sheet by remember { mutableStateOf(false) }
+    var sheet by finding
     val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { vm.importEbook(it) }
-    val ebook = formats?.ebook == true
     // The ebook search judges editions against the recording and audio playing now.
     val playing by vm.playback.collectAsStateWithLifecycle()
     val narration = playing.source?.takeIf { playing.book?.id == book.id }?.let { NarrationContext(playing.book ?: book, it) }
-    val find = { sheet = true; vm.openEbookSearch(book, narration) }
-    if (dense) IconButton(if (ebook) vm::readAlong else find, modifier.testTag("read-along")) {
-        Icon(if (ebook) Icons.AutoMirrored.Rounded.MenuBook else Icons.Rounded.Search, if (ebook) "Read along" else "Find the ebook to read along", tint = MaterialTheme.colorScheme.primary)
-    } else Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (ebook) FilledTonalButton(vm::readAlong, Modifier.testTag("read-along")) {
-            Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Read along")
-        } else OutlinedButton(find, Modifier.testTag("find-ebook-to-read-along"), enabled = formats != null) {
-            Icon(Icons.Rounded.Search, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Find the ebook")
-        }
-        Text(when {
-            formats == null -> ""
-            !ebook -> "Add the edition of this recording to read along."
-            formats?.pairing == PairingStatus.MISMATCH -> "The ebook doesn't match this narration."
-            else -> "The page turns with the narration."
-        }, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-    }
+    // The search judges editions against what's playing.
+    LaunchedEffect(sheet) { if (sheet) vm.openEbookSearch(book, narration) }
     val current = formats
     if (sheet && current != null) EbookSheet(book, current, search, providers, connected, "Add and read along", EbookActions(
         add = { vm.addEbook(book, it) }, addAndOpen = { vm.addEbook(book, it) { vm.readAlong() } }, retry = vm::retryEbookSource,
+        addAndCheck = { vm.addEbookToCheck(book, it) { vm.readAlong() } },
         searchAgain = { vm.findEbooks(book, force = true) },
         chooseFile = { vm.beginEbookImport(book); file.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream")) },
         activate = { vm.chooseEdition(book, it.id) }, remove = { vm.removeEbookEdition(book, it) }, openSearch = { vm.openEbookWebsite(book, it) },

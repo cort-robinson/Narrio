@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
@@ -72,12 +73,23 @@ fun RecordingChooser(
     val everything = chooserRows(current?.recording, search, showAll = true)
     val automatic = (current?.recording ?: chosen ?: pinned.shown?.recording)?.let { wanted -> everything.firstOrNull { sameRecording(it, wanted) } ?: wanted } ?: everything.firstOrNull()
     val picked = pickedKey?.let { key -> everything.firstOrNull { recordingKey(it) == key } } ?: automatic
+    // The reading the sheet opened on, so a pick (which becomes the page's choice at once) still reads as a switch from it.
+    var openedOn by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(automatic?.let(::recordingKey)) { if (openedOn == null && pickedKey == null) openedOn = automatic?.let(::recordingKey) }
     // The pick always shows, even when it isn't one of the distinct versions.
-    val shown = chooserRows(current?.recording, search, showAll).let { rows -> if (picked != null && rows.none { sameRecording(it, picked) }) rows + picked else rows }.distinctBy { it.id }
     val hidden = hiddenMatches(current?.recording, search)
-    // Format and delivery are automatic; Advanced (or a choice between ready formats) overrides them for this pick.
+    // A single extra match isn't worth a toggle; it simply shows.
+    val listAll = showAll || hidden == 1
+    // The listener's own and the best match lead; named readings come before ones that name no one.
+    val leading = listOfNotNull(current?.recording, pinned.shown?.recording.takeIf { current == null })
+    val shown = chooserRows(current?.recording, search, listAll).let { rows -> if (picked != null && rows.none { sameRecording(it, picked) }) rows + picked else rows }.distinctBy { it.id }
+        .sortedBy { row -> when { leading.any { sameRecording(it, row) } -> 0; recordingNarrator(row).isNotBlank() || SourceQuality.DRAMATIZED in SourceQuality.edition(row).kind -> 1; else -> 2 } }
+    // Format and delivery are automatic; Advanced overrides them for this pick.
     var format by remember(picked?.let(::recordingKey)) { mutableStateOf<String?>(null) }
     var delivery by remember(picked?.let(::recordingKey)) { mutableStateOf<String?>(null) }
+    val phoneCopy: (Audiobook) -> Boolean = { recording ->
+        current != null && sameRecording(recording, current.recording) && current.offline != null || downloads.any { it.complete && sameRecording(it.book, recording) } || onThisPhone(recording)
+    }
     val pick: (Audiobook) -> Unit = { recording -> pickedKey = recordingKey(recording); if (current == null || !sameRecording(recording, current.recording)) vm.chooseVersion(recording) }
     // A release chosen in Advanced becomes the pick, shown among every match when it isn't a distinct version.
     val actions = SourceActions(choose = { recording -> pick(recording); if (search?.versions?.contains(recording) != true) showAll = true; advanced = false },
@@ -97,12 +109,16 @@ fun RecordingChooser(
                 chooseFormat = { chosenFormat, chosenDelivery -> format = chosenFormat; delivery = chosenDelivery }, actions = actions,
                 refreshDetails = refreshDetails?.takeIf { current != null && picked != null && sameRecording(picked, current.recording) }, metadataLoading = metadataLoading,
                 back = { advanced = false }, extraSections = advancedSections)
-            else LazyColumn(Modifier.fillMaxWidth().testTag("recording-chooser"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp),
+            else LazyColumn(Modifier.fillMaxWidth().testTag("recording-chooser"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // When every row plays the same way, say it once here instead of on each row.
+                val statuses = shown.map { recording -> readiness(recording, connected, phoneCopy(recording)) }
+                val shared = statuses.distinct().singleOrNull()?.takeIf { shown.size > 1 }?.let(::sharedStatus)
                 item(key = "intro") {
                     Text("Choose a recording", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(6.dp))
-                    Text("Each one is a different reading of ${book.title}. Narrio picks the audio format and how it plays.",
+                    // Before anything plays, it says that picking one doesn't start it, so choosing for a download is safe.
+                    Text(listOfNotNull("Different recordings of ${book.title}.", shared, "Your choice is kept when you close this.".takeIf { current == null }).joinToString(" "),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // A better match than the one Listen plays waits here, never moving the page under the listener.
@@ -111,32 +127,27 @@ fun RecordingChooser(
                 }
                 items(shown, key = { "recording:${it.id}" }) { recording ->
                     val mine = current != null && sameRecording(recording, current.recording)
-                    val phone = mine && current.offline != null || downloads.any { it.complete && sameRecording(it.book, recording) } || onThisPhone(recording)
+                    val phone = phoneCopy(recording)
                     RecordingRow(recording, book, selected = picked?.let { sameRecording(it, recording) } == true,
                         tag = when {
                             mine -> listOfNotNull("Listening now", current.fraction?.takeIf { current.started }?.let { "${(it * 100).toInt().coerceIn(1, 99)}%" }).joinToString(" · ")
                             search?.possible?.any { it.id == recording.id } == true -> "Might be this book"
-                            current == null && recording.id == pinned.shown?.recording?.id -> "Best match"
+                            current == null && recording.id == pinned.shown?.recording?.id -> "Suggested"
                             else -> null
                         },
-                        status = readiness(recording, connected, phone), ready = phone || SourceQuality.ready(recording), enabled = !busy,
-                        release = recording.releaseTitle.ifBlank { recording.title }.takeIf { showAll && !mine }) { pick(recording) }
+                        status = readiness(recording, connected, phone).takeIf { shared == null }, ready = phone || SourceQuality.ready(recording), enabled = !busy,
+                        bytes = downloadBytes(recording, current?.source?.format?.takeIf { mine } ?: defaultFormat(recording, vm.savedFormat(book.id))),
+                        // Every match can share a narrator, and an unnamed one has nothing else to go by: their release names tell them apart.
+                        release = releaseNote(recording, book).takeIf { !mine && (showAll || recordingNarrator(recording).isBlank() && SourceQuality.DRAMATIZED !in SourceQuality.edition(recording).kind) }) { pick(recording) }
                 }
-                item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden, showAll, { showAll = !showAll }) }
+                item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
-                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, { format = it }, startPositionChoice, close)
+                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close,
+                        switched = pickedKey != null && pickedKey != openedOn)
                 }
                 item(key = "advanced") {
-                    Row(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClickLabel = "Open advanced sources") { advanced = true }
-                        .heightIn(min = 56.dp).padding(vertical = 8.dp).semantics(mergeDescendants = true) { }.testTag("advanced-entry"),
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Rounded.Tune, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Column(Modifier.weight(1f)) {
-                            Text("Can't find the right one? Advanced", style = MaterialTheme.typography.titleSmall)
-                            Text("Every source's results, release names, formats, and files", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+                    SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
+                        modifier = Modifier.padding(top = 8.dp).testTag("advanced-entry"))
                 }
             }
         }
@@ -145,8 +156,8 @@ fun RecordingChooser(
 
 /** One recording: who reads it, its kind and language, how it plays, and a tag such as "Listening now · 42%". */
 @Composable
-private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolean, tag: String?, status: String, ready: Boolean, enabled: Boolean,
-                         release: String? = null, choose: () -> Unit) {
+private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolean, tag: String?, status: String?, ready: Boolean, enabled: Boolean,
+                         bytes: Long, release: String? = null, choose: () -> Unit) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent)
         .selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = choose).heightIn(min = 56.dp).padding(end = 12.dp, top = 8.dp, bottom = 8.dp)
@@ -154,19 +165,63 @@ private fun RecordingRow(recording: Audiobook, book: Audiobook, selected: Boolea
         RadioButton(selected, null, Modifier.padding(horizontal = 12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             tag?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
-            Text(recordingNarrator(recording).ifBlank { "Narrator not listed" }, style = MaterialTheme.typography.titleSmall)
-            val facts = recordingKind(recording, book) + listOfNotNull(recording.sources.map { it.format }.distinct().joinToString(" / ").takeIf(String::isNotBlank),
-                (recording.releaseSizeBytes.takeIf { it > 0 } ?: recording.sources.maxOfOrNull { source -> source.parts.sumOf { it.sizeBytes } })?.takeIf { it > 0 }?.let(::sizeLabel))
+            // An unnamed reading is named by what sets it apart: a full cast says so instead of "Narrator not listed".
+            val kind = recordingKind(recording, book)
+            val dramatized = SourceQuality.DRAMATIZED in kind
+            val narrator = recordingNarrator(recording).ifBlank { if (dramatized) "Full cast (dramatized)" else "Narrator not credited" }
+            Text(narrator, style = MaterialTheme.typography.titleSmall)
+            // How long it is tells readings apart better than file size; the size shows when the length isn't known.
+            val facts = kind.filterNot { dramatized && narrator.startsWith("Full cast") && it == SourceQuality.DRAMATIZED } + listOfNotNull(recording.durationMs.takeIf { it > 0 }?.let(::durationLabel) ?: bytes.takeIf { it > 0 }?.let(::sizeLabel))
             if (facts.isNotEmpty()) Text(facts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = muted)
             // Every match can share a narrator and format; their release names tell them apart.
             release?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (status != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(when { status == "On this phone" -> Icons.Rounded.OfflinePin; ready -> Icons.Rounded.Bolt; else -> Icons.Rounded.Schedule }, null, Modifier.size(16.dp),
                     tint = if (ready) MaterialTheme.colorScheme.primary else muted)
                 Text(status, style = MaterialTheme.typography.labelMedium, color = if (ready) MaterialTheme.colorScheme.primary else muted)
             }
         }
     }
+}
+
+/**
+ * What a release's name adds beyond the book's title: "Pride and Prejudice (version 6 dramatic reading)" becomes
+ * "Version 6 dramatic reading"; a name that is only the title adds nothing and is null.
+ */
+internal fun releaseNote(recording: Audiobook, book: Audiobook): String? {
+    val name = recording.releaseTitle.ifBlank { recording.title }.trim()
+    val rest = if (name.startsWith(book.title, ignoreCase = true)) name.substring(book.title.length) else name
+    return rest.trim(' ', '(', ')', '[', ']', '-', ':', ',', '·').replaceFirstChar(Char::uppercase).takeIf(String::isNotBlank)
+}
+
+/**
+ * "Search other sources", the same row in the recording chooser (where it opens Advanced, [expanded] null) and the
+ * ebook sheet (where it unfolds in place).
+ */
+@Composable
+internal fun SearchOtherSourcesRow(detail: String?, expanded: Boolean?, open: () -> Unit, modifier: Modifier = Modifier, title: String = "Search other sources") {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val turn by androidx.compose.animation.core.animateFloatAsState(if (expanded == true) 180f else 0f, label = "sources")
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button, onClickLabel = "Search other sources", onClick = open)
+        .heightIn(min = 56.dp).padding(vertical = 8.dp).semantics(mergeDescendants = true) { if (expanded != null) stateDescription = if (expanded) "Expanded" else "Collapsed" },
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Icon(Icons.Rounded.ManageSearch, null, tint = muted)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = muted) }
+        }
+        if (expanded == null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = muted)
+        else Icon(Icons.Rounded.ExpandMore, null, Modifier.graphicsLayer { rotationZ = turn }, tint = muted)
+    }
+}
+
+/** The status every row shares, said once for the list: "All are free public recordings." Null keeps it per row. */
+internal fun sharedStatus(status: String): String? = when (status) {
+    "Free public recording" -> "All are free."
+    "Ready now" -> "All are ready to play now."
+    "Needs TorBox" -> "All need TorBox."
+    "On this phone" -> "All are on this phone."
+    else -> null
 }
 
 /** While sources answer: "Looking for more recordings"; then nothing found, or the Show all toggle. */
@@ -191,8 +246,7 @@ private fun SearchProgress(streamed: StreamedSourceSearch?, tally: SearchTally?,
 }
 
 /**
- * The pick's one action: Resume or Listen, Get it ready (one tap), or Connect TorBox; a format choice only when it
- * offers several ready ones; Download for offline; and, when leaving a recording with a saved place, what happens to
+ * The pick's one action: Resume or Listen, Get it ready (one tap), or Connect TorBox; and, when leaving a recording with a saved place, what happens to
  * each place. A format the listener picked explicitly is never swapped for another: when it can't play now, the
  * action gets it ready instead.
  */
@@ -200,7 +254,7 @@ private fun SearchProgress(streamed: StreamedSourceSearch?, tally: SearchTally?,
 private fun ChooserActions(
     vm: NarrioViewModel, book: Audiobook, picked: Audiobook, current: CurrentRecording?, entry: ShelfEntry?, preparingRecording: Audiobook?,
     downloads: List<OfflineBook>, connected: Boolean, busy: Boolean, starting: Boolean, preparation: Preparation?, format: String?, delivery: String?,
-    chooseFormat: (String) -> Unit, startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit,
+    startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit, switched: Boolean = false,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val mine = current != null && sameRecording(picked, current.recording)
@@ -212,7 +266,6 @@ private fun ChooserActions(
     val preparedThis = pendingThis != null && (entry?.state == "ready" || preparation?.ready == true && entry?.state == "preparing")
     val formats = readyFormats(pendingThis?.takeIf { preparedThis } ?: picked, phoneFormats)
     val automatic = current?.source?.format?.takeIf { mine } ?: defaultFormat(picked, vm.savedFormat(book.id), phoneFormats)
-    val shownFormat = format ?: automatic
     // Only a change from the automatic format is passed on, so the listener's own recording resumes its own audio.
     val override = format?.takeIf { it != automatic }
     // An explicit format plays only when that format is ready (or on the phone); it never falls back to another.
@@ -221,12 +274,6 @@ private fun ChooserActions(
     // Whether the pick picks up a place of its own, so the notice can say so.
     val resumesAt by produceState<PlaceSummary?>(null, book.id, picked) { value = if (mine) null else vm.savedPlace(book.id, picked) }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp).animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (formats.size > 1 || override != null) {
-            Text("Format", style = MaterialTheme.typography.labelLarge, color = muted)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                (formats + listOfNotNull(override)).distinct().forEach { option -> FilterChip(option == shownFormat, { chooseFormat(option) }, { Text(option) }, Modifier.heightIn(min = 48.dp)) }
-            }
-        }
         if (current != null && current.started && !mine) {
             val switch = RecordingSwitch(current.recording, current.place?.let { listeningPlace(it, current.source) }, picked, resumesAt)
             startPositionChoice?.invoke(switch) ?: Text(switchNotice(switch), style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.testTag("switch-notice"))
@@ -238,7 +285,7 @@ private fun ChooserActions(
             preparingThis || mine && current.preparing && current.source == null && preparation?.ready != true -> Button({}, button, enabled = false) { WorkingLabel("Getting ready in TorBox…") }
             !onPhone && needsTorBox(picked) && !connected -> Button({ close { vm.requestTorBoxConnect() } }, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox to listen") }
             mine && ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, if (override == null) resumeLabel(current) else "Listen in $override") }
-            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, "Listen to this recording") }
+            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, recordingNarrator(picked).takeIf(String::isNotBlank)?.let { "Listen to $it's recording" } ?: "Listen to this recording") }
             else -> {
                 Button({ close { vm.getReady(picked, override ?: format) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.CloudDownload, getReadyLabel) }
                 Text("TorBox can take from minutes to hours to get it ready. Nothing downloads to your phone, and its progress shows on the book's page.",
@@ -252,12 +299,10 @@ private fun ChooserActions(
                 Icon(Icons.Rounded.OfflinePin, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.secondary)
                 Text("On this phone · plays without internet", style = MaterialTheme.typography.bodySmall, color = muted)
             }
-            ready && (connected || !needsTorBox(picked)) -> {
-                val bytes = current?.source?.takeIf { mine && override == null }?.parts?.sumOf { it.sizeBytes }?.takeIf { it > 0 } ?: downloadBytes(picked, shownFormat)
-                OutlinedButton({ close { vm.downloadRecording(picked, override, delivery) } }, Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("chooser-download"), enabled = !busy) {
-                    SlotLabel(Icons.Rounded.Download, listOfNotNull("Download for offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "))
-                }
-            }
         }
+        // After picking another reading, it can become the page's recording without starting, to download or play later.
+        if (current == null && switched && ready && !starting)
+            TextButton({ close {} }, Modifier.fillMaxWidth().testTag("chooser-keep")) { Text("Switch without playing") }
+        // Downloading for offline lives on the book's page, under Listen; the chooser only picks the recording.
     }
 }

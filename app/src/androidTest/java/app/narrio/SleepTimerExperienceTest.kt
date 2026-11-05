@@ -106,7 +106,7 @@ class SleepTimerExperienceTest {
             compose.onNodeWithContentDescription("Add 15 minutes").performClick()
             compose.waitUntil(5_000) { state.sleep.untilMs >= until + SLEEP_EXTENSION_MS }
             compose.onNodeWithTag("sleep-status").assertTextEquals("Pauses in about 30 minutes.")
-            compose.onNodeWithText("Turn timer off").performClick()
+            compose.onNodeWithText("No timer").performClick()
             compose.waitUntil(5_000) { !state.sleep.active }
         } finally {
             main { service.forget(); graph.library.remove(book.id) }
@@ -133,7 +133,8 @@ class SleepTimerDialogTest {
         compose.setContent { MaterialTheme { SleepTimerDialog(listening, { chosen += it.mode }, {}, true, {}, {}) } }
         compose.onNodeWithText("At the end of this chapter").assertDoesNotExist()
         compose.onNodeWithText("At the end of this audio part").assertDoesNotExist()
-        compose.onNodeWithText("Shake to keep listening").assertExists()
+        // Shaking extends a running timer only, so its switch waits for one.
+        compose.onNodeWithText("Shake to keep listening").assertDoesNotExist()
 
         compose.runOnIdle { show(listening.copy(chapters = listOf(Chapter("One", 0), Chapter("Two", 1_800_000)))) }
         compose.onNodeWithText("At the end of this chapter").performClick()
@@ -143,8 +144,10 @@ class SleepTimerDialogTest {
         compose.runOnIdle { show(ListeningState(source = parts, durationMs = 3_600_000)) }
         compose.onNodeWithText("At the end of this audio part").assertExists()
         compose.onNodeWithText("At the end of this chapter").assertDoesNotExist()
-        compose.onNodeWithText("Turn timer off").assertIsSelected()
+        compose.onNodeWithText("No timer").assertIsSelected()
         compose.onNodeWithText("+15 min").assertDoesNotExist()
+        compose.runOnIdle { show(listening.copy(sleep = SleepTimer(SleepMode.END_OF_PART, stop = PartPlace(0, 3_600_000)))) }
+        compose.onNodeWithText("Shake to keep listening").assertExists()
     }
 
     @Test fun aRunningChapterTimerShowsItsChoiceAndTimeLeft() {
@@ -154,7 +157,7 @@ class SleepTimerDialogTest {
         show(state)
         compose.setContent { MaterialTheme { SleepTimerDialog(listening, {}, { extended++ }, null, {}, {}) } }
         compose.onNodeWithText("At the end of this chapter").assertIsSelected()
-        compose.onNodeWithText("Turn timer off").assertIsNotSelected()
+        compose.onNodeWithText("No timer").assertIsNotSelected()
         compose.onNodeWithTag("sleep-status").assertTextEquals("Pauses at the end of this chapter, in about 20 minutes.")
         compose.onNodeWithText("Shake to keep listening").assertDoesNotExist()
         compose.onNodeWithContentDescription("Add 15 minutes").performClick()

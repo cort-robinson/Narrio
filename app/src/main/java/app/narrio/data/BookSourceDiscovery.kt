@@ -413,10 +413,41 @@ object SourceQuality {
         }.values.map { it.first() }
     }
 
+    /**
+     * True when the catalog's audiobook edition (whose cover and blurb can name and praise its narrator) isn't this
+     * recording: the catalog names someone else, or this is a free public reading, which is never a catalog edition.
+     */
+    fun otherNarrator(recording: Audiobook, book: Audiobook): Boolean {
+        val own = edition(recording).narrator.takeIf(String::isNotBlank)
+        if (book.narratorFromCatalog && !BookMetadata.unknown(book.narrator) && own != null) return BookIdentity.authors(own) != BookIdentity.authors(book.narrator)
+        return recording.provider == "archive" && book.provider == "catalog"
+    }
+
+    /** The recording's own cover when the catalog's (an audiobook cover naming its narrator) belongs to another reading. */
+    fun coverFor(recording: Audiobook, book: Audiobook): String =
+        if (otherNarrator(recording, book) && recording.coverUrl.isNotBlank()) recording.coverUrl else book.coverUrl.ifBlank { recording.coverUrl }
+
+    /**
+     * The book's description without the sentences about another edition's narration: those naming the catalog's
+     * narrator, and those about narrators and performances.
+     */
+    fun descriptionFor(recording: Audiobook, book: Audiobook): String =
+        if (!otherNarrator(recording, book)) book.description else withoutNarration(book)
+
+    /** [book]'s description without sentences about its catalog narrator or narration, for a reading by someone else. */
+    fun withoutNarration(book: Audiobook): String {
+        val names = book.narrator.takeIf { book.narratorFromCatalog && !BookMetadata.unknown(it) }.orEmpty()
+            .split(Regex("[,&]| and ")).mapNotNull { it.trim().split(' ').lastOrNull()?.takeIf { name -> name.length > 2 } }
+        val narration = Regex("\\b(narrat\\w*|read by|reader|actress|actor|perform\\w*|voices?|audiobook|audio edition|listen\\w*)\\b", RegexOption.IGNORE_CASE)
+        return book.description.split(Regex("(?<=[.!?])\\s+")).filterNot { sentence ->
+            names.any { sentence.contains(it, ignoreCase = true) } || narration.containsMatchIn(sentence)
+        }.joinToString(" ")
+    }
+
     /** Apply work metadata without claiming the catalog narrator read this particular recording. */
     fun describe(recording: Audiobook, book: Audiobook) = recording.copy(
-        title = book.title, author = book.author, description = book.description.ifBlank { recording.description },
-        coverUrl = book.coverUrl.ifBlank { recording.coverUrl }, releaseTitle = recording.releaseTitle.ifBlank { recording.title },
+        title = book.title, author = book.author, description = descriptionFor(recording, book).ifBlank { recording.description },
+        coverUrl = coverFor(recording, book), releaseTitle = recording.releaseTitle.ifBlank { recording.title },
         metadataSource = book.metadataSource, metadataUrl = book.metadataUrl, metadataUpdatedAtMs = book.metadataUpdatedAtMs,
     )
 }

@@ -39,7 +39,7 @@ class SourceExperienceTest {
             vm.sourceSearch.value = SourceSearchState(book().catalogIdentity(), searched = true); vm.chooseFormat(book(), "M4B") }
         compose.onNodeWithTag("listen-action").assertTextContains("Listen").assertIsEnabled()
         compose.onNodeWithTag("recording-summary").assertTextEquals("Narrator not confirmed · Unabridged · Ready now")
-        compose.onNodeWithTag("download-offline").performScrollTo().assertTextContains("Download for offline · 500 MB")
+        compose.onNodeWithTag("download-offline").performScrollTo().assertTextContains("Listen offline · 500 MB")
         capture("cached-source-$suffix")
         // Advanced lets the listener override the automatic format and see the files.
         compose.onNodeWithTag("book-details").performScrollToIndex(0)
