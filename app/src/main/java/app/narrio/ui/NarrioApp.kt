@@ -229,9 +229,11 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
         // the reader carry their own.
         Column(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
+            // The bottom bar draws above the screens, so when the Listening room or the reader rises it fades away at
+            // once rather than sliding over them.
             transition.AnimatedVisibility({ it == Home || it is Details },
                 enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
-                exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
+                exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
                 AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     // A short fade above it, so a page scrolling underneath trails off rather than being cut through.
                     val page = MaterialTheme.colorScheme.background
@@ -245,7 +247,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             // The tabs stay on home and a book's page alike, so moving between them leaves the bottom of the screen still.
             transition.AnimatedVisibility({ it == Home || it is Details },
                 enter = expandVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized), expandFrom = Alignment.Top) + fadeIn(),
-                exit = shrinkVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate), shrinkTowards = Alignment.Top) + fadeOut()) {
+                exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                     navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
                 }
