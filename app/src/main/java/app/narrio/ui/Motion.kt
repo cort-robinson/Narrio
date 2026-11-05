@@ -92,6 +92,15 @@ fun rememberSheetCloser(sheetState: SheetState, dismiss: () -> Unit): (() -> Uni
     return remember(sheetState, scope) { { after: () -> Unit -> after(); scope.launch { sheetState.hide() }.invokeOnCompletion { latest() } } }
 }
 
+/** Fades in once when it first appears, so content that arrives (a search result) never pops into a held space. */
+@Composable
+fun Modifier.fadesIn(): Modifier {
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, tween(MEDIUM_FADE, easing = Motion.EmphasizedDecelerate)) }
+    return graphicsLayer { alpha = shown.value }
+}
+private const val MEDIUM_FADE = 220
+
 /** A gentle press that makes rows and controls feel physical without moving their layout. */
 @Composable
 fun Modifier.pressScale(interaction: InteractionSource, pressed: Float = .97f): Modifier {

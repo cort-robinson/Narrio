@@ -141,7 +141,7 @@ fun RecordingChooser(
                     ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close)
                 }
                 item(key = "advanced") {
-                    SearchOtherSourcesRow("Find another recording, or add your own file", expanded = null, open = { advanced = true },
+                    SearchOtherSourcesRow("Search other sources, or choose a file from your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
                         modifier = Modifier.padding(top = 8.dp).testTag("advanced-entry"))
                 }
             }

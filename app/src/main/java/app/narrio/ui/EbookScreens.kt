@@ -502,9 +502,10 @@ fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox
     // A book saved before choosing a recording or ebook says what it's waiting for: a quiet status, with Connect
     // beside it when TorBox is the way forward, so the row is never a dead end.
     if (!formats.audio && !formats.ebook) {
-        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        // The status, then its action on a line of its own, so neither wraps beside the other.
+        Column(modifier) {
             Text(if (needsTorBox) "No free recording" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (needsTorBox && connect != null) TextButton(connect, Modifier.padding(start = 4.dp).heightIn(min = 40.dp).testTag("shelf-connect-torbox")) { Text("Connect TorBox") }
+            if (needsTorBox && connect != null) TextButton(connect, Modifier.offset(x = (-12).dp).heightIn(min = 40.dp).testTag("shelf-connect-torbox")) { Text("Connect TorBox") }
         }
         return
     }

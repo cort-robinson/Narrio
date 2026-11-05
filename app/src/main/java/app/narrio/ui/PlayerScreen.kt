@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -432,7 +433,11 @@ private fun PlayGlyph(state: ListeningState, iconSize: Dp, tint: Color, spinner:
         (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn(tween(Motion.SHORT))).togetherWith(scaleOut(tween(Motion.SHORT), targetScale = .4f) + fadeOut(tween(Motion.SHORT)))
     }, contentAlignment = Alignment.Center, label = "play glyph") { shown ->
         when (shown) {
-            0 -> CircularProgressIndicator(Modifier.size(spinner), color = tint, strokeWidth = 3.dp)
+            // Loading keeps the button readable: a dimmed pause inside a ring that turns, never a lone arc.
+            0 -> Box(Modifier.semantics { contentDescription = "Loading" }, contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Pause, null, Modifier.size(spinner), tint = tint.copy(alpha = .4f))
+                CircularProgressIndicator(Modifier.size(iconSize * 1.25f), color = tint, strokeWidth = 2.5.dp)
+            }
             1 -> Icon(Icons.Rounded.Pause, "Pause", Modifier.size(iconSize), tint = tint)
             else -> Icon(Icons.Rounded.PlayArrow, "Play", Modifier.size(iconSize), tint = tint)
         }
@@ -487,9 +492,20 @@ internal fun OptionRow(label: String, selected: Boolean, choose: () -> Unit) {
 }
 
 internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}×"
+/**
+ * A short choice as a bottom sheet, like the app's other choosers. Choosing applies and closes, so there's no button to
+ * confirm; Back, a swipe, or a tap outside leaves it as it is. [extra] sits beside the title.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChoiceDialog(title: String, dismiss: () -> Unit, extra: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) },
-        // Choosing applies and closes, so there's no button to confirm; Back or a tap outside leaves it as it is.
-        confirmButton = { extra?.invoke() })
+    ModalBottomSheet(dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 28.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                extra?.invoke()
+            }
+            content()
+        }
+    }
 }

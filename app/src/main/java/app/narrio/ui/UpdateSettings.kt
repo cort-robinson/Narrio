@@ -39,31 +39,29 @@ fun UpdateSettingsContent(state: UpdateState, installedVersion: String, automati
                           automaticInstallSupported: Boolean = android.os.Build.VERSION.SDK_INT >= 31) {
     val busy = state.phase in listOf(UpdatePhase.CHECKING, UpdatePhase.DOWNLOADING, UpdatePhase.INSTALLING)
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("App updates", style = MaterialTheme.typography.headlineSmall)
         // The release channel and version live under About; here it's only whether Narrio is current.
         if (state.channel == null) {
             Text("Local and debug builds update through your development tools.", style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
-        // The switch reads on only when updates really can install. While Android's permission is missing it reads off,
-        // and turning it on asks Android for that permission (Narrio remembers the choice meanwhile).
-        val blocked = state.permissionNeeded
+        // The switch is the preference itself. Android's install permission is asked for only when there's an update to
+        // install, beside that update, so an up-to-date app never shows a warning.
         val muted = MaterialTheme.colorScheme.onSurfaceVariant
-        // Without Android's permission there's nothing to switch yet: the row says what's needed and offers it. Once
-        // allowed, the switch appears.
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Automatic updates", style = MaterialTheme.typography.titleSmall)
-                if (blocked) Text("Android needs to let Narrio install updates", style = MaterialTheme.typography.bodySmall, color = muted)
-            }
-            if (blocked) FilledTonalButton(allow, enabled = !busy) { Text("Allow updates") }
-            else Switch(state.automatic, automatic, Modifier.semantics { contentDescription = "Automatic app updates" })
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Automatic updates", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+            Switch(state.automatic, automatic, Modifier.semantics { contentDescription = "Automatic app updates" })
         }
-        if (!blocked) Text(if (state.automatic && automaticInstallSupported) "Downloads use Wi-Fi. Updates install while Narrio is closed and playback is paused. Android may ask you to confirm."
-            else if (state.automatic) "Downloads use Wi-Fi. When an update is ready, pause playback and tap Install update. Android will ask you to confirm."
-            else "Automatic checks, downloads, and installation are off. You can check for updates here.",
-            style = MaterialTheme.typography.bodyMedium, color = muted)
+        if (state.available != null) {
+            Text(if (state.automatic && automaticInstallSupported) "Downloads use Wi-Fi. Updates install while Narrio is closed and playback is paused. Android may ask you to confirm."
+                else if (state.automatic) "Downloads use Wi-Fi. When an update is ready, pause playback and tap Install update. Android will ask you to confirm."
+                else "Automatic checks, downloads, and installation are off. You can check for updates here.",
+                style = MaterialTheme.typography.bodyMedium, color = muted)
+            if (state.permissionNeeded) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Android needs to let Narrio install this update.", style = MaterialTheme.typography.bodyMedium)
+                FilledTonalButton(allow, enabled = !busy) { Text("Allow updates") }
+            }
+        }
         val status = when (state.phase) {
             UpdatePhase.CHECKING -> "Checking for updates…"
             UpdatePhase.DOWNLOADING -> "Downloading ${state.available?.version} · ${(state.progress * 100).toInt()}%"

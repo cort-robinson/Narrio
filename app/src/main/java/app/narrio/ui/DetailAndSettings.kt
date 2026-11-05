@@ -114,7 +114,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
                 SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Where it looks for recordings, ebooks, and book details", openAddons, Modifier.testTag("sources-entry"))
             }
         }
-        // The everyday switches and how the app looks share one heading, so no section holds a single row.
+        // The everyday listening and reading switches.
         item {
             Text("Listening and reading", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
@@ -123,11 +123,15 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
             SettingSwitch("Read-along highlights", "Highlights words as they're read. For streamed books, highlights are prepared while your phone charges on Wi-Fi.",
                 backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
+        }
+        // How the app looks and keeps itself current. Local builds have no update channel and show their version under
+        // About instead, so the section is then just Appearance.
+        item {
+            Text("App", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
             AppearanceEntry(appearance, openAppearance)
+            if (updates.channel != null) { Spacer(Modifier.height(8.dp)); UpdateSettings(vm.graph.updates) }
         }
-        // Local builds have no update channel and show their version under About instead.
-        if (updates.channel != null) item { UpdateSettings(vm.graph.updates) }
         item {
             Text("About Narrio", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))

@@ -151,8 +151,8 @@ private val FORMAT_TAG = Regex("""\s*[\[(](?:EPUB|PDF|TXT|MOBI|AZW3?|FB2)[\])]""
 
 /** Why a possible match that leads the ebook sheet is only possible, in words a listener can check against. */
 fun possibleMatchCaution(choice: EbookChoice): String =
-    if (choice.edition.author.isBlank()) "No author is listed, so it may be a different book. Open it to check."
-    else "Its title or author differs a little from this book's. Open it to check."
+    if (choice.edition.author.isBlank()) "No author is listed, so it may be a different book."
+    else "Its title or author differs a little from this book's."
 
 /** Where a choice is from, unless its note already says it comes with the recording. */
 fun ebookChoiceSource(choice: EbookChoice, recording: Boolean): String? =

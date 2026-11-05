@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -69,7 +70,9 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         item(key = "search") {
             OutlinedTextField(query, onValueChange = { vm.search(it) }, modifier = Modifier.fillMaxWidth().onFocusChanged { searchFocused = it.isFocused }.testTag("discover-search"), singleLine = true,
-                placeholder = { Text("Search books or authors") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
+                placeholder = { Text("Search books or authors") },
+                // While a search shows, the leading icon goes back to browsing, as the clear button does.
+                leadingIcon = { if (query.isNotEmpty()) IconButton({ vm.search(""); focus.clearFocus() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back to browsing") } else Icon(Icons.Rounded.Search, null) },
                 // While a typed query loads, the field itself says so; the last results stay readable below it.
                 trailingIcon = { AnimatedVisibility(query.isNotEmpty(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
                     IconButton(onClick = { vm.search("") }) {

@@ -84,7 +84,9 @@ internal const val FREE_AND_TORBOX = "Older books often play free. Newer ones us
 /** Once Discover has marked the books that play free, the hint points at the marks instead of promising the list. */
 internal const val FREE_MARKED_AND_TORBOX = "Books marked “Free to listen” play right away. Most others need TorBox, a paid service."
 
-internal const val TORBOX_PITCH = "A paid service for many more audiobooks. Free LibriVox books play without it."
+internal const val TORBOX_PITCH = "A paid service that finds and streams many more audiobooks. Books marked “Free to listen” play without it."
+/** Opened from a book's page, the sheet says what connecting does for that book. */
+internal const val TORBOX_FOR_BOOK = "Connect your paid TorBox account to search for this book. A recording may not be available."
 
 internal fun connectError(error: Exception) = if (error is ProviderException) error.message.orEmpty() else "Couldn't save the key on this phone. Try again."
 
@@ -109,7 +111,8 @@ fun ConnectTorBoxSheet(vm: NarrioViewModel) {
         } }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Connect TorBox", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
-            Text(TORBOX_PITCH,
+            val forBook = vm.selection.collectAsStateWithLifecycle().value.book != null
+            Text(if (forBook) TORBOX_FOR_BOOK else TORBOX_PITCH,
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             TorBoxConnectForm(state, vm::connect, vm::clearTorBoxError)
         }
@@ -132,7 +135,7 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Two short steps, each beside its control: get the key, then paste it.
-        Text("1. Sign in to TorBox (a paid account) and copy your API key, the code that links it to Narrio.", style = MaterialTheme.typography.bodyMedium)
+        Text("1. Sign in to TorBox and copy your API key.", style = MaterialTheme.typography.bodyMedium)
         OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
             Text("Get your API key"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }

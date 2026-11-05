@@ -72,8 +72,8 @@ class AppUpdatesExperienceTest {
         val state = mutableStateOf(UpdateState(UpdateChannel.DEV, phase = UpdatePhase.READY, available = update, permissionNeeded = true))
         var allowed = 0; var installed = 0; var checked = 0
         content(state, allow = { allowed++ }, install = { installed++ }, check = { checked++ })
-        // Without Android's permission there's no switch yet, only the way to allow it.
-        compose.onNodeWithContentDescription("Automatic app updates").assertDoesNotExist()
+        // With an update waiting and no install permission yet, Android's permission is asked for beside that update.
+        compose.onNodeWithText("Android needs to let Narrio install this update.").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Allow updates").performScrollTo().performClick()
         assertEquals(1, allowed)
         capture("ready-night")

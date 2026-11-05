@@ -323,7 +323,9 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         val length = (recording?.durationMs?.takeIf { it > 0 } ?: book.durationMs).takeIf { it > 0 }
         val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
         // While a recording is being found, the line keeps its height so nothing below moves when the length arrives.
-        if (time != null || reserveTime) Text(time.orEmpty(), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp))
+        if (time != null || reserveTime) key(time == null) {
+            Text(time.orEmpty(), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp).fadesIn())
+        }
     }
     // A short window, such as a folding phone's cover screen, sets a smaller cover beside the title, so the actions and
     // the description start above the mini-player.
@@ -439,7 +441,7 @@ private fun ListenSlot(
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
                 // TorBox isn't the only way: the same row as the chooser's searches again with other words, or adds your own file.
-                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Find a recording, or add your own file", expanded = null, open = actions.addOwnAudio,
+                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Search other sources, or choose a file from your phone", expanded = null, open = actions.addOwnAudio, title = "Find or add a recording",
                     modifier = Modifier.padding(top = 8.dp).testTag("add-own-audio"))
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
@@ -452,7 +454,7 @@ private fun ListenSlot(
 /** "Ray Porter · Unabridged · Ready now", and Change, which opens the recording chooser. */
 @Composable
 private fun RecordingLine(text: String, change: () -> Unit, changing: Boolean = false) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).fadesIn(), verticalAlignment = Alignment.CenterVertically) {
         Text(text, Modifier.weight(1f).testTag("recording-summary"), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         TextButton(change, Modifier.testTag("change-recording").semantics { contentDescription = "Change recording" }) {
             // The label keeps its width while the spinner stands in, so nothing beside it moves.
@@ -566,7 +568,7 @@ private fun OfflineRow(vm: NarrioViewModel, book: Audiobook, target: Audiobook?,
         else -> {
             val format = current?.source?.format?.takeIf { current.recording === target } ?: defaultFormat(target, vm.savedFormat(book.id))
             val bytes = current?.source?.takeIf { current.recording === target }?.parts?.sumOf { it.sizeBytes }?.takeIf { it > 0 } ?: downloadBytes(target, format)
-            Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(enabled = !busy, role = Role.Button, onClickLabel = "Download for offline") { vm.downloadRecording(target) }
+            Row(modifier.fillMaxWidth().fadesIn().clip(RoundedCornerShape(12.dp)).clickable(enabled = !busy, role = Role.Button, onClickLabel = "Download for offline") { vm.downloadRecording(target) }
                 .heightIn(min = 48.dp).padding(vertical = 6.dp).testTag("download-offline"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.primary)
                 Column(Modifier.weight(1f)) {
