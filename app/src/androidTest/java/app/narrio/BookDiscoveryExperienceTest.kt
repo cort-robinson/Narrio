@@ -257,7 +257,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithText("The book").assertDoesNotExist()
         // Fallback cover art also draws the author; the final node is the details text below it.
         compose.onAllNodesWithText("Andy Weir").onLast().assertIsDisplayed()
-        compose.onNodeWithText("Finding audio…").assertIsNotEnabled()
+        compose.onNodeWithText("Finding a recording…").assertIsNotEnabled()
 
         val chosen = recording("fixture-recording", "Project Hail Mary (version 2)", "Fixture Reader")
         compose.runOnIdle { vm.sourceSearch.value = snapshot(book, listOf(chosen)) }

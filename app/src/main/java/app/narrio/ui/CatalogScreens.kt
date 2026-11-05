@@ -311,8 +311,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             item(key = "finished-header") { FinishedHeader(finished.size, finishedOpen, finishedCollapsible, { showFinished = !showFinished }, Modifier.animateItem()) }
             if (finishedOpen) items(finished, key = { it.entry.bookId }, itemContent = row)
         }
-        // Adding an ebook from the phone is a rare step, so it waits quietly under the list rather than in the header.
-        if (shelf.isNotEmpty() && visible.isNotEmpty()) item(key = "add-file") {
+        // The Ebooks filter offers adding one under its list; a book's own page adds an ebook or audio file for that book.
+        if (shelf.isNotEmpty() && filter == ShelfFilter.EBOOKS && visible.isNotEmpty()) item(key = "add-file") {
             // A footer action under the last row's divider, so the list holds only books.
             Column(Modifier.animateItem()) {
                 TextButton({ if (!importing.working) addEbook() }, Modifier.padding(top = 8.dp).heightIn(min = 48.dp).testTag("shelf-add-ebook")) {

@@ -131,7 +131,7 @@ class SourceSearchExperienceTest {
         val fixture = fixture(mapOf("archive" to archive, "torbox-library" to library, "torbox-search" to search, "addon:audiobookbay" to addon, "addon:knaben" to waiting))
 
         // The page waits with one quiet line; Advanced has every source's own section at once, each with its own state.
-        compose.onNodeWithText("Finding audio…").assertIsNotEnabled()
+        compose.onNodeWithText("Finding a recording…").assertIsNotEnabled()
         compose.onNodeWithTag("listening-sources").assertDoesNotExist()
         openAdvanced()
         revealAdvanced(hasTestTag("source-section:addon:knaben"))

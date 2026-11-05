@@ -138,8 +138,7 @@ fun RecordingChooser(
                 }
                 item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
-                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close,
-                        changed = automatic != null && !sameRecording(picked, automatic))
+                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close)
                 }
                 item(key = "advanced") {
                     SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
@@ -250,7 +249,7 @@ private fun SearchProgress(streamed: StreamedSourceSearch?, tally: SearchTally?,
 private fun ChooserActions(
     vm: NarrioViewModel, book: Audiobook, picked: Audiobook, current: CurrentRecording?, entry: ShelfEntry?, preparingRecording: Audiobook?,
     downloads: List<OfflineBook>, connected: Boolean, busy: Boolean, starting: Boolean, preparation: Preparation?, format: String?, delivery: String?,
-    startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit, changed: Boolean = false,
+    startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val mine = current != null && sameRecording(picked, current.recording)
@@ -297,8 +296,8 @@ private fun ChooserActions(
             }
         }
         // A pick already becomes the book page's recording, so it can be downloaded or started later from there.
-        // Offered once the listener has picked another reading than the one already shown on the page.
-        if (current == null && changed && ready && !starting)
+        // Choosing a reading never has to start it: the pick becomes the page's recording, to download or play later.
+        if (current == null && ready && !starting)
             TextButton({ close {} }, Modifier.fillMaxWidth().testTag("chooser-keep")) { Text("Use this recording") }
         // Downloading for offline lives on the book's page, under Listen; the chooser only picks the recording.
     }

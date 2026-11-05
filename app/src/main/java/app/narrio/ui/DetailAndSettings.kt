@@ -110,7 +110,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), state = list, contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item(key = "title") { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item(key = "torbox") {
-            Text("Where books come from", style = MaterialTheme.typography.headlineSmall)
+            Text("Where books come from", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
@@ -119,7 +119,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         }
         // The everyday listening and reading switches.
         item {
-            Text("Listening and reading", style = MaterialTheme.typography.headlineSmall)
+            Text("Listening and reading", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
@@ -131,13 +131,13 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
         // About instead, so the section is then just Appearance.
         item {
             // Each section heading has the same room above it.
-            Text("App", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.headlineSmall)
+            Text("App", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(4.dp))
             AppearanceEntry(appearance, openAppearance)
             if (updates.channel != null) UpdateSettings(vm.graph.updates)
         }
         item {
-            Text("About Narrio", style = MaterialTheme.typography.headlineSmall)
+            Text("About Narrio", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(12.dp))
             Text("Your shelf, progress, and bookmarks stay on this phone.", style = MaterialTheme.typography.bodyMedium, color = muted)
             TextButton({ aboutOpen = !aboutOpen }, Modifier.offset(x = (-12).dp)) { Text(if (aboutOpen) "Hide credits and details" else "Credits and details") }

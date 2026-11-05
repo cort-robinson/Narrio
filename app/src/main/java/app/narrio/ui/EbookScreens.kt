@@ -511,10 +511,11 @@ fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox
     // beside it when TorBox is the way forward, so the row is never a dead end.
     if (!formats.audio && !formats.ebook) {
         // The status and its action read as one line in the same small type; the action keeps a full-size touch target.
-        FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        // Top-aligned, so the status sits right under the author as on every other row; the action's touch target reaches down.
+        FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.Top) {
             Text(if (needsTorBox) "No free recording ·" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (needsTorBox && connect != null) Box(Modifier.minimumInteractiveComponentSize().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = connect)
-                .testTag("shelf-connect-torbox"), contentAlignment = Alignment.CenterStart) {
+                .testTag("shelf-connect-torbox"), contentAlignment = Alignment.TopStart) {
                 Text("Connect TorBox", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
         }

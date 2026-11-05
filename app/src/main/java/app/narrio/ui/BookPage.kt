@@ -429,7 +429,7 @@ private fun ListenSlot(
             }
             streamed != null && tally != null && !streamed.complete && tally.active > 0 -> {
                 // The button says it's searching; the recording line's place is held so nothing moves when it arrives.
-                ModeButton({}, button, leading, enabled = false) { WorkingLabel("Finding audio…") }
+                ModeButton({}, button, leading, enabled = false) { WorkingLabel("Finding a recording…") }
                 Spacer(Modifier.fillMaxWidth().heightIn(min = 48.dp))
             }
             streamed != null && tally != null -> {
