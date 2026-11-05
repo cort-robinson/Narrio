@@ -58,7 +58,9 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         // Drawn art stands in only for a book with no cover, or one that failed to load; a loading cover is a plain shape.
         // A recording's large cover stays plain too, so a drawn tile never passes for yet another edition of it.
         var failed by remember(book.coverUrl) { mutableStateOf(false) }
-        val drawn = (book.coverUrl.isBlank() || failed) && !(large && book.sources.isNotEmpty())
+        // A recording's large cover (one found for the book, described yet or not) never falls back to drawn art, so a
+        // cover that's slow or fails to load shows the same quiet shape on the book page, in the player, and docked.
+        val drawn = (book.coverUrl.isBlank() || failed) && !(large && (book.sources.isNotEmpty() || book.provider != "catalog"))
         Box(Modifier.matchParentSize().background(if (drawn) palette.first else MaterialTheme.colorScheme.surfaceContainerHighest))
         val reveal by animateFloatAsState(if (coverLoaded) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate), label = "cover")
         // A cover that changes in place (a recording's own art replacing the catalog's) keeps the last art showing

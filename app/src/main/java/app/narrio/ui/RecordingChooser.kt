@@ -106,7 +106,7 @@ fun RecordingChooser(
                 chooseFormat = { chosenFormat, chosenDelivery -> format = chosenFormat; delivery = chosenDelivery }, actions = actions,
                 refreshDetails = refreshDetails?.takeIf { current != null && picked != null && sameRecording(picked, current.recording) }, metadataLoading = metadataLoading,
                 back = { advanced = false }, extraSections = advancedSections)
-            else LazyColumn(Modifier.fillMaxWidth().testTag("recording-chooser"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp),
+            else LazyColumn(Modifier.fillMaxWidth().testTag("recording-chooser"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 28.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // When every row plays the same way, say it once here instead of on each row.
                 val statuses = shown.map { recording -> readiness(recording, connected, phoneCopy(recording)) }
@@ -138,7 +138,8 @@ fun RecordingChooser(
                 }
                 item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
-                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close)
+                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close,
+                        switched = automatic != null && !sameRecording(picked, automatic))
                 }
                 item(key = "advanced") {
                     SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
@@ -249,7 +250,7 @@ private fun SearchProgress(streamed: StreamedSourceSearch?, tally: SearchTally?,
 private fun ChooserActions(
     vm: NarrioViewModel, book: Audiobook, picked: Audiobook, current: CurrentRecording?, entry: ShelfEntry?, preparingRecording: Audiobook?,
     downloads: List<OfflineBook>, connected: Boolean, busy: Boolean, starting: Boolean, preparation: Preparation?, format: String?, delivery: String?,
-    startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit,
+    startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit, switched: Boolean = false,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val mine = current != null && sameRecording(picked, current.recording)
@@ -295,10 +296,9 @@ private fun ChooserActions(
                 Text("On this phone · plays without internet", style = MaterialTheme.typography.bodySmall, color = muted)
             }
         }
-        // A pick already becomes the book page's recording, so it can be downloaded or started later from there.
-        // Choosing a reading never has to start it: the pick becomes the page's recording, to download or play later.
-        if (current == null && ready && !starting)
-            TextButton({ close {} }, Modifier.fillMaxWidth().testTag("chooser-keep")) { Text("Use this recording") }
+        // After picking another reading, it can become the page's recording without starting, to download or play later.
+        if (current == null && switched && ready && !starting)
+            TextButton({ close {} }, Modifier.fillMaxWidth().testTag("chooser-keep")) { Text("Switch without playing") }
         // Downloading for offline lives on the book's page, under Listen; the chooser only picks the recording.
     }
 }
