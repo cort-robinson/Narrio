@@ -273,7 +273,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                     Box {
                         IconButton({ menu = true }, Modifier.testTag("shelf-more")) { Icon(Icons.Rounded.MoreVert, "More shelf options") }
                         DropdownMenu(menu, { menu = false }) {
-                            DropdownMenuItem({ Text("Add an ebook from your phone") }, { menu = false; if (!importing.working) addEbook() },
+                            // It makes a new shelf book from the file, so it says so rather than sounding like it attaches to one.
+                            DropdownMenuItem({ Text("Add a new book from an ebook file") }, { menu = false; if (!importing.working) addEbook() },
                                 leadingIcon = { Icon(Icons.Rounded.UploadFile, null) }, modifier = Modifier.testTag("shelf-add-ebook-header"))
                         }
                     }

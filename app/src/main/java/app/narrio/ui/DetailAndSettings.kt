@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -156,7 +157,8 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     // Once the big title scrolls away, a compact one takes its place, as on a book's page, so rows never run
     // against the status bar and the page is always named.
     AnimatedVisibility(list.firstVisibleItemIndex > 0, enter = fadeIn(), exit = fadeOut()) {
-        Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
+        // Its own raised surface, so rows clearly pass beneath it rather than meeting the title.
+        Column(Modifier.fillMaxWidth().shadow(3.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
             Text("Settings", Modifier.padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 12.dp), style = MaterialTheme.typography.titleLarge)
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }

@@ -118,7 +118,7 @@ fun RecordingChooser(
                     Text("Choose a recording", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(6.dp))
                     // Before anything plays, it says that picking one doesn't start it, so choosing for a download is safe.
-                    Text(listOfNotNull("Different recordings of ${book.title}.", shared, "Tap one to use it; nothing plays until you choose Listen.".takeIf { current == null }).joinToString(" "),
+                    Text(listOfNotNull("Different recordings of ${book.title}.", shared, "Tap one to choose it; it's kept when you close this. Listen starts it.".takeIf { current == null }).joinToString(" "),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // A better match than the one Listen plays waits here, never moving the page under the listener.
