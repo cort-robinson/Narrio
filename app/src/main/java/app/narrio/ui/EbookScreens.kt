@@ -208,7 +208,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             item(key = "intro") {
                 Text(if (formats.ebook) "Choose an edition" else "Find ebook", style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
-                Text(if (narrated) "Add the book's text to read along as you listen."
+                Text(if (narrated) "Add the book's text to read along as you listen. Words light up once the audio is prepared."
                      else "Pick the edition you want to read. It's saved on this phone with the book.", style = MaterialTheme.typography.bodyMedium, color = muted)
             }
             if (formats.editions.isNotEmpty()) {
@@ -371,7 +371,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 }
                 // The book it's compared with, so the doubt can be judged without the page behind the sheet.
                 // One sentence names the doubt and the book it's compared with, then how checking works.
-                if (!trusted) Text("${possibleMatchCaution(possible, search.book)} Read a little, then keep it or remove it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
+                if (!trusted) Text("${possibleMatchCaution(possible, search.book)} Open it, read a little, then keep or remove it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
             }
             else -> {
                 val copy = ebookNoMatchCopy(search, tally)

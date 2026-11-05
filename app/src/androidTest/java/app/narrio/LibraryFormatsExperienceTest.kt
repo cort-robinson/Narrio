@@ -314,7 +314,7 @@ class LibraryFormatsExperienceTest {
         compose.waitUntil(10_000) { shown("Possible match") }
         // With no sure match, the possible one leads the card with the same action and its one doubt.
         sheet.performScrollToNode(hasTestTag("ebook-choice:${possible.id}"))
-        compose.onNodeWithText("This ebook has no author listed", substring = true).assertExists()
+        compose.onNodeWithText("No author listed", substring = true).assertExists()
         capture("ebook-chooser-possible-day")
         // Nothing else was found, so there's no list to open.
         compose.onNodeWithTag("ebook-other-choices-toggle").assertDoesNotExist()

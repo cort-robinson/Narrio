@@ -124,7 +124,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books get them once Narrio prepares the audio, while your phone charges on Wi-Fi.",
+            SettingSwitch("Read-along highlights", "Highlights each word as it's read. For streamed books, this starts after your phone charges on Wi-Fi.",
                 backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         // How the app looks and keeps itself current. Local builds have no update channel and show their version under

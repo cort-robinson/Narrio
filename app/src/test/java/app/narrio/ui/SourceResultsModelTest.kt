@@ -70,7 +70,7 @@ class SourceResultsModelTest {
         val disconnectedTally = tally(disconnected, providers, connected = false)
         assertEquals("Needs TorBox", groupStatusLabel(disconnected.groups[1], providers["torbox-search"], connected = false))
         assertEquals(NoMatchKind.NEEDS_TORBOX, noMatchCopy(disconnected, disconnectedTally).kind)
-        assertEquals("TorBox, a paid service, can search for a recording of this book.", noMatchCopy(disconnected, disconnectedTally).message)
+        assertEquals("TorBox, a paid service, can search for a recording of this book. It may not find one.", noMatchCopy(disconnected, disconnectedTally).message)
         assertEquals("1 source searched · 0 found · 1 need TorBox", searchSummary(disconnected, disconnectedTally))
 
         val possibleOnly = search(SourceGroup("archive", "LibriVox", SourceGroupStatus.DONE, possible = listOf(release("p", "archive"))))

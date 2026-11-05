@@ -142,7 +142,7 @@ fun RecordingChooser(
                         changed = automatic != null && !sameRecording(picked, automatic))
                 }
                 item(key = "advanced") {
-                    SearchOtherSourcesRow("Search other sources, or choose a file from your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
+                    SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
                         modifier = Modifier.padding(top = 8.dp).testTag("advanced-entry"))
                 }
             }

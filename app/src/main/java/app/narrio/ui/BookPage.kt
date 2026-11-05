@@ -209,9 +209,8 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             // A finished search with a best match keeps the plain shape until that match is the page's recording, so
             // the catalog cover never flashes in between.
             val freeSearch = current == null && best == null && !connected && book.provider == "catalog" && (streamed?.complete != true || streamed?.best != null)
-            // While this book plays, its length gives way to the time left, matching the mini-player docked below.
-            val left = playback.takeIf { it.book?.id == book.id }?.let { state -> state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 } }
-            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch, leftMs = left,
+            // While this book plays, the mini-player docked below shows the time left, so the page keeps the book's length.
+            BookIdentity(book, current?.recording ?: best, neutralCover = freeSearch,
                 // The length's line is held from the start of the search until a recording brings it.
                 reserveTime = current == null && (best != null || streamed?.complete != true),
                 scrolled = { if (listState.firstVisibleItemIndex > 0) Int.MAX_VALUE else listState.firstVisibleItemScrollOffset }, titleInBar = { titleGone })
@@ -308,7 +307,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
 /** Cover, title, author, and who reads it: the listener's recording, else the page's best match or the catalog. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, leftMs: Long? = null, reserveTime: Boolean = false, scrolled: () -> Int = { 0 },
+private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: Boolean = false, reserveTime: Boolean = false, scrolled: () -> Int = { 0 },
                          titleInBar: () -> Boolean = { false }) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // An audiobook cover naming another narrator gives way to the recording's own cover.
@@ -328,7 +327,7 @@ private fun BookIdentity(book: Audiobook, recording: Audiobook?, neutralCover: B
         }
         if (line.isNotBlank()) { Spacer(Modifier.height(12.dp)); Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.secondary) }
         val length = (recording?.durationMs?.takeIf { it > 0 } ?: book.durationMs).takeIf { it > 0 }
-        val time = leftMs?.let(::resumeTimeLeft) ?: length?.let(::durationLabel)
+        val time = length?.let(::durationLabel)
         // While a recording is being found, the line keeps its height so nothing below moves when the length arrives.
         if (time != null || reserveTime) key(time == null) {
             Text(time.orEmpty(), style = MaterialTheme.typography.labelMedium, color = muted, modifier = Modifier.padding(top = 8.dp).fadesIn())
@@ -448,7 +447,7 @@ private fun ListenSlot(
                     else -> ModeButton(actions.searchAgain, button, leading) { SlotLabel(Icons.Rounded.Refresh, "Search again") }
                 }
                 // TorBox isn't the only way: the same row as the chooser's searches again with other words, or adds your own file.
-                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Search other sources, or choose a file from your phone", expanded = null, open = actions.addOwnAudio, title = "Find or add a recording",
+                if (copy.kind == NoMatchKind.NEEDS_TORBOX) SearchOtherSourcesRow("Other sources, or a file on your phone", expanded = null, open = actions.addOwnAudio, title = "Find or add a recording",
                     modifier = Modifier.padding(top = 8.dp).testTag("add-own-audio"))
             }
             else -> ModeButton({}, button, leading, enabled = false) { SlotLabel(Icons.Rounded.PlayArrow, "Listen") }
@@ -478,7 +477,7 @@ private fun RecordingLine(text: String, change: () -> Unit, changing: Boolean = 
 @Composable
 private fun afterAMoment(waiting: Boolean): Boolean {
     var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(waiting) { shown = false; if (waiting) { kotlinx.coroutines.delay(150); shown = true } }
+    LaunchedEffect(waiting) { shown = false; if (waiting) { kotlinx.coroutines.delay(400); shown = true } }
     return waiting && shown
 }
 

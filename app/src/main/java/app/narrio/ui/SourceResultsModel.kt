@@ -156,7 +156,7 @@ fun noMatchCopy(search: StreamedSourceSearch, tally: SearchTally): NoMatchCopy {
         tally.failed > 0 -> NoMatchCopy(NoMatchKind.PARTLY_FAILED, "No recording found yet",
             "${tally.failed} of ${tally.active} sources couldn't be checked. Retry ${if (tally.failed == 1) "it" else "them"} below, or search again.")
         tally.needTorBox > 0 -> NoMatchCopy(NoMatchKind.NEEDS_TORBOX, "No free recording found",
-            "TorBox, a paid service, can search for a recording of this book.")
+            "TorBox, a paid service, can search for a recording of this book. It may not find one.")
         else -> NoMatchCopy(NoMatchKind.NOTHING_FOUND, "No recording found", "Searched $searched. Nothing matched this title and author.")
     }
 }
