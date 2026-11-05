@@ -35,7 +35,7 @@ class BookPageModelTest {
         val search = SourceSearchState(book, listOf(release("better", "Someone Else"), release("ray", "Ray Porter")))
         assertNotEquals("ray", search.choice?.id)
         assertEquals("Resume · 50 m left", resumeLabel(current))
-        assertEquals("Ray Porter · Needs time to get ready", recordingLine(current.recording, book, connected = true))
+        assertEquals("Read by Ray Porter · Needs time to get ready", recordingLine(current.recording, book, connected = true))
         assertTrue(current.started)
         assertEquals(70f / 120f, current.fraction!!, .001f)
         // In the chooser it leads, once, above the other versions.
@@ -57,7 +57,7 @@ class BookPageModelTest {
         val played = mine.sources[0]
         val sameAudio = currentRecording(book, shelf(mine, played, "ray-1", 0), mine, listOf(copy(mine, played)))!!
         assertEquals("Play offline", resumeLabel(sameAudio))
-        assertEquals("Ray Porter · On this phone", recordingLine(sameAudio.recording, book, connected = false, onPhone = true))
+        assertEquals("Read by Ray Porter · On this phone", recordingLine(sameAudio.recording, book, connected = false, onPhone = true))
         // A copy of another format doesn't take over Resume; it keeps its place on the offline row instead.
         val otherFormat = currentRecording(book, shelf(mine, played, "ray-1", 120_000), mine, listOf(copy(mine, mine.sources[1])))!!
         assertNull(otherFormat.offline)

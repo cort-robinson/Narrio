@@ -13,7 +13,7 @@ class SourceWordsTest {
 
     @Test fun variantsOfferTitleOnlySeriesAndSurname() {
         assertEquals(listOf(
-            WordsVariant("Title only", "The Gate of the Feral Gods"),
+            WordsVariant("Without the author", "The Gate of the Feral Gods"),
             WordsVariant("Include series name", "Dungeon Crawler Carl The Gate of the Feral Gods"),
             WordsVariant("Author last name only", "The Gate of the Feral Gods Dinniman"),
         ), SourceWords.variants(carl))
@@ -25,7 +25,7 @@ class SourceWordsTest {
         assertEquals("Wheel of Time", SourceWords.series(carl.copy(title = "The Eye of the World: Wheel of Time #1")))
         // A real subtitle isn't a series, and a book with no series offers no series variant.
         assertNull(SourceWords.series(carl.copy(title = "Sapiens: A Brief History of Humankind")))
-        assertEquals(listOf("Title only", "Author last name only"), SourceWords.variants(carl.copy(title = "Project Hail Mary", author = "Andy Weir")).map { it.label })
+        assertEquals(listOf("Without the author", "Author last name only"), SourceWords.variants(carl.copy(title = "Project Hail Mary", author = "Andy Weir")).map { it.label })
     }
 
     @Test fun surnameSkipsSuffixesAndUnknownAuthors() {
@@ -34,7 +34,7 @@ class SourceWordsTest {
         assertNull(SourceWords.lastName("Author not verified"))
         assertNull(SourceWords.lastName("Homer"))
         // An unknown author leaves only the title variant.
-        assertEquals(listOf("Title only"), SourceWords.variants(carl.copy(title = "Beowulf", author = "Author not listed")).map { it.label })
+        assertEquals(listOf("Without the author"), SourceWords.variants(carl.copy(title = "Beowulf", author = "Author not listed")).map { it.label })
     }
 
     @Test fun wordsMatchReleaseNamesAndFilesIgnoringPunctuationAndCase() {

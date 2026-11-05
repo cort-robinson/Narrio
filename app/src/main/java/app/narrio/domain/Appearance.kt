@@ -19,7 +19,7 @@ enum class ThemeMode(val label: String) {
 
 @Serializable
 enum class ThemePalette(val label: String, val description: String, val seasonal: Boolean = false) {
-    LISTENING_ROOM("Listening room", "Copper & sage"),
+    LISTENING_ROOM("Copper", "Copper & sage, Narrio's own"),
     OCEAN("Ocean", "Sea glass & blue ink"),
     FOREST("Forest", "Fern & golden light"),
     ROSEWOOD("Rosewood", "Rose & plum"),
@@ -29,13 +29,13 @@ enum class ThemePalette(val label: String, val description: String, val seasonal
     MIDNIGHT("Midnight", "Indigo & starlight"),
     EMBER("Ember", "Terracotta & ochre"),
     HALLOWEEN("Halloween", "Pumpkin & black", seasonal = true),
-    CUSTOM("Custom", "Your own colours");
+    CUSTOM("Custom", "Your own colors");
 }
 
 /** Night backgrounds in true black for OLED screens: only the reader's pages, or all of Narrio. */
 @Serializable
 enum class PureBlack(val label: String, val description: String) {
-    OFF("Off", "Night uses each palette's own dark colour."),
+    OFF("Off", "Night uses each palette's own dark color."),
     READER("Reader", "Book pages turn true black at night."),
     EVERYWHERE("Everywhere", "All of Narrio turns true black at night."),
 }

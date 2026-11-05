@@ -216,4 +216,22 @@ class BookSourceDiscoveryTest {
         assertEquals(original.narrator, described.narrator); assertEquals(original.language, described.language); assertFalse(described.narratorFromCatalog)
         assertEquals(original.title, described.releaseTitle); assertEquals(book.title, described.title)
     }
+
+    @Test fun anotherReadingNeverWearsTheCatalogNarratorsCoverOrPraise() {
+        val catalog = book.copy(narrator = "Kate Beckinsale", narratorFromCatalog = true,
+            description = "A witty classic. English actress Kate Beckinsale is the perfect reader. Her performance brings it to life. Read it again.")
+        val public = Audiobook("archive:pp", "Pride and Prejudice", "Jane Austen", narrator = "Karen Savage", coverUrl = "https://archive/cover.jpg")
+        val described = SourceQuality.describe(public, catalog)
+        assertEquals("https://archive/cover.jpg", described.coverUrl)
+        assertEquals("A witty classic. Read it again.", described.description)
+        // The catalog's own narrator keeps its cover and blurb.
+        val same = SourceQuality.describe(public.copy(narrator = "Kate Beckinsale"), catalog)
+        assertEquals(catalog.coverUrl, same.coverUrl); assertEquals(catalog.description, same.description)
+        // A catalog that names no narrator: a free public reading still drops the edition's cover and its narration praise.
+        val unnamed = book.copy(description = "A witty classic. English actress Kate Beckinsale is the perfect reader for it. Read it again.")
+        val free = SourceQuality.describe(public, unnamed)
+        assertEquals("https://archive/cover.jpg", free.coverUrl); assertEquals("A witty classic. Read it again.", free.description)
+        // A release that isn't a public reading keeps the catalog's cover and description.
+        assertEquals(unnamed.coverUrl, SourceQuality.describe(release(), unnamed).coverUrl)
+    }
 }

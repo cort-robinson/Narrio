@@ -71,7 +71,7 @@ private fun ContinueCard(item: ContinueItem, compact: Boolean, resume: () -> Uni
     Surface(modifier = modifier.pressScale(interaction, .98f), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, onClick = details, interactionSource = interaction) {
         Column {
             Row(Modifier.padding(if (compact) 14.dp else 16.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                BookCover(book, if (compact) Modifier.width(56.dp).height(82.dp) else Modifier.width(64.dp).height(94.dp), sharedKey = "cover-${book.id}")
+                BookCover(book, if (compact) Modifier.size(64.dp) else Modifier.size(76.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(book.title, style = MaterialTheme.typography.titleMedium, minLines = if (compact) 2 else 1, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(book.author, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)

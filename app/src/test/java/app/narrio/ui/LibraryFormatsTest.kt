@@ -36,7 +36,9 @@ class LibraryFormatsTest {
     @Test fun startedBooksNeverReadZeroAndUnfinishedNeverReadHundred() {
         val formats = BookFormats("b", editions = listOf(edition), textChapter = 1)
         assertEquals("Ch 1 · 0%", placeSummary(formats.copy(position = reading(0.0)))!!.label)
-        assertEquals("Ch 1 · 1%", placeSummary(formats.copy(position = reading(.002)))!!.label)
+        assertEquals("Ch 1 · <1%", placeSummary(formats.copy(position = reading(.002)))!!.label)
+        assertEquals("Chapter 1, less than 1%", spokenPlace("Ch 1 · <1%"))
+        assertEquals("Ch 1 · 1%", placeSummary(formats.copy(position = reading(.012)))!!.label)
         assertEquals("Ch 1 · 99%", placeSummary(formats.copy(position = reading(.9996)))!!.label)
         assertEquals("Ch 1 · 100%", placeSummary(formats.copy(position = reading(1.0)))!!.label)
     }

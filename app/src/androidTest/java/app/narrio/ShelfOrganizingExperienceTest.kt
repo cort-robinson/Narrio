@@ -213,7 +213,8 @@ class ShelfOrganizingExperienceTest {
         compose.onNodeWithContentDescription("More for ${heard.title}").performClick()
         compose.onNodeWithText("Mark as not finished").performClick()
         compose.waitUntil(5_000) { finishedAt(heard) == 0L }
-        compose.onNodeWithTag("shelf").performScrollToNode(hasText("Part 2 of 6 · 25%"))
+        // Back among the books in progress, with its place as time left: 15 of 60 minutes heard.
+        compose.onNodeWithTag("shelf").performScrollToNode(hasText("45 m left"))
     }
 
     private fun hasStateDescription(value: String) = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, value)

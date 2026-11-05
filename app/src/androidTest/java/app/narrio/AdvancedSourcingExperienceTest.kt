@@ -91,11 +91,12 @@ class AdvancedSourcingExperienceTest {
     private fun reveal(matcher: SemanticsMatcher) = advanced().performScrollToNode(matcher)
     private fun has(tag: String) = compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
-    /** The book page's Recordings & sources row opens the chooser. */
+    /** Change beside the recording line opens the chooser; a page without a recording has the Recordings & sources row. */
     private fun openChooser() {
         compose.waitUntil(5_000) { has("book-details") }
-        compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("recordings-row"))
-        compose.onNodeWithTag("recordings-row").performClick()
+        val entry = if (has("change-recording")) "change-recording" else "recordings-row"
+        compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag(entry))
+        compose.onNodeWithTag(entry).performClick()
         compose.waitUntil(5_000) { has("recording-chooser") }
     }
     /** The chooser's last row opens Advanced. */
@@ -189,7 +190,7 @@ class AdvancedSourcingExperienceTest {
         openChooser()
         compose.waitUntil(5_000) { has("recording:${us.id}") }
         compose.onNodeWithTag("recording:${us.id}").performClick()
-        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near"))
+        compose.waitUntil(5_000) { runCatching { compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near")) }.isSuccess }
         // One whole-book file of unknown length: the same elapsed time, 1:30:00, labelled approximate.
         compose.waitUntil(5_000) { compose.onAllNodesWithText("Start near 1:30:00 (≈)").fetchSemanticsNodes().isNotEmpty() }
         capture("advanced-start-near")

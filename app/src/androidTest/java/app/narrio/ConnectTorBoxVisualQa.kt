@@ -55,7 +55,7 @@ class ConnectTorBoxVisualQa {
                 compose.waitUntil(5_000) { compose.onAllNodesWithTag("connect-torbox-sheet").fetchSemanticsNodes().isEmpty() }
 
                 compose.runOnIdle { vm.navigate(2) }
-                compose.onNodeWithTag("torbox-key").assertIsDisplayed(); capture("connect-settings-disconnected-$label")
+                compose.onNodeWithTag("torbox-settings").assertIsDisplayed(); capture("connect-settings-disconnected-$label")
                 compose.runOnIdle { vm.connected.value = true }
                 compose.onNodeWithTag("torbox-connected").assertIsDisplayed(); capture("connect-settings-connected-$label")
             }

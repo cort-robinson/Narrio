@@ -28,16 +28,15 @@ fun bestEbookCopy(best: BestEbook, book: Audiobook, recording: Boolean = false):
         EbookMatchReason.WITH_RECORDING in reasons -> "Comes with this recording"
         EbookMatchReason.IN_YOUR_TORBOX in reasons -> "In your TorBox"
         EbookMatchReason.CACHED_IN_TORBOX in reasons -> "Ready in TorBox"
-        EbookMatchReason.PUBLIC_DOMAIN in reasons -> "Free public-domain ebook"
+        EbookMatchReason.PUBLIC_DOMAIN in reasons -> "Free ebook"
         else -> null
     }
     val caution = if (recording) cautionLabel(NarrationMatch.judge(book, best.edition, best.providerId, confirmed = true)) else null
     val detail = buildList {
         if (EbookMatchReason.WITH_RECORDING in reasons) add("Most likely the narrated edition")
-        if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Likely matches the narration")
+        if (EbookMatchReason.LIKELY_NARRATION in reasons) add("Same text as this recording")
         caution?.let { add("May not follow the narration: ${it.replaceFirstChar(Char::lowercase)}") }
-        if (EbookMatchReason.STRONG_MATCH in reasons) add("Matches this title and author")
-        if (EbookMatchReason.LANGUAGE_MATCH in reasons && !BookMetadata.unknown(book.language)) add(book.language)
+        // Only what helps reading along is said; a matching title or the book's own language goes without saying.
     }
     return BestMatchCopy(listOfNotNull(availability, best.edition.format.ifBlank { null }).joinToString(" · "), detail.joinToString(" · "))
 }
@@ -88,8 +87,8 @@ fun ebookNoMatchCopy(search: StreamedEbookSearch, tally: SearchTally): NoMatchCo
         tally.active == 0 -> NoMatchCopy(NoMatchKind.ALL_OFF, "No ebook source is searching", "Turn one on in Settings → Sources & add-ons, or add your own file below.")
         !search.complete -> NoMatchCopy(NoMatchKind.SEARCHING, "Finding the best ebook",
             "Checking ${tally.active} ${plural(tally.active, "source")} for this title and author.")
-        tally.possible > 0 && tally.found == 0 -> NoMatchCopy(NoMatchKind.POSSIBLE_ONLY, "No sure match",
-            "Nothing named this title and author closely enough to choose for you. Check the possible ${plural(tally.possible, "match", "matches")} below before adding one.")
+        tally.possible > 0 && tally.found == 0 -> NoMatchCopy(NoMatchKind.POSSIBLE_ONLY, if (tally.possible == 1) "1 possible match" else "${tally.possible} possible matches",
+            if (tally.possible == 1) "Couldn't confirm it's this book. Open it to check before keeping it." else "Couldn't confirm one is this book. Open one to check before keeping it.")
         tally.failed == tally.active -> NoMatchCopy(NoMatchKind.ALL_FAILED, "Couldn't reach any source",
             if (tally.active == 1) "$searched didn't answer. Check your connection, then try again."
             else "None of your ${tally.active} ebook sources answered. Check your connection, then try again.")
@@ -121,20 +120,48 @@ data class EbookChoice(val edition: BookTextSource, val providerId: String, val 
  * best match, then confirmed before possible, then the likeliest to follow the narration, keeping source order for ties.
  */
 fun ebookChoices(search: StreamedEbookSearch, book: Audiobook, shownId: String?): List<EbookChoice> = search.groups.flatMap { group ->
-    val source = if (group.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "In this recording's files" else group.name
+    val source = if (group.providerId == DeviceSourceProviderSettings.RECORDING_FILES) "Free ebook · From this recording's files" else group.name
     group.editions.map { EbookChoice(it, group.providerId, source, true, NarrationMatch.judge(book, it, group.providerId, confirmed = true)) } +
         group.possible.map { EbookChoice(it, group.providerId, source, false, NarrationMatch.judge(book, it, group.providerId, confirmed = false)) }
 }.distinctBy { it.edition.id }.filter { it.edition.id != shownId }
     .sortedWith(compareByDescending<EbookChoice> { it.providerId == DeviceSourceProviderSettings.RECORDING_FILES }.thenByDescending { it.confirmed }
         .thenByDescending { it.fit.score })
 
-/** "Jane Austen · French · EPUB": the language only when it differs from the book's. */
+/** "Jane Austen · French": the language only when it differs from the book's. The file format is the app's business. */
 fun ebookChoiceDetail(choice: EbookChoice, book: Audiobook): String {
     val theirs = NarrationMatch.language(choice.edition.language)
     val ours = NarrationMatch.language(book.language)
     val language = theirs?.takeIf { it != ours }?.let(::languageName)
-    return listOfNotNull(choice.edition.author.ifBlank { null }, language, choice.edition.format.ifBlank { null }).joinToString(" · ")
+    return listOfNotNull(choice.edition.author.ifBlank { null }, language).joinToString(" · ")
 }
+
+/** A recording's own file is named for the book rather than "pride_and_prejudice3_djvu.txt". */
+fun ebookChoiceTitle(choice: EbookChoice, book: Audiobook): String {
+    val title = choice.edition.title
+    val fileName = FILE_NAME.containsMatchIn(title) || (' ' !in title && '_' in title)
+    return if (title.isBlank() || choice.providerId == DeviceSourceProviderSettings.RECORDING_FILES && fileName) book.title
+        else ebookTitle(title, book)
+}
+
+/** An edition's title as the sheet shows it, without a release's format tag. */
+fun ebookTitle(title: String, book: Audiobook): String = title.replace(FORMAT_TAG, "").trim().ifBlank { book.title }
+
+/** "Lantern Keeper [EPUB]": a release's format tag is the app's business, not part of the title. */
+private val FORMAT_TAG = Regex("""\s*[\[(](?:EPUB|PDF|TXT|MOBI|AZW3?|FB2)[\])]""", RegexOption.IGNORE_CASE)
+
+/** Why a possible match that leads the ebook sheet is only possible, in words a listener can check against. */
+fun possibleMatchCaution(choice: EbookChoice, book: Audiobook? = null): String {
+    val yours = book?.let { listOf(it.title, it.author.takeIf(String::isNotBlank)?.let { author -> "by $author" }).filterNotNull().joinToString(" ") }
+    return if (choice.edition.author.isBlank()) "No author listed, so this may not be ${yours ?: "this book"}."
+    else "Its title or author differs a little from ${yours ?: "this book's"}."
+}
+
+/** Where a choice is from, unless its note already says it comes with the recording. */
+fun ebookChoiceSource(choice: EbookChoice, recording: Boolean): String? =
+    choice.source.takeUnless { ebookChoiceNotes(choice, recording).any { it.kind == ChoiceNoteKind.LIKELY && shipped(choice) } }
+
+private val FILE_NAME = Regex("""\.[A-Za-z0-9]{2,5}$""")
+private fun shipped(choice: EbookChoice) = NarrationSignal.WITH_RECORDING in choice.fit.signals
 
 private fun languageName(code: String) = if (code.length == 2) java.util.Locale.forLanguageTag(code).getDisplayLanguage(java.util.Locale.ENGLISH).ifBlank { code } else code.replaceFirstChar(Char::uppercase)
 
@@ -142,18 +169,20 @@ enum class ChoiceNoteKind { LIKELY, CAUTION, CHECK }
 data class ChoiceNote(val kind: ChoiceNoteKind, val text: String)
 
 /**
- * What a choice says about itself, in order: a possible match asks for a check of its title and author; then, with a
- * [recording], a likely fit, or the reason it may not follow the narration (shown even beside the check, since a known
- * difference matters either way). Never a verified claim: the pairing status decides after adding.
+ * What a choice says about itself, in order: a possible match asks for a check of its title and author, unless it
+ * comes with the recording, which is the better reason; then, with a [recording], a likely fit, or the reason it may
+ * not follow the narration (shown even beside the check, since a known difference matters either way). Never a
+ * verified claim: the pairing status decides after adding.
  */
 fun ebookChoiceNotes(choice: EbookChoice, recording: Boolean): List<ChoiceNote> {
     val caution = cautionLabel(choice.fit)
-    val shipped = NarrationSignal.WITH_RECORDING in choice.fit.signals
+    val shipped = shipped(choice)
+    val withRecording = recording && choice.fit.likely && shipped
     return listOfNotNull(
-        ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author").takeIf { !choice.confirmed },
+        ChoiceNote(ChoiceNoteKind.CHECK, "Check the title and author").takeIf { !choice.confirmed && !withRecording },
         when {
-            recording && choice.fit.likely && shipped -> ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")
-            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Likely matches the narration")
+            withRecording -> ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")
+            recording && choice.fit.likely && choice.confirmed -> ChoiceNote(ChoiceNoteKind.LIKELY, "Same text as this recording")
             caution != null -> ChoiceNote(ChoiceNoteKind.CAUTION, if (recording) "May not follow the narration: ${caution.replaceFirstChar(Char::lowercase)}" else caution)
             else -> null
         },
@@ -187,7 +216,7 @@ fun ebookWordSuggestions(book: Audiobook): EbookWordSuggestions {
     val original = originalTitle.find(book.description)?.groupValues?.get(1)?.trim()?.trimEnd('\'', '’')
         ?.takeIf { it.isNotBlank() && BookIdentity.normalize(it) != BookIdentity.normalize(title) }
     val choices = listOfNotNull(
-        EbookWordChoice("Title only", title).takeIf { title.isNotBlank() && it.words != details },
+        EbookWordChoice("Without the author", title).takeIf { title.isNotBlank() && it.words != details },
         EbookWordChoice("Without subtitle", with(short)).takeIf { short.isNotBlank() && short != title },
         original?.let { EbookWordChoice("Original title", with(it)) },
     )

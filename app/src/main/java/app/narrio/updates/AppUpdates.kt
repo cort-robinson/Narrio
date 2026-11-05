@@ -231,6 +231,7 @@ class AppUpdates(private val application: Application, private val playback: Pla
         }
     }
 
-    private fun message(error: Exception) = error.message?.take(180)?.takeIf { !it.contains("http", true) }
+    /** Only messages written for listeners (they say what to do next); network and policy details stay out of Settings. */
+    private fun message(error: Exception) = error.message?.take(180)?.takeIf { it.endsWith("again.") || it.endsWith("again later.") }
         ?: "Could not complete the update. Check your connection and try again."
 }

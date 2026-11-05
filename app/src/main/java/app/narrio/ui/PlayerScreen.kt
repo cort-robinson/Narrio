@@ -13,6 +13,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -32,6 +34,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,20 +88,23 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
         color = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp, interactionSource = interaction) {
         Column(if (aboveSystemBar) Modifier.navigationBarsIgnoringVisibilityPadding() else Modifier) {
             Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                BookCover(book, Modifier.width(38.dp).height(52.dp), sharedKey = "now-${book.id}")
+                BookCover(book, Modifier.size(48.dp))
                 Column(Modifier.weight(1f)) {
                     Text(book.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AnimatedVisibility(state.playing, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) { NarrationPulse(true, Modifier.size(12.dp, 10.dp)) }
-                        Text(if (state.buffering) "Buffering…" else "${state.part?.title ?: "Ready to listen"} · ${formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    // The play/pause button already says whether it's playing; the line says where.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Time left in the book, in the shelf's words; elapsed time when the length isn't known yet.
+                        val left = (state.bookTime?.remainingMs ?: (state.durationMs - state.positionMs).takeIf { state.durationMs > 0 })?.let { "${timeLeftLabel(it)} left" }
+                        Text(if (state.buffering) "Loading…" else "${state.placeTitle ?: book.author} · ${left ?: formatTime(state.positionMs)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                SkipButton(true, 48.dp, 24.dp) { vm.graph.playback.service?.skip(it) }
+                // One skip fits here: back 10 s, to catch what was just missed.
+                SkipButton(false, 48.dp, 24.dp) { vm.graph.playback.service?.skip(it) }
                 IconButton({ haptics.performHapticFeedback(if (state.playing) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn); vm.graph.playback.service?.toggle() }) {
                     PlayGlyph(state, 24.dp, MaterialTheme.colorScheme.primary, 20.dp)
                 }
             }
-            if (state.hasLength) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(2.dp), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
+            if (state.hasLength) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(3.dp), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.surfaceContainerHighest, gapSize = 0.dp, drawStopIndicator = {})
         }
     }
 }
@@ -107,12 +113,19 @@ fun MiniPlayer(vm: NarrioViewModel, modifier: Modifier = Modifier, aboveSystemBa
 @Composable
 fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Modifier, hingeY: Float? = null, hingeGap: Float = 0f) {
     val state by vm.playback.collectAsStateWithLifecycle()
-    val book = state.book ?: return
+    // Until its audio has loaded, the room shows the book Listen is starting, in its loading state.
+    val starting by vm.startingBook.collectAsStateWithLifecycle()
+    // A start in progress shows the recording being started, even over the one still loaded from before.
+    val book = starting ?: state.book ?: return
+    // While Listen's audio loads, the cover already sits at its playing size, so nothing grows once it starts.
+    val leaning = state.playing || state.buffering || starting != null
     var speedOpen by remember { mutableStateOf(false) }
     var sleepOpen by remember { mutableStateOf(false) }
     var partsOpen by remember { mutableStateOf(false) }
     var bookmarksOpen by remember { mutableStateOf(false) }
     var coloursOpen by remember { mutableStateOf(false) }
+    val findingEbook = remember { mutableStateOf(false) }
+    val bookFormats by remember(book.id) { vm.readingLibrary.value.observeBook(book) }.collectAsStateWithLifecycle(null)
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -134,17 +147,13 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
         if (dense) Row(pullDown, verticalAlignment = Alignment.CenterVertically) {
             if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
             Text("Now playing", Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            ReadAlongEntry(vm, book, dense = true)
-            BookColoursButton { coloursOpen = true }
-            BookmarkNow(vm)
-            PlayerMenu(vm)
-        } else Column(pullDown) {
-            PlayerHeading(vm, compact) { coloursOpen = true }
-            ReadAlongEntry(vm, book, dense = false, modifier = Modifier.padding(start = if (compact) 12.dp else 0.dp, bottom = 4.dp))
-        }
+            PlayerMenu(vm, { coloursOpen = true })
+        } else Column(pullDown) { PlayerHeading(vm, compact) { coloursOpen = true } }
+        ReadAlongEntry(vm, book, finding = findingEbook)
     }
     val controls: @Composable (Boolean) -> Unit = { dense ->
-        Transport(vm, state, { speedOpen = true }, { sleepOpen = true }, { partsOpen = true }, { bookmarksOpen = true }, dense)
+        Transport(vm, state, { speedOpen = true }, { sleepOpen = true }, { partsOpen = true }, { bookmarksOpen = true }, dense,
+            read = { if (bookFormats?.ebook == true) vm.readAlong() else findingEbook.value = true }, ebook = bookFormats?.ebook == true)
     }
     if (hingeY != null) {
         // Tabletop: artwork and words above the hinge, hands-on controls below it.
@@ -152,9 +161,9 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             Column(Modifier.fillMaxWidth().height(hingeY.dp.coerceAtLeast(0.dp)).clipToBounds().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 heading(false)
                 BoxWithConstraints(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
-                    val coverHeight = minOf(maxHeight, maxWidth * .55f * 1.45f).coerceAtLeast(1.dp)
+                    val coverHeight = minOf(maxHeight, maxWidth * .55f).coerceAtLeast(1.dp)
                     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                        ListeningCover(book, state.playing, Modifier.width(coverHeight / 1.45f).height(coverHeight))
+                        ListeningCover(book, leaning, Modifier.size(coverHeight))
                         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                             Text(book.title, style = MaterialTheme.typography.headlineLarge)
                             Spacer(Modifier.height(12.dp))
@@ -179,7 +188,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             scaleX = 1f - drag * .08f; scaleY = scaleX
         }) {
             Column(Modifier.padding(horizontal = if (compact) 16.dp else 24.dp).padding(top = if (dense) 0.dp else 8.dp)) { heading(dense) }
-            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown) { controls(dense) } }
+            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown, { vm.openPlayingBook() }, leaning, vm::changePlayingRecording) { controls(dense) } }
         }
         }
     }
@@ -218,11 +227,6 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
     if (coloursOpen) BookColoursSheet(vm, book) { coloursOpen = false }
 }
 
-@Composable
-private fun BookColoursButton(open: () -> Unit) {
-    IconButton(open, Modifier.testTag("book-colours-open")) { Icon(Icons.Rounded.Palette, "Colours for this book") }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -> Unit) {
@@ -231,7 +235,7 @@ private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -
     val dark = appearance.mode.isDark(isSystemInDarkTheme())
     ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
-            Text("Colours for this book", style = MaterialTheme.typography.headlineSmall)
+            Text("Colors for this book", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(8.dp))
             Text("Used in the Listening room and the reader for ${book.title}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
@@ -246,16 +250,17 @@ private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -
  * neither fits (small windows or very large text).
  */
 @Composable
-private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean, pullDown: Modifier, controls: @Composable () -> Unit) {
+private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean, pullDown: Modifier, openBook: () -> Unit, leaning: Boolean,
+                       changeRecording: () -> Unit, controls: @Composable () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = maxWidth; val height = maxHeight
         val wide = width >= 560.dp && width > height * 1.15f
         when {
             wide -> Row(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(32.dp), verticalAlignment = Alignment.CenterVertically) {
-                val coverHeight = minOf(height - 16.dp, width * .4f * 1.45f).coerceAtLeast(120.dp)
-                ListeningCover(book, state.playing, pullDown.width(coverHeight / 1.45f).height(coverHeight))
+                val coverHeight = minOf(height - 16.dp, width * .4f).coerceAtLeast(120.dp)
+                ListeningCover(book, leaning, pullDown.size(coverHeight))
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
-                    TitleBlock(book, 2)
+                    TitleBlock(book, 2, openBook, changeRecording)
                     Spacer(Modifier.height(20.dp))
                     controls()
                 }
@@ -263,8 +268,8 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
             height < 480.dp -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp)) {
                 // A short, narrow pane (a landscape phone's split view): the book becomes a byline beside its cover.
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ListeningCover(book, state.playing, pullDown.width(64.dp).height(93.dp))
-                    TitleBlock(book, 1)
+                    ListeningCover(book, leaning, pullDown.size(72.dp))
+                    TitleBlock(book, 1, openBook, changeRecording)
                 }
                 Spacer(Modifier.height(12.dp))
                 controls()
@@ -274,15 +279,16 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 // Only when even a small cover cannot fit (short windows, very large text) does the stage scroll.
                 val density = LocalDensity.current
                 var controlsHeight by remember { mutableStateOf(430.dp) }
-                val cap = minOf(width * .82f * 1.45f, 470.dp)
+                // Audiobook art is square, and so is the room's cover.
+                val cap = minOf(width - 48.dp, 420.dp)
                 val space = height - controlsHeight - 40.dp
                 val coverHeight = minOf(space, cap).coerceAtLeast(if (compact) 150.dp else 180.dp)
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp)) {
                     Box(Modifier.fillMaxWidth().then(pullDown).padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
-                        ListeningCover(book, state.playing, Modifier.width(coverHeight / 1.45f).height(coverHeight))
+                        ListeningCover(book, leaning, Modifier.size(coverHeight))
                     }
                     Column(Modifier.onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }) {
-                        TitleBlock(book, 2)
+                        TitleBlock(book, 2, openBook, changeRecording)
                         Spacer(Modifier.height(16.dp))
                         controls()
                         Spacer(Modifier.height(16.dp))
@@ -294,11 +300,22 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
 }
 
 @Composable
-private fun TitleBlock(book: Audiobook, maxLines: Int) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(book.title, style = MaterialTheme.typography.headlineMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+private fun TitleBlock(book: Audiobook, maxLines: Int, open: (() -> Unit)? = null, change: (() -> Unit)? = null) {
+    // The title leads to the book's page, as a row does on the shelf.
+    Column(Modifier.fillMaxWidth()
+        .then(if (open != null) Modifier.clickable(onClickLabel = "Open the book's page", onClick = open).testTag("player-book-page") else Modifier)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(book.title, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.headlineMedium, maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+            if (open != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.padding(start = 4.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        // The narrator line offers another reading right here, the same chooser as the book page's Change.
+        if (change == null) Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        else Row(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = "Choose another reading", onClick = change).testTag("player-change-recording"),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(narrationLabel(book), Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(" · Change", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        }
     }
 }
 
@@ -310,7 +327,7 @@ private fun ListeningCover(book: Audiobook, playing: Boolean, modifier: Modifier
     BookCover(book, modifier.graphicsLayer {
         scaleX = scale; scaleY = scale
         shadowElevation = lift.toPx(); shape = RoundedCornerShape(8.dp)
-    }, large = true, sharedKey = "now-${book.id}")
+    }, large = true)
 }
 
 @Composable
@@ -319,70 +336,73 @@ private fun PlayerHeading(vm: NarrioViewModel, compact: Boolean, openColours: ()
         if (compact) IconButton({ vm.playerOpen.value = false }) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse player") }
         Text("Now playing", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.weight(1f))
-        BookColoursButton(openColours)
-        BookmarkNow(vm)
-        PlayerMenu(vm)
+        // Bookmarks live in one place, the tool tray, whose sheet leads with Add bookmark.
+        PlayerMenu(vm, openColours)
     }
 }
 
 /**
- * Close player stops listening and clears Now playing; the shelf keeps the book and its place. It sits behind a menu
- * so a sleepy tap meant for Bookmark can't end the session (the mini-player keeps it as a TalkBack action).
+ * The room's less frequent actions: this book's colours and Close player. Close
+ * stops listening and clears Now playing; the shelf keeps the book and its place. It sits behind the menu so a
+ * sleepy tap can't end the session (the mini-player keeps it as a TalkBack action).
  */
 @Composable
-private fun PlayerMenu(vm: NarrioViewModel) {
+private fun PlayerMenu(vm: NarrioViewModel, openColours: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton({ open = true }, Modifier.testTag("player-menu")) { Icon(Icons.Rounded.MoreVert, "More options") }
         DropdownMenu(open, { open = false }, containerColor = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            DropdownMenuItem({ Text("Colors for this book") }, { open = false; openColours() },
+                leadingIcon = { Icon(Icons.Rounded.Palette, null) }, modifier = Modifier.testTag("book-colours-open"))
             DropdownMenuItem({ Text("Close player") }, { open = false; haptics.performHapticFeedback(HapticFeedbackType.Reject); vm.dismissPlayback() },
                 leadingIcon = { Icon(Icons.Rounded.Close, null) }, modifier = Modifier.testTag("close-player"))
         }
     }
 }
 
-/** Bookmarking gives a small pop and a confirming tick: the moment has been kept. */
-@Composable
-private fun BookmarkNow(vm: NarrioViewModel) {
-    val haptics = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
-    val pop = remember { Animatable(1f) }
-    IconButton({
-        haptics.performHapticFeedback(HapticFeedbackType.Confirm); vm.bookmark()
-        scope.launch { pop.snapTo(1.35f); pop.animateTo(1f, spring(dampingRatio = .4f, stiffness = Spring.StiffnessMedium)) }
-    }) { Icon(Icons.Rounded.BookmarkAdd, "Bookmark this moment", Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value }, tint = MaterialTheme.colorScheme.primary) }
-}
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> Unit, sleep: () -> Unit, parts: () -> Unit, bookmarks: () -> Unit, dense: Boolean = false) {
+private fun Transport(vm: NarrioViewModel, state: ListeningState, speed: () -> Unit, sleep: () -> Unit, parts: () -> Unit, bookmarks: () -> Unit, dense: Boolean = false,
+                      read: (() -> Unit)? = null, ebook: Boolean = false) {
     val sync by vm.readingSync.collectAsStateWithLifecycle()
     val confidence = sync.confidence.takeIf { sync.bookId == state.book?.id && sync.sourceId == state.source?.id } ?: MappingConfidence.UNMAPPED
     var scrub by remember { mutableStateOf<Long?>(null) }
     Column(Modifier.fillMaxWidth()) {
-        ChapterTitleRow(vm, state, dense, if (dense) null else "Part ${state.partIndex + 1} of ${state.source?.parts?.size ?: 1} · ${deliveryLabel(state.source)}")
+        // Parts are counted only when there are several; where it plays from matters only when it's the phone.
+        val partCount = state.source?.parts?.size ?: 1
+        val subtitle = listOfNotNull("Part ${state.partIndex + 1} of $partCount".takeIf { partCount > 1 }, deliveryLabel(state.source).takeIf { it == "On this phone" })
+            .joinToString(" · ").takeIf { it.isNotEmpty() && !dense }
+        ChapterTitleRow(vm, state, dense, subtitle)
         SeekSlider(state.positionMs, state.durationMs, { vm.graph.playback.service?.seek(it) }, { scrub = it })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             EstimatedPlace(formatTime(scrub ?: state.positionMs), if (scrub != null) MappingConfidence.EXACT else confidence, Modifier.testTag("mapped-audio-position"), color = if (scrub != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(if (state.durationMs > 0) "−${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))}" else "Loading length", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (state.durationMs > 0) "${formatTime((state.durationMs - (scrub ?: state.positionMs)).coerceAtLeast(0))} left" else "Loading…", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TimeLeftLine(state, Modifier.padding(top = if (dense) 0.dp else 4.dp), dense)
         Spacer(Modifier.height(if (dense) 4.dp else 16.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            SkipButton(false, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
-            PlayButton(state, if (dense) 64.dp else 82.dp, if (dense) 34.dp else 42.dp) { vm.graph.playback.service?.toggle() }
-            SkipButton(true, 56.dp, 32.dp) { vm.graph.playback.service?.skip(it) }
+            // While Listen's audio is still being found, the room is loading, not paused: the button says so from its first frame,
+            // and the skips rest dimmed until there's audio to move through.
+            val starting by vm.startingBook.collectAsStateWithLifecycle()
+            val loaded = starting == null && state.durationMs > 0
+            SkipButton(false, 56.dp, 32.dp, enabled = loaded) { vm.graph.playback.service?.skip(it) }
+            PlayButton(if (starting != null) state.copy(buffering = true) else state, if (dense) 64.dp else 82.dp, if (dense) 34.dp else 42.dp) { vm.graph.playback.service?.toggle() }
+            SkipButton(true, 56.dp, 32.dp, enabled = loaded) { vm.graph.playback.service?.skip(it) }
         }
         Spacer(Modifier.height(if (dense) 4.dp else 20.dp))
         // A quiet tool tray: four equal slots that never wrap into an orphaned row.
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent(speedLabel(state.speed), transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { FitLabel(it) } }
+            ToolSlot(Icons.Rounded.Speed, speed) { AnimatedContent("${speedLabel(state.speed)} speed", transitionSpec = { (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut()) }, label = "speed") { FitLabel(it) } }
             ToolSlot(Icons.Rounded.Bedtime, sleep, active = state.sleep.active) {
                 FitLabel(sleepLabel(state))
             }
-            ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel("Parts") }
+            // One file without chapters has nothing to list.
+            if (state.chapters.isNotEmpty() || (state.source?.parts?.size ?: 1) > 1)
+                ToolSlot(Icons.AutoMirrored.Rounded.FormatListBulleted, parts) { FitLabel(if (state.chapters.isNotEmpty()) "Chapters" else "Parts") }
             ToolSlot(Icons.Rounded.Bookmarks, bookmarks) { FitLabel("Bookmarks") }
+            // Reading along starts here too, or finding the ebook to read along with.
+            if (read != null) ToolSlot(Icons.AutoMirrored.Rounded.MenuBook, read, modifier = Modifier.testTag("read-along")) { FitLabel(if (ebook) "Read along" else "Find ebook") }
         }
         AnimatedVisibility(state.error != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
             Column { Spacer(Modifier.height(16.dp)); RecoveryState("Playback stopped", state.error.orEmpty()) { vm.graph.playback.service?.retry() } }
@@ -422,7 +442,8 @@ private fun PlayGlyph(state: ListeningState, iconSize: Dp, tint: Color, spinner:
         (scaleIn(Motion.responsive(), initialScale = .4f) + fadeIn(tween(Motion.SHORT))).togetherWith(scaleOut(tween(Motion.SHORT), targetScale = .4f) + fadeOut(tween(Motion.SHORT)))
     }, contentAlignment = Alignment.Center, label = "play glyph") { shown ->
         when (shown) {
-            0 -> CircularProgressIndicator(Modifier.size(spinner), color = tint, strokeWidth = 3.dp)
+            // Loading is one clear, full-size spinner; the pause glyph appears only once audio plays.
+            0 -> CircularProgressIndicator(Modifier.size(iconSize).semantics { contentDescription = "Loading" }, color = tint, strokeWidth = 3.5.dp)
             1 -> Icon(Icons.Rounded.Pause, "Pause", Modifier.size(iconSize), tint = tint)
             else -> Icon(Icons.Rounded.PlayArrow, "Play", Modifier.size(iconSize), tint = tint)
         }
@@ -431,24 +452,25 @@ private fun PlayGlyph(state: ListeningState, iconSize: Dp, tint: Color, spinner:
 
 /** Back 10 s, ahead 30 s. Skips give a small turn in their direction, so the jump feels like a physical nudge. */
 @Composable
-internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, skip: (deltaMs: Long) -> Unit) {
+internal fun SkipButton(forward: Boolean, size: Dp, iconSize: Dp, enabled: Boolean = true, skip: (deltaMs: Long) -> Unit) {
     val turn = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     IconButton({
         haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); skip(if (forward) SKIP_FORWARD_MS else -SKIP_BACK_MS)
         scope.launch { turn.animateTo(if (forward) 1f else -1f, tween(90, easing = Motion.EmphasizedDecelerate)); turn.animateTo(0f, spring(dampingRatio = .45f, stiffness = Spring.StiffnessLow)) }
-    }, Modifier.size(size)) {
+    }, Modifier.size(size), enabled = enabled) {
         Icon(if (forward) Icons.Rounded.Forward30 else Icons.Rounded.Replay10, if (forward) "Skip forward 30 seconds" else "Rewind 10 seconds",
             Modifier.size(iconSize).graphicsLayer { rotationZ = turn.value * 30f })
     }
 }
 
 @Composable
-internal fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVector, open: () -> Unit, active: Boolean = false, label: @Composable () -> Unit) {
+internal fun RowScope.ToolSlot(icon: androidx.compose.ui.graphics.vector.ImageVector, open: () -> Unit, active: Boolean = false, modifier: Modifier = Modifier,
+                                label: @Composable () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val tint by animateColorAsState(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, label = "tool")
-    Column(Modifier.weight(1f).fillMaxHeight().heightIn(min = 56.dp).pressScale(interaction, .94f).clip(RoundedCornerShape(14.dp))
+    Column(modifier.weight(1f).fillMaxHeight().heightIn(min = 56.dp).pressScale(interaction, .94f).clip(RoundedCornerShape(14.dp))
         .clickable(interaction, LocalIndication.current, role = Role.Button, onClick = open).padding(vertical = 8.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically)) {
         Icon(icon, null, Modifier.size(22.dp), tint = tint)
@@ -476,8 +498,20 @@ internal fun OptionRow(label: String, selected: Boolean, choose: () -> Unit) {
 }
 
 internal fun speedLabel(speed: Float) = "${speed.toString().removeSuffix(".0")}×"
+/**
+ * A short choice as a bottom sheet, like the app's other choosers. Choosing applies and closes, so there's no button to
+ * confirm; Back, a swipe, or a tap outside leaves it as it is. [extra] sits beside the title.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ChoiceDialog(title: String, dismiss: () -> Unit, extra: (@Composable () -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
-    AlertDialog(onDismissRequest = dismiss, title = { Text(title, style = MaterialTheme.typography.headlineMedium) }, text = { Column(Modifier.verticalScroll(rememberScrollState()), content = content) },
-        confirmButton = { TextButton(dismiss) { Text("Done") } }, dismissButton = extra)
+    ModalBottomSheet(dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 24.dp, end = 24.dp, bottom = 28.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, Modifier.weight(1f).semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
+                extra?.invoke()
+            }
+            content()
+        }
+    }
 }

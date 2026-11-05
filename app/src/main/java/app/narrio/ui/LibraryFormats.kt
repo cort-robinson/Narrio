@@ -32,7 +32,7 @@ data class BookFormats(
 
 /** Shelf filters. Audiobooks and Ebooks include books that have both; Both narrows to the pairs. */
 enum class ShelfFilter(val label: String) {
-    ALL("All"), AUDIOBOOKS("Audiobooks"), EBOOKS("Ebooks"), BOTH("Both");
+    ALL("All"), AUDIOBOOKS("Audiobooks"), EBOOKS("Ebooks"), BOTH("Audio + ebook");
 
     fun matches(formats: BookFormats): Boolean = when (this) {
         ALL -> true
@@ -43,7 +43,9 @@ enum class ShelfFilter(val label: String) {
 }
 
 /** A place in one mode, ready to show: "Ch 12 · 43%" or "Part 3 of 12 · 43%". [fraction] is null when unknown. */
-data class PlaceSummary(val mode: PositionOrigin, val label: String, val fraction: Float?, val confidence: MappingConfidence = MappingConfidence.EXACT)
+data class PlaceSummary(val mode: PositionOrigin, val label: String, val fraction: Float?, val confidence: MappingConfidence = MappingConfidence.EXACT,
+                        /** Listening time left in the whole book, when every part's length is known. */
+                        val remainingMs: Long? = null)
 
 /** Where the shared place stands in the mode that last moved it. */
 fun placeSummary(formats: BookFormats): PlaceSummary? {
@@ -68,33 +70,35 @@ fun counterpartPlace(formats: BookFormats): PlaceSummary? {
 
 fun readingPlace(cursor: ContentCursor, chapter: Int?): PlaceSummary {
     val fraction = cursor.progression.coerceIn(0.0, 1.0).toFloat()
-    return PlaceSummary(PositionOrigin.READING, listOfNotNull(chapter?.let { "Ch $it" }, "${percent(fraction)}%").joinToString(" · "), fraction)
+    return PlaceSummary(PositionOrigin.READING, listOfNotNull(chapter?.let { "Ch $it" }, percent(fraction)).joinToString(" · "), fraction)
 }
 
 /** Whole-book progress only when every part reports its length; otherwise the time into the part, never a guess. */
 fun listeningPlace(cursor: AudioCursor, source: AudioSource?): PlaceSummary {
     val parts = source?.parts.orEmpty()
     val index = resumeIndex(parts, cursor.partId)
-    val fraction = bookTime(parts, index, cursor.positionMs)?.fraction
+    val known = bookTime(parts, index, cursor.positionMs)
+    val fraction = known?.fraction
     val time = formatTime(cursor.positionMs)
     val label = when {
-        parts.size > 1 && fraction != null -> "Part ${index + 1} of ${parts.size} · ${percent(fraction)}%"
+        parts.size > 1 && fraction != null -> "Part ${index + 1} of ${parts.size} · ${percent(fraction)}"
         parts.size > 1 -> "Part ${index + 1} of ${parts.size} · $time in"
-        fraction != null -> "$time · ${percent(fraction)}%"
+        fraction != null -> "$time · ${percent(fraction)}"
         else -> "$time in"
     }
-    return PlaceSummary(PositionOrigin.LISTENING, label, fraction)
+    return PlaceSummary(PositionOrigin.LISTENING, label, fraction, remainingMs = known?.remainingMs)
 }
 
-/** A started book never reads as 0%, and an unfinished one never as 100%. */
-private fun percent(fraction: Float): Int = when {
-    fraction <= 0f -> 0
-    fraction >= 1f -> 100
-    else -> floor(fraction * 100).toInt().coerceIn(1, 99)
+/** A started book reads "<1%" rather than 0% or an overstated 1%, and an unfinished one never as 100%. */
+private fun percent(fraction: Float): String = when {
+    fraction <= 0f -> "0%"
+    fraction >= 1f -> "100%"
+    fraction < .01f -> "<1%"
+    else -> "${floor(fraction * 100).toInt().coerceIn(1, 99)}%"
 }
 
 /** Screen readers hear "Chapter 12" rather than "C H 12". */
-fun spokenPlace(label: String): String = label.replace(Regex("\\bCh (\\d)"), "Chapter $1").replace(" · ", ", ")
+fun spokenPlace(label: String): String = label.replace(Regex("\\bCh (\\d)"), "Chapter $1").replace("<1%", "less than 1%").replace(" · ", ", ")
 
 /** How well the active edition follows the recording, in the listener's terms. Null when there's no pair to judge. */
 data class PairingCopy(val title: String, val detail: String)
@@ -114,5 +118,5 @@ fun emptyFilterCopy(filter: ShelfFilter): Pair<String, String> = when (filter) {
     ShelfFilter.ALL -> "Nothing saved yet" to "Save a book or start listening. Your books, progress, and bookmarks stay here on this device."
     ShelfFilter.AUDIOBOOKS -> "No audiobooks here yet" to "Books you listen to, or save from a recording, appear here."
     ShelfFilter.EBOOKS -> "No ebooks here yet" to "Add an EPUB or text file from this phone, or use Find ebook on a book's page."
-    ShelfFilter.BOTH -> "No books with both formats yet" to "Find an ebook for an audiobook, or a recording for an ebook, to read and listen from one place."
+    ShelfFilter.BOTH -> "No books with audio and an ebook yet" to "Find an ebook for an audiobook, or a recording for an ebook, to read and listen from one place."
 }
