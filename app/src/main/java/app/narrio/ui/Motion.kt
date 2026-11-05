@@ -65,7 +65,7 @@ object Motion {
      */
     fun rise(): ContentTransform =
         // Opaque as it rises too, so the room never lies see-through over the page it covers.
-        (slideInVertically(tween(MEDIUM, easing = EmphasizedDecelerate)) { it } + fadeIn(tween(40)))
+        (slideInVertically(tween(380, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(40)))
             .togetherWith(fadeOut(tween(MEDIUM, delayMillis = SHORT)))
             .apply { targetContentZIndex = 1f }
 

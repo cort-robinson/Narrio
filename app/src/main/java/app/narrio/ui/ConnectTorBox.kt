@@ -82,8 +82,8 @@ class TorBoxConnector(private val scope: CoroutineScope, private val save: suspe
 /** The one line Discover uses, on its hint and under the list, about what plays free and what needs TorBox. */
 internal const val FREE_AND_TORBOX = "Older books often play free. Newer ones usually need TorBox, a paid service."
 /** Once Discover has marked the books that play free, the hint points at the marks instead of promising the list. */
-internal const val ALL_FREE_AND_TORBOX = "All free to listen. Newer books may need TorBox."
-internal const val FREE_MARKED_AND_TORBOX = "Free readings are marked. Others may need TorBox."
+internal const val ALL_FREE_AND_TORBOX = "All free to listen. Newer books need paid TorBox."
+internal const val FREE_MARKED_AND_TORBOX = "Free recordings are marked. Others need paid TorBox."
 
 internal const val TORBOX_PITCH = "A paid service that finds and streams many more audiobooks. Books marked “Free to listen” play without it."
 /** Opened from a book's page, the sheet says what connecting does for that book. */

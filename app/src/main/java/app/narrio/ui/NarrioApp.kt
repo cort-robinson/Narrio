@@ -241,13 +241,11 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             // The bottom bar draws above the screens, so when the Listening room or the reader rises it fades away at
             // once rather than sliding over them.
             // Coming back from the reader, it waits for the reader to drop most of the way, so it never draws over it.
-            // The Listening room draws above it while it moves; the mini-player arrives as the room reaches the dock,
-            // so the two players are never seen at once.
+            // The Listening room draws above it while it moves, uncovering the mini-player and tabs as it drops.
             val fromRoom = transition.currentState == Listening
             val barDelay = if (fromRoom) 200 else Motion.MEDIUM * 2 / 3
-            // From the room it also rises a little into place, meeting the room as it drops.
-            val barEnter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay)) +
-                (if (fromRoom) slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, delayMillis = 120, easing = Motion.EmphasizedDecelerate)) { it / 2 } else EnterTransition.None)
+            // From the room they're simply there, underneath it, so the bottom of the page is never empty as the room drops.
+            val barEnter = if (fromRoom) EnterTransition.None else fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay))
             transition.AnimatedVisibility({ it == Home || it is Details },
                 enter = barEnter,
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {

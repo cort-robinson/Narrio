@@ -363,7 +363,7 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Text(ebookChoiceTitle(possible, search.book), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(possible.source, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 // Like a confirmed match's reason line: why this text should follow the narration.
-                if (trusted) Text("Same text as this reading", style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
+                if (trusted) Text("Same text as this recording", style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 ebookChoiceNotes(possible, narrated).filter { it.kind == ChoiceNoteKind.CAUTION }.forEach {
                     Text(it.text, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
@@ -508,7 +508,7 @@ fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox
     if (!formats.audio && !formats.ebook) {
         // The status and its action read as one line in the same small type; the action keeps a full-size touch target.
         FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
-            Text(if (needsTorBox) "No free recording" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(if (needsTorBox) "No free recording ·" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (needsTorBox && connect != null) Box(Modifier.minimumInteractiveComponentSize().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = connect)
                 .testTag("shelf-connect-torbox"), contentAlignment = Alignment.CenterStart) {
                 Text("Connect TorBox", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)

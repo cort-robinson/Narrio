@@ -114,7 +114,7 @@ fun RecordingChooser(
                 item(key = "intro") {
                     Text("Choose a recording", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.semantics { heading() })
                     Spacer(Modifier.height(6.dp))
-                    Text(listOfNotNull("Different readings of ${book.title}.", shared).joinToString(" "),
+                    Text(listOfNotNull("Different recordings of ${book.title}.", shared).joinToString(" "),
                         style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // A better match than the one Listen plays waits here, never moving the page under the listener.
@@ -138,7 +138,8 @@ fun RecordingChooser(
                 }
                 item(key = "progress") { SearchProgress(streamed, tally, current != null, hidden.takeIf { it > 1 } ?: 0, showAll, { showAll = !showAll }) }
                 if (picked != null) item(key = "actions") {
-                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close)
+                    ChooserActions(vm, book, picked, current, entry, preparingRecording, downloads, connected, busy, starting, preparation, format, delivery, startPositionChoice, close,
+                        changed = automatic != null && !sameRecording(picked, automatic))
                 }
                 item(key = "advanced") {
                     SearchOtherSourcesRow("Search other sources, or choose a file from your phone", expanded = null, open = { advanced = true }, title = "Find or add a recording",
@@ -249,7 +250,7 @@ private fun SearchProgress(streamed: StreamedSourceSearch?, tally: SearchTally?,
 private fun ChooserActions(
     vm: NarrioViewModel, book: Audiobook, picked: Audiobook, current: CurrentRecording?, entry: ShelfEntry?, preparingRecording: Audiobook?,
     downloads: List<OfflineBook>, connected: Boolean, busy: Boolean, starting: Boolean, preparation: Preparation?, format: String?, delivery: String?,
-    startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit,
+    startPositionChoice: (@Composable (RecordingSwitch) -> Unit)?, close: (() -> Unit) -> Unit, changed: Boolean = false,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val mine = current != null && sameRecording(picked, current.recording)
@@ -280,7 +281,7 @@ private fun ChooserActions(
             preparingThis || mine && current.preparing && current.source == null && preparation?.ready != true -> Button({}, button, enabled = false) { WorkingLabel("Getting ready in TorBox…") }
             !onPhone && needsTorBox(picked) && !connected -> Button({ close { vm.requestTorBoxConnect() } }, button) { SlotLabel(Icons.Rounded.Link, "Connect TorBox to listen") }
             mine && ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, if (override == null) resumeLabel(current) else "Listen in $override") }
-            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, recordingNarrator(picked).takeIf(String::isNotBlank)?.let { "Listen to $it's reading" } ?: "Listen to this recording") }
+            ready -> Button({ close { vm.listenTo(picked, override, delivery) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.PlayArrow, recordingNarrator(picked).takeIf(String::isNotBlank)?.let { "Listen to $it's recording" } ?: "Listen to this recording") }
             else -> {
                 Button({ close { vm.getReady(picked, override ?: format) } }, button, enabled = !busy) { SlotLabel(Icons.Rounded.CloudDownload, getReadyLabel) }
                 Text("TorBox can take from minutes to hours to get it ready. Nothing downloads to your phone, and its progress shows on the book's page.",
@@ -296,7 +297,9 @@ private fun ChooserActions(
             }
         }
         // A pick already becomes the book page's recording, so it can be downloaded or started later from there.
-        if (current == null && picked != null && ready && !starting) TextButton({ close {} }, Modifier.fillMaxWidth().testTag("chooser-keep")) { Text("Choose without listening") }
+        // Offered once the listener has picked another reading than the one already shown on the page.
+        if (current == null && changed && ready && !starting)
+            TextButton({ close {} }, Modifier.fillMaxWidth().testTag("chooser-keep")) { Text("Use this recording") }
         // Downloading for offline lives on the book's page, under Listen; the chooser only picks the recording.
     }
 }

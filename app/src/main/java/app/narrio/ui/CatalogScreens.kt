@@ -126,9 +126,9 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 }
             }
             if (query.isNotBlank()) item(key = "results-title") {
-                // Once free readings are marked, the count says so; what an unmarked book needs is told on its page.
+                // Once free recordings are marked, the count says so; what an unmarked book needs is told on its page.
                 val count = "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}"
-                AnimatedContent(if (catalog.loading) "Searching…" else if (!connected && catalog.free.isNotEmpty()) "$count · free readings are marked" else count,
+                AnimatedContent(if (catalog.loading) "Searching…" else if (!connected && catalog.free.isNotEmpty()) "$count · free recordings are marked" else count,
                     transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
                     Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -251,8 +251,8 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 Text("My shelf", Modifier.weight(1f), style = MaterialTheme.typography.displaySmall)
                 // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
                 // Its one action shows as its own icon, so it never reads as another row's menu.
-                if (shelf.isNotEmpty()) IconButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
-                    Icon(Icons.Rounded.UploadFile, "Add an ebook from your phone")
+                if (shelf.isNotEmpty()) TextButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
+                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add ebook")
                 }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))

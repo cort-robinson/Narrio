@@ -154,7 +154,7 @@ class LibraryFormatsExperienceTest {
         compose.onNodeWithText("Checking 2 sources").assertIsDisplayed()
         capture("find-ebook-searching-night")
         compose.waitUntil(10_000) { shown("Free ebook · Project Gutenberg") }
-        compose.onNodeWithText("Same text as this reading").assertIsDisplayed()
+        compose.onNodeWithText("Same text as this recording").assertIsDisplayed()
         // The simple layer keeps each source's own section and status in Advanced; the file choice stays visible.
         compose.onNodeWithTag("ebook-sources-summary").assertDoesNotExist()
         compose.onNodeWithTag("ebook-sheet").performScrollToNode(hasText("Add an ebook from your phone"))
