@@ -268,7 +268,7 @@ fun EbookSheet(book: Audiobook, formats: BookFormats, search: EbookSearchState, 
             }
             item(key = "advanced") {
                 // With no sure match, what's wanted may be a different ebook, not another edition of this one.
-                SearchOtherSourcesRow(if (pinned.shown == null) "Find a different ebook" else "Find another edition", expanded = advanced, open = { advanced = !advanced },
+                SearchOtherSourcesRow(if (pinned.shown == null) "Find a different ebook" else "Look on other sites", expanded = advanced, open = { advanced = !advanced },
                     modifier = Modifier.testTag("ebook-advanced"))
             }
             if (advanced) {
@@ -337,7 +337,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                 Text(when { shown == null && searching -> "Finding an ebook…"; shown == null && possible != null && !trusted -> "Possible match"; else -> "Suggested" }, style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
                 // Once there's a best match, the remaining sources finish quietly.
-                AnimatedVisibility(searching && shown == null, enter = fadeIn(), exit = fadeOut()) {
+                // It leaves at once when a match arrives, so no dimmed half-faded label lingers on the card.
+                AnimatedVisibility(searching && shown == null, enter = fadeIn(), exit = ExitTransition.None) {
                     Text("Checking ${tally.active} ${plural(tally.active, "source")}", style = MaterialTheme.typography.labelMedium, color = muted)
                 }
             }

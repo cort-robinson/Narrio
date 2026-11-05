@@ -54,8 +54,9 @@ object Motion {
         val direction = if (forward) 1 else -1
         // Long enough, and evenly paced enough, to see the page leave and the next arrive, so neither direction reads as a cut.
         // Standard easing spreads the travel across the whole move instead of spending it in the first frames.
-        return (slideInHorizontally(tween(400, easing = FastOutSlowInEasing)) { direction * it / 4 } + fadeIn(tween(250, delayMillis = 80, easing = LinearOutSlowInEasing)))
-            .togetherWith(slideOutHorizontally(tween(400, easing = FastOutSlowInEasing)) { -direction * it / 4 } + fadeOut(tween(160, easing = FastOutLinearInEasing)))
+        // The old page is gone before the new one fades up, so the two never show through each other.
+        return (slideInHorizontally(tween(400, easing = FastOutSlowInEasing)) { direction * it / 4 } + fadeIn(tween(260, delayMillis = 120, easing = LinearOutSlowInEasing)))
+            .togetherWith(slideOutHorizontally(tween(400, easing = FastOutSlowInEasing)) { -direction * it / 4 } + fadeOut(tween(120, easing = FastOutLinearInEasing)))
     }
 
     /**

@@ -368,6 +368,11 @@ class NarrioViewModel @JvmOverloads constructor(
                 // Without TorBox, browsing leads with the books that play free; a slow check leaves the chart's order.
                 val free = if (value.isBlank() && !connected.value) freeReadingsOf(books) else emptySet()
                 catalog.value = CatalogState(books.sortedByDescending { it.id in free }, false, query = value, free = free)
+                // A typed search keeps its order, and marks the free readings once they're known, as browsing does.
+                if (value.isNotBlank() && !connected.value) {
+                    val found = freeReadingsOf(books)
+                    if (found.isNotEmpty() && catalog.value.query == value && catalog.value.books == books) catalog.value = catalog.value.copy(free = found)
+                }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { catalog.value = CatalogState(emptyList(), false, friendly(error)) }
         }
@@ -572,6 +577,10 @@ class NarrioViewModel @JvmOverloads constructor(
      * one right away; one with a recording keeps it, and looks for others when the recording chooser opens.
      */
     /** From the Listening room to the playing book's page, as the shelf opens it. */
+    /** A book whose page should open its recording chooser on arrival, as when the narrator line in the player is tapped. */
+    val chooserRequest = MutableStateFlow<String?>(null)
+    fun changePlayingRecording() { playback.value.book?.let { chooserRequest.value = it.id; openPlayingBook() } }
+
     fun openPlayingBook() = viewModelScope.launch {
         val book = playback.value.book ?: return@launch
         // Its page may already be under the player; then the player simply settles back onto it.

@@ -224,7 +224,10 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                 }
                 // A book's page keeps the tabs (and the mini-player above them), so going back never moves either.
                 is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.padding(bottom = barHeight), scrollFor(it.id)) }
-                Listening -> PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
+                // The room's surface reaches the top edge, so as it rises nothing of the page shows above it.
+                Listening -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
+                }
                 is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
             }
         }
@@ -235,9 +238,9 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             // The bottom bar draws above the screens, so when the Listening room or the reader rises it fades away at
             // once rather than sliding over them.
             // Coming back from the reader, it waits for the reader to drop most of the way, so it never draws over it.
-            // The Listening room draws above it while it moves, so there the mini-player is already in place underneath,
-            // uncovered as the room slides down into it.
-            val barDelay = if (transition.currentState == Listening) 0 else Motion.MEDIUM * 2 / 3
+            // The Listening room draws above it while it moves; the mini-player arrives as the room reaches the dock,
+            // so the two players are never seen at once.
+            val barDelay = if (transition.currentState == Listening) 200 else Motion.MEDIUM * 2 / 3
             transition.AnimatedVisibility({ it == Home || it is Details },
                 enter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay)),
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
@@ -255,7 +258,15 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             transition.AnimatedVisibility({ it == Home || it is Details },
                 enter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay)),
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                // Without a mini-player above it, the tabs carry the same short fade, so text scrolling under them trails off.
+                val page = MaterialTheme.colorScheme.background
+                NavigationBar(Modifier.drawBehind {
+                    if (!hasPlayback) {
+                        val fade = 20.dp.toPx()
+                        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(page.copy(alpha = 0f), page), startY = -fade, endY = 0f),
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, -fade), size = androidx.compose.ui.geometry.Size(size.width, fade))
+                    }
+                }, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                     navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
                 }
             }

@@ -146,6 +146,9 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
     LaunchedEffect(chooserOpening) { chooserOpening?.let { view -> withFrameNanos { }; withFrameNanos { }; chooser = view } }
     LaunchedEffect(chooser) { if (chooser != null) { withFrameNanos { }; chooserOpening = null } }
     val openChooser: (ChooserView) -> Unit = { view -> interacted = true; chooserOpening = view }
+    // Asked for from the player's narrator line: the page arrives with its readings open.
+    val chooserRequest by vm.chooserRequest.collectAsStateWithLifecycle()
+    LaunchedEffect(chooserRequest) { if (chooserRequest == book.id) { vm.chooserRequest.value = null; openChooser(ChooserView.LIST) } }
     // The offline row stands for the recording Listen plays, once it can play.
     val offlineTarget = current?.recording ?: best?.takeIf { playableNow(it, onPhone(it)) }
     val offlineShown = offlineTarget?.let { offlineDownload(it, current, downloadsHere) }
@@ -219,7 +222,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             val listen: @Composable () -> Unit = {
                 ListenSlot(book, current, best, streamed, tally, connected, busy, starting, preparation, leading = !readingFirst, awaitingAudioSearch, onPhone,
                     announcement = streamed?.takeIf { current == null && tally != null }?.let { searchAnnouncement(it, pinned.shown, tally!!, book) },
-                    finished = finished, playingHere = playback.book?.id == book.id && (playback.playing || playback.buffering), actions = ListenActions(
+                    finished = finished, playingHere = playback.book?.id == book.id && (playback.playing || playback.buffering) && startingBook == null, actions = ListenActions(
                         listen = { vm.listenTo(it) }, getReady = { vm.getReady(it) }, change = { openChooser(ChooserView.LIST) },
                         review = { openChooser(ChooserView.ALL) }, findAudiobook = { vm.findSources(book.catalogIdentity(), force = true) },
                         searchAgain = { vm.findSources(book.catalogIdentity(), force = true) }, connectTorBox = vm::requestTorBoxConnect, sourceSettings = vm::openSourceSettings,
@@ -244,7 +247,7 @@ fun DetailPane(vm: NarrioViewModel, book: Audiobook, compact: Boolean, modifier:
             }
             // While a free recording is still being found, the Download row's place is held too, so the page settles once.
             // A free recording found but not yet described still gets its offline row, so its place stays held too.
-            if (current == null && (best == null && streamed?.complete != true || best?.provider == "archive" && offlineTarget == null)) Spacer(Modifier.height(72.dp))
+            if (current == null && (best == null && streamed?.complete != true || best?.provider == "archive" && offlineTarget == null)) Spacer(Modifier.height(62.dp))
             else OfflineRow(vm, book, offlineTarget, current, downloadsHere, wifiOnly, connected, busy, Modifier.padding(top = 12.dp))
         } }
         // Phone copies the offline row doesn't stand for (another recording or format) keep their own cards until removed.

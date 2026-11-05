@@ -187,7 +187,7 @@ fun PlayerScreen(vm: NarrioViewModel, compact: Boolean, modifier: Modifier = Mod
             scaleX = 1f - drag * .08f; scaleY = scaleX
         }) {
             Column(Modifier.padding(horizontal = if (compact) 16.dp else 24.dp).padding(top = if (dense) 0.dp else 8.dp)) { heading(dense) }
-            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown, { vm.openPlayingBook() }, leaning) { controls(dense) } }
+            Box(Modifier.weight(1f)) { AudioStage(book, state, compact, pullDown, { vm.openPlayingBook() }, leaning, vm::changePlayingRecording) { controls(dense) } }
         }
         }
     }
@@ -250,7 +250,7 @@ private fun BookColoursSheet(vm: NarrioViewModel, book: Audiobook, dismiss: () -
  */
 @Composable
 private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean, pullDown: Modifier, openBook: () -> Unit, leaning: Boolean,
-                       controls: @Composable () -> Unit) {
+                       changeRecording: () -> Unit, controls: @Composable () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val width = maxWidth; val height = maxHeight
         val wide = width >= 560.dp && width > height * 1.15f
@@ -259,7 +259,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 val coverHeight = minOf(height - 16.dp, width * .4f).coerceAtLeast(120.dp)
                 ListeningCover(book, leaning, pullDown.size(coverHeight))
                 Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.Center) {
-                    TitleBlock(book, 2, openBook)
+                    TitleBlock(book, 2, openBook, changeRecording)
                     Spacer(Modifier.height(20.dp))
                     controls()
                 }
@@ -268,7 +268,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                 // A short, narrow pane (a landscape phone's split view): the book becomes a byline beside its cover.
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     ListeningCover(book, leaning, pullDown.size(72.dp))
-                    TitleBlock(book, 1, openBook)
+                    TitleBlock(book, 1, openBook, changeRecording)
                 }
                 Spacer(Modifier.height(12.dp))
                 controls()
@@ -287,7 +287,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
                         ListeningCover(book, leaning, Modifier.size(coverHeight))
                     }
                     Column(Modifier.onSizeChanged { controlsHeight = with(density) { it.height.toDp() } }) {
-                        TitleBlock(book, 2, openBook)
+                        TitleBlock(book, 2, openBook, changeRecording)
                         Spacer(Modifier.height(16.dp))
                         controls()
                         Spacer(Modifier.height(16.dp))
@@ -299,7 +299,7 @@ private fun AudioStage(book: Audiobook, state: ListeningState, compact: Boolean,
 }
 
 @Composable
-private fun TitleBlock(book: Audiobook, maxLines: Int, open: (() -> Unit)? = null) {
+private fun TitleBlock(book: Audiobook, maxLines: Int, open: (() -> Unit)? = null, change: (() -> Unit)? = null) {
     // The title leads to the book's page, as a row does on the shelf.
     Column(Modifier.fillMaxWidth()
         .then(if (open != null) Modifier.clickable(onClickLabel = "Open the book's page", onClick = open).testTag("player-book-page") else Modifier)) {
@@ -308,7 +308,13 @@ private fun TitleBlock(book: Audiobook, maxLines: Int, open: (() -> Unit)? = nul
             if (open != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.padding(start = 4.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(8.dp)); Text(book.author, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        // The narrator line offers another reading right here, the same chooser as the book page's Change.
+        if (change == null) Text(narrationLabel(book), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 4.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+        else Row(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = "Choose another reading", onClick = change).testTag("player-change-recording"),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(narrationLabel(book), Modifier.weight(1f, fill = false), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(" · Change", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        }
     }
 }
 
