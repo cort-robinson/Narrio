@@ -215,17 +215,19 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                 else -> Motion.sharedAxisX(targetState.depth > initialState.depth)
             }
         }, contentKey = { it }) { screen ->
-            // Each screen is opaque, so one sliding over another hides it rather than showing through.
-            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            // Each screen is opaque, so one sliding over another hides it rather than showing through. Screens with the
+            // tabs stop short of them, so the tabs and mini-player below show through while the Listening room moves.
+            Box(Modifier.fillMaxSize().padding(bottom = if (screen == Home || screen is Details) barHeight else 0.dp)
+                .background(MaterialTheme.colorScheme.background)) {
             when (screen) {
-                Home -> Box(shellInsets.fillMaxSize().padding(bottom = barHeight)) {
+                Home -> Box(shellInsets.fillMaxSize()) {
                     HomeDestinations(vm, destination)
                     // Scrolled rows fade out under the status bar rather than being cut through at its edge.
                     val page = MaterialTheme.colorScheme.background
                     Box(Modifier.fillMaxWidth().height(24.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page, .4f to page, 1f to page.copy(alpha = 0f))))
                 }
                 // A book's page keeps the tabs (and the mini-player above them), so going back never moves either.
-                is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets.padding(bottom = barHeight), scrollFor(it.id)) }
+                is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets, scrollFor(it.id)) }
                 // The room's surface reaches the top edge, so as it rises nothing of the page shows above it.
                 Listening -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
