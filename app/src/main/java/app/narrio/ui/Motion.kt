@@ -72,7 +72,8 @@ object Motion {
     fun fall(): ContentTransform =
         // The room stays opaque as it drops, so it never lies see-through over the page; it fades only once nearly gone.
         fadeIn(tween(SHORT))
-            .togetherWith(slideOutVertically(tween(350, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(60, delayMillis = 350 - 60)))
+            // It fades as it nears the dock while the mini-player fades in there, so one reads as becoming the other.
+            .togetherWith(slideOutVertically(tween(350, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(200, delayMillis = 150)))
             .apply { targetContentZIndex = -1f }
 }
 

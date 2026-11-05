@@ -72,6 +72,7 @@ fun OfflineStatus(vm: NarrioViewModel, download: OfflineBook, modifier: Modifier
     if (remove) AlertDialog(onDismissRequest = { remove = false }, title = { Text("Remove phone download?") }, text = { Text("Audio files for this ${download.source.format} source will be removed. Your book, bookmarks, and listening progress stay on your shelf.") }, confirmButton = { TextButton({ vm.removeDownload(download); remove = false }) { Text("Remove audio") } }, dismissButton = { TextButton({ remove = false }) { Text("Keep download") } })
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val connected by vm.connected.collectAsStateWithLifecycle()
@@ -105,7 +106,10 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     // TorBox leads: it gates every source beyond LibriVox. Where books come from and how the app looks follow as rows,
     // then everyday switches, then the app itself.
     LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
+        // The title stays pinned, so rows scroll under it rather than being cut against the status bar.
+        stickyHeader(key = "title") {
+            Text("Settings", Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(bottom = 8.dp), style = MaterialTheme.typography.displaySmall)
+        }
         item(key = "torbox") {
             Text("Where books come from", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
@@ -121,7 +125,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights words as they're read. For streamed books they're prepared while your phone charges on Wi-Fi, so they may take a while.",
+            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books are prepared while charging on Wi-Fi.",
                 backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         // How the app looks and keeps itself current. Local builds have no update channel and show their version under
@@ -131,7 +135,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Text("App", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(4.dp))
             AppearanceEntry(appearance, openAppearance)
-            if (updates.channel != null) { Spacer(Modifier.height(8.dp)); UpdateSettings(vm.graph.updates) }
+            if (updates.channel != null) UpdateSettings(vm.graph.updates)
         }
         item {
             Text("About Narrio", style = MaterialTheme.typography.headlineSmall)

@@ -190,7 +190,7 @@ class ConnectTorBoxTest {
 
         // Its Connect TorBox opens the sheet over Discover.
         compose.onNodeWithTag("torbox-nudge").assertIsDisplayed()
-        compose.onNode(hasText("Connect TorBox") and hasAnyAncestor(hasTestTag("torbox-nudge"))).performClick()
+        compose.onNode(hasText("Connect") and hasAnyAncestor(hasTestTag("torbox-nudge"))).performClick()
         compose.onNodeWithTag("connect-torbox-sheet").assertIsDisplayed()
         compose.runOnIdle { vm.dismissTorBoxConnect() }
         compose.waitUntil(5_000) { compose.onAllNodesWithTag("connect-torbox-sheet").fetchSemanticsNodes().isEmpty() }

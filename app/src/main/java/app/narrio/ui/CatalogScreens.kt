@@ -252,7 +252,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
                 // Its one action shows as its own icon, so it never reads as another row's menu.
                 if (shelf.isNotEmpty()) TextButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
-                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add ebook")
+                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add from phone")
                 }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))

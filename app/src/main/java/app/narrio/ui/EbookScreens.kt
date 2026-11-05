@@ -361,12 +361,17 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
             // What it is, where it's from, and (for a text from elsewhere) the one doubt, said once.
             possible != null -> Column(Modifier.testTag("ebook-choice:${possible.edition.id}")) {
                 Text(ebookChoiceTitle(possible, search.book), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(possible.source, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
+                // Said like a confirmed match: a public-domain text reads as a free ebook first.
+                Text(if (possible.edition.provider == "gutenberg" && !possible.source.startsWith("Free ebook")) "Free ebook · ${possible.source}" else possible.source,
+                    style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 // Like a confirmed match's reason line: why this text should follow the narration.
                 if (trusted) Text("Same text as this recording", style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 ebookChoiceNotes(possible, narrated).filter { it.kind == ChoiceNoteKind.CAUTION }.forEach {
                     Text(it.text, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
+                // The book it's compared with, so the doubt can be judged without the page behind the sheet.
+                if (!trusted) Text(listOf(search.book.title, search.book.author).filter(String::isNotBlank).joinToString(" · ", prefix = "Your book: "),
+                    style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 if (!trusted) Text("${possibleMatchCaution(possible)} Read a little, then keep it or remove it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
             }
             else -> {
@@ -507,7 +512,7 @@ fun FormatMarks(formats: BookFormats, modifier: Modifier = Modifier, needsTorBox
     // beside it when TorBox is the way forward, so the row is never a dead end.
     if (!formats.audio && !formats.ebook) {
         // The status and its action read as one line in the same small type; the action keeps a full-size touch target.
-        FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {
             Text(if (needsTorBox) "No free recording ·" else "Open to find a recording", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (needsTorBox && connect != null) Box(Modifier.minimumInteractiveComponentSize().clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = connect)
                 .testTag("shelf-connect-torbox"), contentAlignment = Alignment.CenterStart) {
