@@ -174,8 +174,8 @@ fun TorBoxSettings(vm: NarrioViewModel, connected: Boolean) {
             Text(if (connected) "Connected on this phone" else "Paid · finds more audiobooks", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (connected) TextButton({ confirm = true }, Modifier.heightIn(min = 48.dp)) { Text("Disconnect") }
-        // The same filled Connect TorBox as on a book that needs it.
-        else Button(vm::requestTorBoxConnect, Modifier.heightIn(min = 48.dp).testTag("torbox-settings-connect")) { Text("Connect") }
+        // A setting, not a call to action: tonal, so Settings stays calmer than a book page's Listen.
+        else FilledTonalButton(vm::requestTorBoxConnect, Modifier.heightIn(min = 48.dp).testTag("torbox-settings-connect")) { Text("Connect") }
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("Disconnect TorBox?") },
         text = { Text("Your API key is removed from this phone and unfinished TorBox downloads pause. Downloaded audio, your shelf, and progress stay.") },
