@@ -295,6 +295,8 @@ private fun ChooserActions(
                 Text("On this phone · plays without internet", style = MaterialTheme.typography.bodySmall, color = muted)
             }
         }
+        // A pick already becomes the book page's recording, so it can be downloaded or started later from there.
+        if (current == null && picked != null && ready && !starting) TextButton({ close {} }, Modifier.fillMaxWidth().testTag("chooser-keep")) { Text("Choose without listening") }
         // Downloading for offline lives on the book's page, under Listen; the chooser only picks the recording.
     }
 }

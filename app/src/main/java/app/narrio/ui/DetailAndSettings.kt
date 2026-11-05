@@ -111,7 +111,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             Spacer(Modifier.height(12.dp))
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 TorBoxSettings(vm, connected)
-                SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Choose which sites Narrio searches", openAddons, Modifier.testTag("sources-entry"))
+                SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Choose which sources Narrio searches", openAddons, Modifier.testTag("sources-entry"))
             }
         }
         // The everyday listening and reading switches.
@@ -121,7 +121,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books get them later, while charging on Wi-Fi.",
+            SettingSwitch("Read-along highlights", "Highlights words as they're read. For streamed books they're prepared while your phone charges on Wi-Fi, so they may take a while.",
                 backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         // How the app looks and keeps itself current. Local builds have no update channel and show their version under

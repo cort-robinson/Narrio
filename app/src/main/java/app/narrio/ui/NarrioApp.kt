@@ -215,6 +215,8 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                 else -> Motion.sharedAxisX(targetState.depth > initialState.depth)
             }
         }, contentKey = { it }) { screen ->
+            // Each screen is opaque, so one sliding over another hides it rather than showing through.
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             when (screen) {
                 Home -> Box(shellInsets.fillMaxSize().padding(bottom = barHeight)) {
                     HomeDestinations(vm, destination)
@@ -230,6 +232,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
                 }
                 is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
             }
+            }
         }
         // While a book plays, its controls stay at the bottom of every screen, above the tabs. The Listening room and
         // the reader carry their own.
@@ -240,9 +243,13 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             // Coming back from the reader, it waits for the reader to drop most of the way, so it never draws over it.
             // The Listening room draws above it while it moves; the mini-player arrives as the room reaches the dock,
             // so the two players are never seen at once.
-            val barDelay = if (transition.currentState == Listening) 200 else Motion.MEDIUM * 2 / 3
+            val fromRoom = transition.currentState == Listening
+            val barDelay = if (fromRoom) 200 else Motion.MEDIUM * 2 / 3
+            // From the room it also rises a little into place, meeting the room as it drops.
+            val barEnter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay)) +
+                (if (fromRoom) slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, delayMillis = 120, easing = Motion.EmphasizedDecelerate)) { it / 2 } else EnterTransition.None)
             transition.AnimatedVisibility({ it == Home || it is Details },
-                enter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay)),
+                enter = barEnter,
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
                 AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     // A short fade above it, so a page scrolling underneath trails off rather than being cut through.
@@ -256,7 +263,7 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             }
             // The tabs stay on home and a book's page alike, so moving between them leaves the bottom of the screen still.
             transition.AnimatedVisibility({ it == Home || it is Details },
-                enter = fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay)),
+                enter = barEnter,
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
                 // Without a mini-player above it, the tabs carry the same short fade, so text scrolling under them trails off.
                 val page = MaterialTheme.colorScheme.background

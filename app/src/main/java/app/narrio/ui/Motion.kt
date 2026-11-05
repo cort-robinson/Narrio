@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 /**
@@ -51,12 +52,11 @@ object Motion {
 
     /** Material shared axis X: deeper content arrives from the trailing edge. */
     fun sharedAxisX(forward: Boolean): ContentTransform {
-        val direction = if (forward) 1 else -1
-        // Long enough, and evenly paced enough, to see the page leave and the next arrive, so neither direction reads as a cut.
-        // Standard easing spreads the travel across the whole move instead of spending it in the first frames.
-        // The old page is gone before the new one fades up, so the two never show through each other.
-        return (slideInHorizontally(tween(400, easing = FastOutSlowInEasing)) { direction * it / 4 } + fadeIn(tween(260, delayMillis = 120, easing = LinearOutSlowInEasing)))
-            .togetherWith(slideOutHorizontally(tween(400, easing = FastOutSlowInEasing)) { -direction * it / 4 } + fadeOut(tween(120, easing = FastOutLinearInEasing)))
+        // A push: the deeper page slides across the full width over the one below, which eases a little the other way.
+        // Both stay opaque, so there's never a blank or doubled frame, and the direction reads at any frame rate.
+        val spec = tween<IntOffset>(380, easing = FastOutSlowInEasing)
+        return if (forward) (slideInHorizontally(spec) { it }).togetherWith(slideOutHorizontally(spec) { -it / 4 }).apply { targetContentZIndex = 1f }
+        else (slideInHorizontally(spec) { -it / 4 }).togetherWith(slideOutHorizontally(spec) { it }).apply { targetContentZIndex = -1f }
     }
 
     /**
