@@ -580,7 +580,7 @@ private fun OfflineRow(vm: NarrioViewModel, book: Audiobook, target: Audiobook?,
                 Icon(Icons.Rounded.Download, null, tint = MaterialTheme.colorScheme.primary)
                 Column(Modifier.weight(1f)) {
                     Text(listOfNotNull("Listen offline", bytes.takeIf { it > 0 }?.let(::sizeLabel)).joinToString(" · "), style = MaterialTheme.typography.titleSmall)
-                    Text(if (wifiOnly) "Saves to this phone over Wi-Fi" else "Saves to this phone; can use mobile data", style = MaterialTheme.typography.bodySmall, color = muted)
+                    Text(if (wifiOnly) "Downloads to this phone over Wi-Fi" else "Downloads to this phone; can use mobile data", style = MaterialTheme.typography.bodySmall, color = muted)
                 }
                 // The whole row starts it; the word says so, as Find ebook's chevron says it opens.
                 Text("Download", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 4.dp))

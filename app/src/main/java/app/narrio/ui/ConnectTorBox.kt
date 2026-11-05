@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -136,7 +137,7 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
     fun submit() { if (key.isNotBlank() && !state.connecting) connect(key) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // Two steps, each beside its control: get the key, then paste it.
-        Text("1. Get your TorBox API key: sign in (or sign up), then open Settings\u00A0→\u00A0API\u00A0Key.", style = MaterialTheme.typography.bodyMedium)
+        Text("1. Sign in to TorBox (or sign up) and copy your key. On TorBox's site it's under Settings\u00A0→\u00A0API\u00A0Key.", style = MaterialTheme.typography.bodyMedium)
         OutlinedButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://torbox.app/settings"))) }, Modifier.heightIn(min = 48.dp)) {
             Text("Open TorBox"); Spacer(Modifier.width(6.dp)); Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(16.dp))
         }
@@ -147,8 +148,10 @@ fun TorBoxConnectForm(state: TorBoxConnectState, connect: (String) -> Unit, edit
             keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submit() }),
             trailingIcon = {
-                if (key.isEmpty()) IconButton({ scope.launch { clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.let { change(it.toString()) } } }) {
-                    Icon(Icons.Rounded.ContentPaste, "Paste your key")
+                // Coming back with the key copied, the paste is a named button, the obvious next tap.
+                if (key.isEmpty()) TextButton({ scope.launch { clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.let { change(it.toString()) } } },
+                    Modifier.padding(end = 4.dp).semantics { contentDescription = "Paste your key" }) {
+                    Icon(Icons.Rounded.ContentPaste, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Paste")
                 } else IconButton({ shown = !shown }) { Icon(if (shown) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, if (shown) "Hide API key" else "Show API key") }
             },
             supportingText = state.error?.let { error -> { Text(error, Modifier.semantics { liveRegion = LiveRegionMode.Polite }.testTag("torbox-error")) } },
