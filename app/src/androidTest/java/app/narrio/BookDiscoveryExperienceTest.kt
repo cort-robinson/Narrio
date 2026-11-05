@@ -138,7 +138,7 @@ class BookDiscoveryExperienceTest {
         // The chooser on the same page offers those results without looking again.
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:lookup-fixture").assertIsDisplayed()
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording")
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true)
         assertEquals(1, calls.get())
         assertEquals(migrated.id, fixture.selection.value.book?.id)
     }
@@ -218,7 +218,7 @@ class BookDiscoveryExperienceTest {
         compose.runOnIdle { assertEquals(fast, vm.sourceSearch.value.choice); vm.chooseVersion(fast) }
         compose.runOnIdle { vm.sourceSearch.value = vm.sourceSearch.value.withSnapshot(snapshot(better, true)) }
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
-        compose.onNodeWithText("Read by Fixture Reader", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("recording-summary").assertTextContains("Fixture Reader", substring = true)
         compose.runOnIdle {
             assertEquals(fast, vm.sourceSearch.value.choice)
             assertEquals(better, vm.sourceSearch.value.streamed!!.best!!.recording)
@@ -257,23 +257,24 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithText("The book").assertDoesNotExist()
         // Fallback cover art also draws the author; the final node is the details text below it.
         compose.onAllNodesWithText("Andy Weir").onLast().assertIsDisplayed()
-        compose.onNodeWithText("Finding audio…").assertIsNotEnabled()
+        compose.onNodeWithText("Finding a recording…").assertIsNotEnabled()
 
         val chosen = recording("fixture-recording", "Project Hail Mary (version 2)", "Fixture Reader")
         compose.runOnIdle { vm.sourceSearch.value = snapshot(book, listOf(chosen)) }
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Fixture Reader · Free public recording")
-        // About this book comes before the sources, which the page sums up in one row.
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Fixture Reader · Free")
+        // About this book follows; with a recording to play, Change is the one way into the chooser.
         reveal(hasText(book.description)); compose.onNodeWithText(book.description).assertIsDisplayed()
-        reveal(hasTestTag("recordings-row")); compose.onNodeWithTag("recordings-row").assertTextContains("1 found")
+        compose.onNodeWithTag("change-recording").assertExists()
+        compose.onNodeWithTag("recordings-row").assertDoesNotExist()
         compose.onNodeWithTag("listening-sources").assertDoesNotExist()
 
         // One chooser: distinct versions, the best match tagged, and Listen in one tap.
         compose.onNodeWithTag("book-details").performScrollToIndex(0)
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:${chosen.id}").assertIsDisplayed().assertIsSelected()
-        compose.onNodeWithText("Best match").assertIsDisplayed()
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording").assertIsEnabled()
+        compose.onNodeWithText("Suggested").assertIsDisplayed()
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true).assertIsEnabled()
         // Advanced keeps the per-source sections, the release, its files, and how it plays.
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("advanced-entry"))
         compose.onNodeWithTag("advanced-entry").performClick()
@@ -290,7 +291,7 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithTag("recording:${other.id}").performClick()
         compose.runOnIdle { assertEquals(other.id, vm.sourceSearch.value.choice?.id) }
         // The page behind the sheet follows the pick.
-        compose.waitUntil(5_000) { compose.onAllNodesWithText("Second Reader · Free public recording").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { compose.onAllNodesWithText("Read by Second Reader · Free").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun uncertainMatchesWaitForTheListenerToChooseFromSearchResults() {
@@ -305,16 +306,17 @@ class BookDiscoveryExperienceTest {
         compose.onNodeWithTag("recording:${possible.id}").performClick()
         compose.runOnIdle { assertEquals(possible.id, vm.sourceSearch.value.choice?.id) }
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording")
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true)
 
         // Disconnected and nothing found: the slot says so and offers TorBox for the sources that need it.
         compose.runOnIdle { vm.back() }
         show(SourceSearchState(book = book).withSnapshot(StreamedSourceSearch(book, listOf(
             SourceGroup("archive", "Internet Archive / LibriVox", SourceGroupStatus.DONE),
             SourceGroup("torbox-search", "TorBox search", SourceGroupStatus.SKIPPED, message = "Connect TorBox")), complete = true)))
-        compose.onNodeWithText("No free public recording found").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("No free recording found").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Connect TorBox").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Search again").performScrollTo().assertIsEnabled()
+        // Searching again can't find more without TorBox, so it isn't offered.
+        compose.onAllNodesWithText("Search again").assertCountEquals(0)
     }
 
     /** A book on the shelf with its own recording and a place a quarter of the way in, as listening leaves it. */
@@ -350,7 +352,7 @@ class BookDiscoveryExperienceTest {
     private fun shelfBookResumesAndChanges(fixture: NarrioViewModel, mine: Audiobook, calls: AtomicInteger, appearance: AppearanceSettings) {
         // Its own recording leads with the time left; nothing is searched until the listener asks.
         compose.onNodeWithTag("listen-action").assertTextContains("Resume · 7 h 30 m left").assertIsEnabled()
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Free")
         assertEquals(0, calls.get())
         capture("shelf-book-resume-night")
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
@@ -366,14 +368,14 @@ class BookDiscoveryExperienceTest {
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Start near 2:30:00 (≈)") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Start from the beginning").assertExists()
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
-        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to this recording").assertIsEnabled()
+        compose.onNodeWithTag("chooser-listen").assertTextContains("Listen to ", substring = true).assertIsEnabled()
         capture("chooser-switch-night")
         compose.runOnIdle { fixture.updateAppearance(appearance.copy(mode = ThemeMode.DAY)) }
         capture("chooser-switch-day")
         compose.runOnIdle { assertEquals("lookup-fixture", fixture.sourceSearch.value.choice?.id) }
         // Picking isn't listening: the page still resumes the listener's recording.
         compose.onNodeWithTag("listen-action").assertTextContains("Resume · 7 h 30 m left")
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Free")
     }
 
     @Test fun aDownloadedRecordingPlaysOffline() {

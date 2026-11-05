@@ -23,6 +23,8 @@ data class ListeningState(
     val bookTime: BookTime? get() = source?.parts?.let { app.narrio.domain.bookTime(it, partIndex, positionMs, durationMs) }
     /** The chapter playing now in this part, or null when the part has no chapters. */
     val chapter: Chapter? get() = chapters.getOrNull(chapterIndexAt(chapters, positionMs))
+    /** Where the listener is: the chapter, else the audio part when there are several. A lone file's name says nothing. */
+    val placeTitle: String? get() = chapter?.title ?: part?.title?.takeIf { (source?.parts?.size ?: 1) > 1 }
     /** Progress for thin progress lines: the whole book when known, otherwise this part. */
     val progress: Float get() = bookTime?.fraction ?: if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     val hasLength: Boolean get() = durationMs > 0 || bookTime != null

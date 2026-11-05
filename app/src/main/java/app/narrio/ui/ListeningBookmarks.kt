@@ -57,7 +57,8 @@ fun ListeningBookmarksSheet(vm: NarrioViewModel, state: ListeningState, book: Au
         LazyColumn(contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.heightIn(max = 480.dp).testTag("listening-bookmarks")) {
             item {
                 Text("Bookmarks", style = MaterialTheme.typography.headlineMedium); Spacer(Modifier.height(12.dp))
-                FilledTonalButton({ haptics.performHapticFeedback(HapticFeedbackType.Confirm); vm.bookmark() }) { Icon(Icons.Rounded.BookmarkAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add bookmark") }
+                // Adding keeps the moment and gets out of the way; the snackbar confirms it.
+                FilledTonalButton({ haptics.performHapticFeedback(HapticFeedbackType.Confirm); leave { vm.bookmark() } }) { Icon(Icons.Rounded.BookmarkAdd, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Add bookmark") }
             }
             if (entries.isEmpty()) item {
                 Text("No bookmarks yet. Each one keeps the exact time, and bookmarks you add while reading appear here too.",

@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 /**
@@ -51,20 +52,28 @@ object Motion {
 
     /** Material shared axis X: deeper content arrives from the trailing edge. */
     fun sharedAxisX(forward: Boolean): ContentTransform {
-        val direction = if (forward) 1 else -1
-        return (slideInHorizontally(tween(MEDIUM, easing = Emphasized)) { direction * it / 7 } + fadeIn(tween(210, delayMillis = 60, easing = EmphasizedDecelerate)))
-            .togetherWith(slideOutHorizontally(tween(MEDIUM, easing = Emphasized)) { -direction * it / 7 } + fadeOut(tween(90, easing = EmphasizedAccelerate)))
+        // A push: the deeper page slides across the full width over the one below, which eases a little the other way.
+        // Both stay opaque, so there's never a blank or doubled frame, and the direction reads at any frame rate.
+        val spec = tween<IntOffset>(380, easing = FastOutSlowInEasing)
+        return if (forward) (slideInHorizontally(spec) { it }).togetherWith(slideOutHorizontally(spec) { -it / 4 }).apply { targetContentZIndex = 1f }
+        else (slideInHorizontally(spec) { -it / 4 }).togetherWith(slideOutHorizontally(spec) { it }).apply { targetContentZIndex = -1f }
     }
 
-    /** The listening room rises from the mini-player and settles back into it. */
+    /**
+     * The listening room rises as a sheet from the bottom, where the mini-player and Listen are, and drops back down
+     * over the page it came from; the page underneath stays put, so the room is what moves.
+     */
     fun rise(): ContentTransform =
-        (slideInVertically(tween(LONG, easing = Emphasized)) { it / 4 } + fadeIn(tween(MEDIUM, easing = EmphasizedDecelerate)))
-            .togetherWith(fadeOut(tween(SHORT, easing = EmphasizedAccelerate)) + scaleOut(tween(LONG, easing = Emphasized), targetScale = .94f))
+        // Opaque as it rises too, so the room never lies see-through over the page it covers.
+        (slideInVertically(tween(380, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(40)))
+            .togetherWith(fadeOut(tween(MEDIUM, delayMillis = SHORT)))
             .apply { targetContentZIndex = 1f }
 
     fun fall(): ContentTransform =
-        (fadeIn(tween(MEDIUM, delayMillis = 60, easing = EmphasizedDecelerate)) + scaleIn(tween(LONG, easing = Emphasized), initialScale = .94f))
-            .togetherWith(slideOutVertically(tween(MEDIUM, easing = EmphasizedAccelerate)) { it / 4 } + fadeOut(tween(MEDIUM, easing = EmphasizedAccelerate)))
+        // The room stays opaque as it drops, so it never lies see-through over the page; it fades only once nearly gone.
+        fadeIn(tween(SHORT))
+            // It fades as it nears the dock while the mini-player fades in there, so one reads as becoming the other.
+            .togetherWith(slideOutVertically(tween(350, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(200, delayMillis = 150)))
             .apply { targetContentZIndex = -1f }
 }
 
@@ -86,22 +95,14 @@ fun rememberSheetCloser(sheetState: SheetState, dismiss: () -> Unit): (() -> Uni
     return remember(sheetState, scope) { { after: () -> Unit -> after(); scope.launch { sheetState.hide() }.invokeOnCompletion { latest() } } }
 }
 
-/** Shared-element plumbing for compact navigation. Absent scopes leave covers static. */
-@OptIn(ExperimentalSharedTransitionApi::class)
-val LocalSharedTransition = staticCompositionLocalOf<SharedTransitionScope?> { null }
-val LocalNavigationScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
-
-@OptIn(ExperimentalSharedTransitionApi::class)
+/** Fades in once when it first appears, so content that arrives (a search result) never pops into a held space. */
 @Composable
-fun Modifier.sharedCover(key: String?): Modifier {
-    val shared = LocalSharedTransition.current
-    val scope = LocalNavigationScope.current
-    if (key == null || shared == null || scope == null) return this
-    return with(shared) {
-        this@sharedCover.sharedElement(rememberSharedContentState(key), scope,
-            boundsTransform = { _, _ -> spring(dampingRatio = .86f, stiffness = Spring.StiffnessMediumLow) })
-    }
+fun Modifier.fadesIn(): Modifier {
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, tween(MEDIUM_FADE, easing = Motion.EmphasizedDecelerate)) }
+    return graphicsLayer { alpha = shown.value }
 }
+private const val MEDIUM_FADE = 220
 
 /** A gentle press that makes rows and controls feel physical without moving their layout. */
 @Composable

@@ -26,7 +26,8 @@ class ReadingSyncSmokeTest {
     private val vm get() = ViewModelProvider(compose.activity)[NarrioViewModel::class.java]
 
     @Test fun settingsToggleAndAtomicProgressSurviveRepositoryRecreation() = runBlocking {
-        compose.runOnIdle { vm.setBackgroundAlignment(true); vm.navigate(2) }
+        // The Read-along highlights switch stands for both settings, so both start on.
+        compose.runOnIdle { vm.setBackgroundAlignment(true); vm.setReadAlongSync(true); vm.navigate(2) }
         compose.onNodeWithTag("settings-options").performScrollToNode(hasTestTag("background-alignment"))
         compose.onNodeWithTag("background-alignment").performScrollTo().assertIsOn().performClick().assertIsOff()
         assertFalse(graph.bookAlignment.enabled())

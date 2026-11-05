@@ -73,7 +73,8 @@ class EbookWebAcquisition(
                     if (prefix.startsWith("<!doctype html", true) || prefix.startsWith("<html", true))
                         throw ProviderException("This link returned a web page. Complete its verification and tap the final ebook download.")
                     val format = declared ?: BookTextParser.detect(bytes)
-                        ?: throw ProviderException("This download isn't an EPUB or text ebook. PDF, Kindle, and other file types cannot be opened.")
+                        ?: throw ProviderException(BookTextParser.describe(bytes)?.let { kind -> "This download is $kind, not an EPUB or text ebook. Choose an EPUB download." }
+                            ?: "This download isn't an EPUB or text ebook. PDF, Kindle, and other file types cannot be opened.")
                     BookTextParser.parse(bytes, format, "Downloaded ebook")
                     return@withContext bytes to format
                 }

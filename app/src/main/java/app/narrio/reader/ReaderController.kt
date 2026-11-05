@@ -138,7 +138,7 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         }
         else markProgrammatic()
         target = cursor; targetAttempts = 2
-        val accepted = navigator.go(locator, animated)
+        val accepted = whilePageAlive { navigator.go(locator, animated) } ?: false
         if (!accepted && asReader) readerTarget = null
         return accepted
     }
@@ -391,8 +391,8 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
                     // Readium can resolve a quote on the preceding page when it starts exactly at
                     // the exclusive page boundary. Re-sending that locator lands there again.
                     if (range.end?.let { it.resource == wanted.resource && it.offset == wanted.offset } == true)
-                        navigator.goForward(animated = false)
-                    else book.locator(wanted)?.let { navigator.go(it) }
+                        whilePageAlive { navigator.goForward(animated = false) }
+                    else book.locator(wanted)?.let { whilePageAlive { navigator.go(it) } }
                     scheduleProbe(350)
                     return@launch
                 }
@@ -435,6 +435,12 @@ class ReaderController(val book: ReaderBook, private val scope: CoroutineScope) 
         /** How long after a touch or key a page change still counts as the reader's own. */
         const val USER_INPUT_MS = 1_500L
     }
+
+    /**
+     * Runs a navigator move, or returns null when Readium throws because the page fragment's view is already gone (its
+     * pager destroyed the page while a probe was settling). The caller's next probe tries again on the current page.
+     */
+    private inline fun <T> whilePageAlive(move: () -> T): T? = try { move() } catch (_: IllegalStateException) { null }
 
     private fun JSONObject.position() = PagePosition(if (isNull("o")) null else optInt("o"), optInt("r"))
 

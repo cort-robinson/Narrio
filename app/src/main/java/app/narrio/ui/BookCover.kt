@@ -3,6 +3,8 @@ package app.narrio.ui
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,10 +21,8 @@ import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import androidx.compose.ui.platform.LocalContext
-import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.draw.blur
 import app.narrio.R
 import app.narrio.domain.Audiobook
 
@@ -30,7 +30,18 @@ import app.narrio.domain.Audiobook
 private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>())
 
 @Composable
-fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, sharedKey: String? = null) {
+private fun CoverPlaceholderMark(size: androidx.compose.ui.unit.Dp = 44.dp) =
+    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(size), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .35f))
+
+@Composable
+fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, blank: Boolean = false) {
+    // A cover still being decided is a plain book shape, never drawn art that could pass for the real cover.
+    if (blank) {
+        // The page below already says what it's finding, so the shape holds only a quiet book mark.
+        Box(modifier.clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            contentAlignment = Alignment.Center) { CoverPlaceholderMark() }
+        return
+    }
     val key = book.title.lowercase()
     val palette = when {
         "pride" in key -> Pair(Color(0xFF694851), Color(0xFFEAD7B4))
@@ -41,11 +52,27 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         else -> Pair(Color(0xFF435C4A), Color(0xFFF0E4CC))
     }
     val curated = listOf("secret garden", "pride", "sherlock", "gatsby", "dracula", "alice").any { it in key }
-    BoxWithConstraints(Modifier.sharedCover(sharedKey).then(modifier).clip(RoundedCornerShape(8.dp)).background(palette.first)) {
+    BoxWithConstraints(modifier.clip(RoundedCornerShape(8.dp))) {
         val tiny = maxWidth < 100.dp
         var coverLoaded by remember(book.coverUrl) { mutableStateOf(book.coverUrl in loadedCovers) }
+        // Drawn art stands in only for a book with no cover, or one that failed to load; a loading cover is a plain shape.
+        // A recording's large cover stays plain too, so a drawn tile never passes for yet another edition of it.
+        var failed by remember(book.coverUrl) { mutableStateOf(false) }
+        // A recording's large cover (one found for the book, described yet or not) never falls back to drawn art, so a
+        // cover that's slow or fails to load shows the same quiet shape on the book page, in the player, and docked.
+        val drawn = (book.coverUrl.isBlank() || failed) && !(large && (book.sources.isNotEmpty() || book.provider != "catalog"))
+        Box(Modifier.matchParentSize().background(if (drawn) palette.first else MaterialTheme.colorScheme.surfaceContainerHighest))
         val reveal by animateFloatAsState(if (coverLoaded) 1f else 0f, tween(Motion.MEDIUM, easing = Motion.EmphasizedDecelerate), label = "cover")
-        val fallback = reveal < 1f
+        // A cover that changes in place (a recording's own art replacing the catalog's) keeps the last art showing
+        // until the new one arrives, rather than flashing the drawn fallback in between.
+        var lastLoaded by remember { mutableStateOf<String?>(null) }
+        // A replacement that fails stops the bridge, so the old art never stands in for the new book indefinitely.
+        val previous = lastLoaded?.takeIf { !failed && it != book.coverUrl && it in loadedCovers }
+        val fallback = reveal < 1f && previous == null && drawn
+        // A large cover still on its way holds a quiet book mark, so the shape never reads as a broken image.
+        // Any art bridging the change draws over it, so the mark shows only while nothing else does.
+        // A thumbnail still loading carries a smaller mark, so no size ever looks like a broken image.
+        if (!drawn && !coverLoaded) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) { CoverPlaceholderMark(if (large) 44.dp else if (tiny) 16.dp else 24.dp) }
         if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))
@@ -76,10 +103,11 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
                         drawOval(palette.second.copy(alpha=.45f),Offset(w*.22f,h*.53f),Size(w*.56f,h*.29f),style=androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
                         drawLine(palette.second.copy(alpha=.45f),Offset(w*.15f,h*.92f),Offset(w*.85f,h*.92f),1.5f)
                     }
+                    // Kept above the author line at the foot of the cover, so nothing strikes through it.
                     else -> {
-                        drawCircle(palette.second.copy(alpha=.7f),w*.23f,Offset(w*.65f,h*.67f))
-                        drawCircle(palette.first,w*.23f,Offset(w*.37f,h*.61f))
-                        drawLine(palette.second.copy(alpha=.5f),Offset(w*.18f,h*.87f),Offset(w*.82f,h*.87f),2f)
+                        drawCircle(palette.second.copy(alpha=.7f),w*.23f,Offset(w*.65f,h*.58f))
+                        drawCircle(palette.first,w*.23f,Offset(w*.37f,h*.52f))
+                        drawLine(palette.second.copy(alpha=.5f),Offset(w*.18f,h*.8f),Offset(w*.82f,h*.8f),2f)
                     }
                 }
             }
@@ -92,26 +120,23 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
             Text(book.author.removePrefix("Sir "), color = if ("secret garden" in key || !curated) Color(0xFFF4E4C9) else palette.second,
                 style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
+        if (previous != null && reveal < 1f) {
+            val context = LocalContext.current
+            val old = remember(previous, large) { ImageRequest.Builder(context).data(previous).size(if (large) 720 else 240).memoryCacheKey(coverKey(previous, large)).build() }
+            Image(rememberAsyncImagePainter(old), null, Modifier.matchParentSize().graphicsLayer { alpha = 1f - reveal }, contentScale = ContentScale.Fit)
+        }
         if (book.coverUrl.isNotBlank()) {
             // Thumbnails decode small; large covers show the cached thumbnail while their sharper decode
-            // arrives, so a shared-element flight from a row never draws a blank frame.
+            // arrives, so a cover the listener just saw in a row never draws a blank frame.
             val context = LocalContext.current
             val request = remember(book.coverUrl, large) {
                 ImageRequest.Builder(context).data(book.coverUrl).size(if (large) 720 else 240).memoryCacheKey(coverKey(book.coverUrl, large))
-                    .apply { if (large) placeholderMemoryCacheKey(coverKey(book.coverUrl, false)) }.build()
+                    // Each size stands in for the other, so the mini-player never shows an empty tile for art already on screen.
+                    .placeholderMemoryCacheKey(coverKey(book.coverUrl, !large)).build()
             }
             val painter = rememberAsyncImagePainter(request,
-                onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true }, onError = { coverLoaded = false })
-            // Square audiobook art in a book-shaped frame: its own softened light fills the margins. Large covers
-            // blur the art on Android 12+; elsewhere a tiny upscaled decode gives the same soft light cheaply.
-            if (coverLoaded) {
-                if (large && Build.VERSION.SDK_INT >= 31) Image(painter, null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }.blur(18.dp), contentScale = ContentScale.Crop)
-                else {
-                    val glow = remember(book.coverUrl) { ImageRequest.Builder(context).data(book.coverUrl).size(16).memoryCacheKey("${book.coverUrl}#glow").build() }
-                    Image(rememberAsyncImagePainter(glow), null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Crop)
-                }
-                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = .22f * reveal)))
-            }
+                onSuccess = { loadedCovers += book.coverUrl; coverLoaded = true; lastLoaded = book.coverUrl }, onError = { coverLoaded = false; failed = true })
+            // Covers are square, like audiobook art; other shapes (a portrait ebook cover) sit on the plain surface behind them.
             // Rows and the mini-player already read the title beside the art; only standalone covers describe it.
             Image(painter, if (large) "Cover of ${book.title}" else null, Modifier.matchParentSize().graphicsLayer { alpha = reveal }, contentScale = ContentScale.Fit)
         }

@@ -122,13 +122,16 @@ fun recordingNarrator(recording: Audiobook): String = SourceQuality.edition(reco
 fun recordingKind(recording: Audiobook, book: Audiobook): List<String> {
     val edition = SourceQuality.edition(recording)
     val kind = edition.kind.ifBlank { if (Regex("(?i)\\bunabridged\\b").containsMatchIn(recording.releaseTitle.ifBlank { recording.title })) "Unabridged" else "" }
-    val language = edition.language.takeUnless { it.isBlank() || it.equals(book.language, true) || BookMetadata.unknown(book.language) }.orEmpty()
+    // A language is worth saying only when it's neither the book's nor the listener's own.
+    val language = edition.language.takeUnless { it.isBlank() || it.equals(book.language, true) || BookMetadata.unknown(book.language) ||
+        it.equals(java.util.Locale.getDefault().getDisplayLanguage(java.util.Locale.ENGLISH), true) }.orEmpty()
     return listOf(kind, language).filter(String::isNotBlank)
 }
 
-/** The one line under Listen: "Ray Porter · Unabridged · Ready now". */
+/** The one line under Listen: "Read by Ray Porter · Unabridged · Ready now", short enough to sit beside Change. */
 fun recordingLine(recording: Audiobook, book: Audiobook, connected: Boolean, onPhone: Boolean = false): String =
-    (listOf(recordingNarrator(recording).ifBlank { "Narrator not confirmed" }) + recordingKind(recording, book) + readiness(recording, connected, onPhone)).joinToString(" · ")
+    (listOf(recordingNarrator(recording).takeIf(String::isNotBlank)?.let { "Read by $it" } ?: "Narrator not confirmed") + recordingKind(recording, book) +
+        readiness(recording, connected, onPhone).let { if (it == "Free public recording") "Free" else it }).joinToString(" · ")
 
 /** True when this recording plays through TorBox, so it needs a connected account. */
 fun needsTorBox(recording: Audiobook): Boolean = recording.provider != "archive" && !onThisPhone(recording)

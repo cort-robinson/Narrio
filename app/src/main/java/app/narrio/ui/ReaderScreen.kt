@@ -109,6 +109,28 @@ fun ReaderScreen(appVm: NarrioViewModel, bookId: String, onClose: () -> Unit, to
             }
             else -> OpeningBook()
         }
+        // A possible match added to be checked: once the listener has looked, they keep it or remove it (also when it
+        // can't be opened at all).
+        val checking by appVm.checkingEdition.collectAsStateWithLifecycle()
+        checking?.takeIf { it.book.id == bookId && state !is ReaderState.Opening }?.let {
+            CheckEbookCard(it, appVm::keepCheckedEbook, appVm::removeCheckedEbook, Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 12.dp))
+        }
+    }
+}
+
+@Composable
+private fun CheckEbookCard(checking: CheckingEdition, keep: () -> Unit, remove: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(modifier.padding(horizontal = 16.dp).widthIn(max = 560.dp).fillMaxWidth().testTag("check-ebook"), shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh, shadowElevation = 6.dp) {
+        Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 4.dp)) {
+            Text("Is this ${checking.book.title}?", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 8.dp))
+            Text("This ebook wasn't confirmed as the same book. Read a little, then keep it or remove it.", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp, end = 8.dp))
+            Row(Modifier.align(Alignment.End)) {
+                TextButton(remove, Modifier.testTag("check-ebook-remove")) { Text("Remove") }
+                TextButton(keep, Modifier.testTag("check-ebook-keep")) { Text("Keep") }
+            }
+        }
     }
 }
 
@@ -521,7 +543,7 @@ private fun TypographySheet(settings: ReaderSettings, appearance: AppearanceSett
         SwitchRow("Hyphenation", "Break long words at line ends", settings.hyphenate && !settings.publisherStyles) { value -> update { withAdvanced { copy(hyphenate = value) } } }
         SwitchRow("Publisher styles", if (settings.publisherStyles) "The book's own spacing and alignment" else "Your spacing and alignment choices", settings.publisherStyles) { value -> update { copy(publisherStyles = value) } }
         SwitchRow("Volume keys turn pages", "Only while nothing is playing", settings.volumeKeys) { value -> update { copy(volumeKeys = value) } }
-        SheetLabel("Colours for this book")
+        SheetLabel("Colors for this book")
         bookColours()
         SheetLabel("Mode")
         Segments(ThemeMode.entries, appearance.mode, { it.label }) { mode -> updateAppearance(appearance.copy(mode = mode)) }

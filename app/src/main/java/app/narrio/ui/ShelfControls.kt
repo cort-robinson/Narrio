@@ -32,6 +32,8 @@ import app.narrio.domain.Audiobook
 
 /** Shelves larger than this always show their search field; smaller ones open it from a search button. */
 const val SHELF_SEARCH_AT = 8
+/** Below this many books the shelf shows no filters, search, or sort. */
+const val SHELF_ORGANIZE_AT = 3
 
 /** Shelf rows with decoded books, reusing a book until its saved metadata changes (progress saves don't). */
 @Composable

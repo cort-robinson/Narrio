@@ -22,6 +22,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -54,6 +56,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     val appearance by vm.appearance.collectAsStateWithLifecycle()
     val selected by vm.selection.collectAsStateWithLifecycle()
     val playerOpen by vm.playerOpen.collectAsStateWithLifecycle()
+    val startingBook by vm.startingBook.collectAsStateWithLifecycle()
     val state by vm.playback.collectAsStateWithLifecycle()
     val destination by vm.destination.collectAsStateWithLifecycle()
     val reader by vm.reader.collectAsStateWithLifecycle()
@@ -138,7 +141,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
             val statusTop = WindowInsets.statusBars.getTop(density)
             val current: Screen = when {
                 reader != null -> Reading(reader!!.book.id)
-                playerOpen && state.book != null -> Listening
+                playerOpen && (state.book != null || startingBook != null) -> Listening
                 selected.book != null -> Details(selected.book!!.id)
                 else -> Home
             }
@@ -154,7 +157,7 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
                 expanded -> {
                     BackHandler(backEnabled, goBack)
                     // A landscape phone has width but little height: give an open player the whole canvas.
-                    val fullPlayer = maxHeight < 480.dp && playerOpen && state.book != null
+                    val fullPlayer = maxHeight < 480.dp && playerOpen && (state.book != null || startingBook != null)
                     // The reader takes the whole window, rail included: a book open on the inner display is just the book.
                     AnimatedContent(reader != null, Modifier.fillMaxSize(), transitionSpec = { Motion.sharedAxisX(targetState) }, label = "reading") { reading ->
                         if (reading) recentReader?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
@@ -183,7 +186,6 @@ fun NarrioApp(activity: ComponentActivity, vm: NarrioViewModel = viewModel()) {
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int, hasPlayback: Boolean, bookFor: (String) -> Audiobook?, readerFor: () -> ReaderRequest?, scrollFor: (String) -> LazyListState,
                          backEnabled: Boolean, goBack: () -> Unit, barHeight: Dp, shellInsets: Modifier, onBarHeight: (Dp) -> Unit) {
@@ -203,46 +205,77 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
         }
     }
     val transition = rememberTransition(seekState, label = "screen")
-    SharedTransitionLayout(Modifier.fillMaxSize()) {
-        CompositionLocalProvider(LocalSharedTransition provides this) {
-            Box(Modifier.fillMaxSize()) {
-                transition.AnimatedContent(Modifier.fillMaxSize(), transitionSpec = {
-                    when {
-                        targetState == Listening -> Motion.rise()
-                        initialState == Listening -> Motion.fall()
-                        else -> Motion.sharedAxisX(targetState.depth > initialState.depth)
-                    }
-                }, contentKey = { it }) { screen ->
-                    CompositionLocalProvider(LocalNavigationScope provides this) {
-                        when (screen) {
-                            Home -> Box(shellInsets.fillMaxSize().padding(bottom = barHeight)) { HomeDestinations(vm, destination) }
-                            // The mini-player stays docked under a book's details; it brings its own navigation-bar room.
-                            is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, if (hasPlayback) shellInsets.padding(bottom = barHeight) else shellInsets.navigationBarsPadding(), scrollFor(it.id)) }
-                            Listening -> PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
-                            is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
-                        }
-                    }
+    Box(Modifier.fillMaxSize()) {
+        // While the Listening room rises or drops it draws above the mini-player and tabs, so they never show over it.
+        val roomMoving = transition.currentState == Listening || transition.targetState == Listening
+        transition.AnimatedContent(Modifier.fillMaxSize().zIndex(if (roomMoving) 1f else 0f), transitionSpec = {
+            when {
+                targetState == Listening -> Motion.rise()
+                initialState == Listening -> Motion.fall()
+                else -> Motion.sharedAxisX(targetState.depth > initialState.depth)
+            }
+        }, contentKey = { it }) { screen ->
+            // Each screen is opaque, so one sliding over another hides it rather than showing through. Screens with the
+            // tabs stop short of them, so the tabs and mini-player below show through while the Listening room moves.
+            Box(Modifier.fillMaxSize().padding(bottom = if (screen == Home || screen is Details) barHeight else 0.dp)
+                .background(MaterialTheme.colorScheme.background)) {
+            when (screen) {
+                Home -> Box(shellInsets.fillMaxSize()) {
+                    HomeDestinations(vm, destination)
+                    // Scrolled rows fade out under the status bar rather than being cut through at its edge.
+                    val page = MaterialTheme.colorScheme.background
+                    Box(Modifier.fillMaxWidth().height(24.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to page, .4f to page, 1f to page.copy(alpha = 0f))))
                 }
-                // While a book plays, its controls stay at the bottom of every screen: above the tabs at home, and
-                // docked under a book's details. The Listening room and the reader carry their own.
-                Column(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
-                    .onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
-                    transition.AnimatedVisibility({ it == Home || it is Details },
-                        enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
-                        exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
-                        CompositionLocalProvider(LocalNavigationScope provides this) {
-                            AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                                MiniPlayer(vm, aboveSystemBar = current is Details)
-                            }
-                        }
+                // A book's page keeps the tabs (and the mini-player above them), so going back never moves either.
+                is Details -> bookFor(screen.id)?.let { DetailPane(vm, it, true, shellInsets, scrollFor(it.id)) }
+                // The room's surface reaches the top edge, so as it rises nothing of the page shows above it.
+                Listening -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    PlayerScreen(vm, true, shellInsets.fillMaxSize().navigationBarsPadding())
+                }
+                is Reading -> readerFor()?.takeIf { it.book.id == screen.id }?.let { ReaderScreen(vm, it.book.id, vm::closeReader, it.together, it.fromListening) }
+            }
+            }
+        }
+        // While a book plays, its controls stay at the bottom of every screen, above the tabs. The Listening room and
+        // the reader carry their own.
+        Column(Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .onSizeChanged { onBarHeight(with(density) { it.height.toDp() }) }) {
+            // The bottom bar draws above the screens, so when the Listening room or the reader rises it fades away at
+            // once rather than sliding over them.
+            // Coming back from the reader, it waits for the reader to drop most of the way, so it never draws over it.
+            // The Listening room draws above it while it moves, uncovering the mini-player and tabs as it drops.
+            val fromRoom = transition.currentState == Listening
+            val barDelay = if (fromRoom) 200 else Motion.MEDIUM * 2 / 3
+            // From the room they're already in place underneath it, so the page's bottom is never empty; the room fades
+            // as it passes them, so the two players never stand out together.
+            val barEnter = if (fromRoom) EnterTransition.None else fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay))
+            transition.AnimatedVisibility({ it == Home || it is Details },
+                enter = barEnter,
+                exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
+                AnimatedVisibility(hasPlayback, enter = expandVertically(expandFrom = Alignment.Top) + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    // A short fade above it, so a page scrolling underneath trails off rather than being cut through.
+                    val page = MaterialTheme.colorScheme.background
+                    MiniPlayer(vm, Modifier.drawBehind {
+                        val fade = 20.dp.toPx()
+                        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(page.copy(alpha = 0f), page), startY = -fade, endY = 0f),
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, -fade), size = androidx.compose.ui.geometry.Size(size.width, fade))
+                    })
+                }
+            }
+            // The tabs stay on home and a book's page alike, so moving between them leaves the bottom of the screen still.
+            transition.AnimatedVisibility({ it == Home || it is Details },
+                enter = barEnter,
+                exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {
+                // Without a mini-player above it, the tabs carry the same short fade, so text scrolling under them trails off.
+                val page = MaterialTheme.colorScheme.background
+                NavigationBar(Modifier.drawBehind {
+                    if (!hasPlayback) {
+                        val fade = 20.dp.toPx()
+                        drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(page.copy(alpha = 0f), page), startY = -fade, endY = 0f),
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, -fade), size = androidx.compose.ui.geometry.Size(size.width, fade))
                     }
-                    transition.AnimatedVisibility({ it == Home },
-                        enter = slideInVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.Emphasized)) { it } + fadeIn(),
-                        exit = slideOutVertically(androidx.compose.animation.core.tween(Motion.MEDIUM, easing = Motion.EmphasizedAccelerate)) { it } + fadeOut()) {
-                        NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-                            navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
-                        }
-                    }
+                }, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    navItems.forEachIndexed { index, item -> NavigationBarItem(destination == index, { vm.navigate(index) }, icon = { Icon(item.icon, item.label) }, label = { Text(item.label) }) }
                 }
             }
         }

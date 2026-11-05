@@ -37,7 +37,7 @@ internal fun sleepChoices(state: ListeningState): List<SleepChoice> = buildList 
     listOf(15, 30, 45, 60, 90).forEach { add(SleepChoice("In $it minutes", SleepMode.MINUTES, it)) }
     if (state.chapters.isNotEmpty() || state.sleep.mode == SleepMode.END_OF_CHAPTER) add(SleepChoice("At the end of this chapter", SleepMode.END_OF_CHAPTER))
     if ((state.source?.parts?.size ?: 0) > 1 || state.sleep.mode == SleepMode.END_OF_PART) add(SleepChoice("At the end of this audio part", SleepMode.END_OF_PART))
-    add(SleepChoice("Turn timer off", SleepMode.OFF))
+    add(SleepChoice("No timer", SleepMode.OFF))
 }
 
 /** Whole minutes left on the timer, rounded up so it never reads 0 while running; null when unknown. */
@@ -50,7 +50,7 @@ internal fun sleepStatus(state: ListeningState, nowMs: Long = System.currentTime
     fun count(n: Long) = "$n minute${if (n == 1L) "" else "s"}"
     val about = minutes?.let { ", in about ${count(it)}" }.orEmpty()
     return when (state.sleep.mode) {
-        SleepMode.OFF -> "Choose when playback pauses. The narration fades out over its last few seconds."
+        SleepMode.OFF -> "Pauses playback with a gentle fade."
         SleepMode.MINUTES -> "Pauses in about ${count(minutes ?: 1)}."
         SleepMode.END_OF_CHAPTER -> "Pauses at the end of this chapter$about."
         SleepMode.END_OF_PART -> "Pauses at the end of this audio part$about."
@@ -86,7 +86,8 @@ internal fun SleepTimerDialog(state: ListeningState, choose: (SleepChoice) -> Un
         Column(Modifier.selectableGroup()) {
             sleepChoices(state).forEach { choice -> OptionRow(choice.label, choice.selected(state.sleep)) { haptics.performHapticFeedback(HapticFeedbackType.SegmentTick); choose(choice) } }
         }
-        if (shake != null) {
+        // Shaking only extends a running timer, so its switch shows only while one runs.
+        if (shake != null && state.sleep.active) {
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
             Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(shake, role = Role.Switch, onValueChange = setShake).padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -112,7 +113,7 @@ internal data class TimeLeft(val text: String, val spoken: String)
 /**
  * Time left in the whole book when every part's length is known, otherwise in this part; never a guess. The chapter
  * number appears for single-file books, whose chapters number the whole book. At other speeds it adds the listening
- * time at that speed.
+ * time at that speed. A single file without chapters at 1× has nothing to add to the slider's countdown.
  */
 internal fun timeLeft(state: ListeningState): TimeLeft? {
     val book = state.bookTime
@@ -123,6 +124,8 @@ internal fun timeLeft(state: ListeningState): TimeLeft? {
     }
     val chapter = chapterIndexAt(state.chapters, state.positionMs).takeIf { it >= 0 && book != null && state.source?.parts?.size == 1 }?.let { it + 1 }
     val faster = state.speed != 1f && state.speed > 0f
+    // One file without chapters at normal speed: the slider's own countdown already says exactly this.
+    if (chapter == null && !faster && (state.source?.parts?.size ?: 1) == 1) return null
     val text = listOfNotNull(chapter?.let { "Ch $it" }, "${timeLeftLabel(remaining)} left in $where").joinToString(" · ") +
         if (faster) " (${timeLeftLabel(atSpeed(remaining, state.speed))} at ${speedLabel(state.speed)})" else ""
     val spoken = listOfNotNull(chapter?.let { "Chapter $it" }, "${spokenTimeLeft(remaining)} left in $where",
@@ -148,9 +151,12 @@ internal fun ChapterTitleRow(vm: NarrioViewModel, state: ListeningState, dense: 
     val parts = state.source?.parts?.size ?: 1
     val chapters = state.chapters.isNotEmpty()
     val noun = if (chapters) "chapter" else "part"
+    val title = state.placeTitle
+    // A single file without chapters has no place to name; the book's own title above says it all.
+    if (title == null && subtitle == null && !chapters && parts <= 1) return
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(state.chapter?.title ?: state.part?.title ?: "Ready to listen", Modifier.testTag("listening-title"), style = MaterialTheme.typography.titleSmall,
+            if (title != null) Text(title, Modifier.testTag("listening-title"), style = MaterialTheme.typography.titleSmall,
                 maxLines = if (dense) 1 else 2, overflow = TextOverflow.Ellipsis)
             if (subtitle != null) Text(subtitle, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

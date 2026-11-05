@@ -49,13 +49,13 @@ class PersistentPlayerTest {
             main { service.load(audio, source, false, source.parts.single().id, 12_000) }
             compose.runOnIdle { graph.preferences.edit().putBoolean("notificationAsked", true).apply(); vm.playerOpen.value = false }
 
-            // A book's details keep the player under them.
+            // A book's details keep the player under them, docked on the tabs, which stay so going back moves neither.
             compose.runOnIdle { vm.open(audio) }
             compose.waitForIdle()
-            val root = compose.onRoot().fetchSemanticsNode().boundsInRoot
             val docked = compose.onNodeWithTag("mini-player").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-            assertEquals("Docked at the bottom edge", root.bottom, docked.bottom, 1f)
-            compose.onNodeWithContentDescription("Skip forward 30 seconds").assertIsDisplayed()
+            val tabs = compose.onNodeWithText("Discover").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+            assertTrue("Docked directly above the tabs", tabs.top >= docked.bottom - 1f && tabs.top - docked.bottom < 24f)
+            compose.onNodeWithContentDescription("Rewind 10 seconds").assertIsDisplayed()
             capture("docked-details.png")
 
             // So does the reader, with the page ending where the player begins.

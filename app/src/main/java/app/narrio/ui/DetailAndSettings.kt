@@ -6,8 +6,15 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -83,10 +90,13 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     // Leaving Settings cancels a connection its form started, so the key is never saved later; the sheet keeps its own.
     DisposableEffect(vm) { onDispose { if (!vm.torBox.value.prompt) vm.dismissTorBoxConnect() } }
     AnimatedContent(page, modifier, transitionSpec = { Motion.sharedAxisX(targetState != "home") }, label = "settings page") { shown ->
-        when (shown) {
-            "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, vm::requestTorBoxConnect, vm::addonsChanged, { vm.sourceSettingsOpen.value = false })
-            "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
-            else -> SettingsHome(vm, connected, appearance, wifiOnly, { vm.sourceSettingsOpen.value = true }) { appearanceOpen = true }
+        // Opaque, so the page sliding in covers the one beneath instead of showing its text through.
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            when (shown) {
+                "addons" -> AddonSettings(vm.graph.addons, vm.sourceProviderSettings, vm.ebookProviderSettings, connected, vm::requestTorBoxConnect, vm::addonsChanged, { vm.sourceSettingsOpen.value = false })
+                "appearance" -> AppearanceScreen(appearance, vm::updateAppearance, { appearanceOpen = false })
+                else -> SettingsHome(vm, connected, appearance, wifiOnly, { vm.sourceSettingsOpen.value = true }) { appearanceOpen = true }
+            }
         }
     }
 }
@@ -95,55 +105,101 @@ fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
 private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: AppearanceSettings, wifiOnly: Boolean, openAddons: () -> Unit, openAppearance: () -> Unit) {
     val context = LocalContext.current
     val backgroundAlignment by vm.backgroundAlignment.collectAsStateWithLifecycle()
+    // The one highlights switch is on only when both of its settings are, so it never shows On over a setting that's off.
     val readAlongSync by vm.readAlongSync.collectAsStateWithLifecycle()
-    // TorBox leads: it gates every source beyond LibriVox. Everyday listening settings follow, then the app itself.
-    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(28.dp)) {
-        item { Text("Settings", style = MaterialTheme.typography.displaySmall) }
-        item(key = "torbox") { TorBoxSettings(vm, connected) }
-        item {
-            OutlinedButton(openAddons, Modifier.fillMaxWidth()) {
-                Text("Sources & add-ons · Audiobooks, ebooks & book info")
+    var aboutOpen by rememberSaveable { mutableStateOf(false) }
+    val updates by vm.graph.updates.state.collectAsStateWithLifecycle()
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    // TorBox leads: it gates every source beyond LibriVox. Where books come from and how the app looks follow as rows,
+    // then everyday switches, then the app itself.
+    val list = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), state = list, contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        item(key = "title") { Text("Settings", style = MaterialTheme.typography.displaySmall) }
+        item(key = "torbox") {
+            Text("Where books come from", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                TorBoxSettings(vm, connected)
+                SettingsRow(Icons.Rounded.ManageSearch, "Sources Narrio uses", "Choose which sources Narrio searches", openAddons, Modifier.testTag("sources-entry"))
+                // An ebook file of your own is another place books come from; it opens as a new book, and My shelf shows any problem.
+                val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> vm.importEbook(uri); if (uri != null) vm.navigate(1) }
+                SettingsRow(Icons.Rounded.UploadFile, "Import an ebook file", "Adds it to My shelf as a new book", {
+                    vm.beginEbookImport(null); importer.launch(arrayOf("application/epub+zip", "text/plain", "application/octet-stream"))
+                }, Modifier.testTag("settings-import-ebook"))
             }
         }
+        // The everyday listening and reading switches.
         item {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
-            Text("Downloads", style = MaterialTheme.typography.headlineSmall)
+            Text("Listening and reading", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(8.dp))
+            SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
-            Text("Use Download for offline on a book to save its recording to this phone. Manage downloads on the book or your shelf. Streaming plays over the internet without saving the book.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Download only on Wi-Fi", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Switch(wifiOnly, vm::setWifiOnly)
-            }
-            Text(if (wifiOnly) "Downloads wait for an unmetered connection." else "Downloads can use mobile data, including large whole-book files.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
+            SettingSwitch("Read-along highlights", "Highlights each word as it's read. For streamed books, word highlighting is prepared while your phone charges on Wi-Fi.",
+                backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
+        }
+        // How the app looks and keeps itself current. Local builds have no update channel and show their version under
+        // About instead, so the section is then just Appearance.
+        item {
+            // Each section heading has the same room above it.
+            Text("App", Modifier.padding(top = 8.dp), style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(4.dp))
+            AppearanceEntry(appearance, openAppearance)
+            if (updates.channel != null) UpdateSettings(vm.graph.updates)
         }
         item {
-            Text("Reading & listening", style = MaterialTheme.typography.headlineSmall)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Sync narration in the background", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Switch(backgroundAlignment, vm::setBackgroundAlignment, Modifier.testTag("background-alignment"))
+            Text("About Narrio", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(12.dp))
+            Text("Your shelf, progress, and bookmarks stay on this phone.", style = MaterialTheme.typography.bodyMedium, color = muted)
+            TextButton({ aboutOpen = !aboutOpen }, Modifier.offset(x = (-12).dp)) { Text(if (aboutOpen) "Hide credits and details" else "Credits and details") }
+            AnimatedVisibility(aboutOpen) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium, color = muted)
+                    Text("Search identifies books from catalog details. Opening a book looks for LibriVox recordings and, with TorBox connected, your TorBox library and enabled sources, then picks the best match with audio ready to play. Other versions appear only when the narrator, language, or edition differs. Some releases don't confirm their narrator, language, or abridgment, so check the release and files before listening.",
+                        style = MaterialTheme.typography.bodySmall, color = muted)
+                    Text("Book details and covers come from your catalog sources, with Google Books as a fallback. Book names go to those sources; your TorBox key and listening history stay private. Covers belong to their rights holders. Fallback covers use original garden artwork made with ImageGen. Type: Newsreader and Manrope, SIL Open Font License.",
+                        style = MaterialTheme.typography.bodySmall, color = muted)
+                    TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://librivox.org/pages/about-librivox/"))) }, Modifier.offset(x = (-12).dp)) { Text("About the LibriVox recordings") }
+                }
             }
-            Text("Align downloaded audio on this phone. Streaming alignment waits for Wi-Fi and charging. The English narration model downloads once over Wi-Fi.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Sync while reading along", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
-                Switch(readAlongSync, vm::setReadAlongSync, Modifier.testTag("read-along-sync"))
-            }
-            Text("While read along is open, listens to the narration on this phone to keep the highlight in step. Audio isn't uploaded.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        item { AppearanceEntry(appearance, openAppearance) }
-        item { UpdateSettings(vm.graph.updates) }
-        item {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant); Spacer(Modifier.height(24.dp))
-            Text("About Narrio", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(12.dp))
-            Text("Narrio ${BuildConfig.VERSION_NAME} · Native Android\n\nSearch identifies books from catalog metadata. Opening a book looks for public-domain LibriVox recordings and, with TorBox connected, your TorBox library and enabled source add-ons. The best match with ready audio is chosen automatically. Other versions appear only when the narrator, language, or edition differs. When no recording matches confidently, you can review the search results yourself. Matching releases with verified audio files and available seeders can be explicitly prepared in TorBox. Indexed releases may have unverified narration, language, or abridgment; inspect the release and files before listening. Availability depends on the provider and TorBox cache.\n\nSaved books, downloads, progress, and bookmarks stay on this device. Downloading to your phone is optional.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(12.dp))
-            Text("Matched book details and cover art come from enabled catalog add-ons, with Google Books as a built-in fallback. Manage providers in Add-ons. Catalog narrator information does not verify the release's recording. Book names go directly to these metadata providers; your TorBox key and listening history stay private.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(12.dp))
-            TextButton({ context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://librivox.org/pages/about-librivox/"))) }) { Text("About the LibriVox recordings") }
-            Text("Retrieved covers belong to their respective rights holders. Fallbacks use original garden artwork created with ImageGen and Narrio's graphic designs. Typography: Newsreader and Manrope, SIL Open Font License.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    // Once the big title scrolls away, a compact one takes its place, as on a book's page, so rows never run
+    // against the status bar and the page is always named.
+    AnimatedVisibility(list.firstVisibleItemIndex > 0, enter = fadeIn(), exit = fadeOut()) {
+        // Its own raised surface, so rows clearly pass beneath it rather than meeting the title.
+        Column(Modifier.fillMaxWidth().shadow(3.dp).background(MaterialTheme.colorScheme.surfaceContainer)) {
+            Text("Settings", Modifier.padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 12.dp), style = MaterialTheme.typography.titleLarge)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
+    }
+    }
+}
+
+/** A row into a settings page, flat like the switches: icon, title, one line saying what's inside, and a chevron. */
+@Composable
+internal fun SettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, detail: String, open: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = open).padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Icon(Icons.Rounded.ChevronRight, null)
+    }
+}
+
+/** One switch with its title and a one-line consequence; the whole row toggles it (and carries [modifier]'s tag). */
+@Composable
+private fun SettingSwitch(title: String, detail: String, checked: Boolean, change: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).toggleable(checked, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = change).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked, null)
     }
 }

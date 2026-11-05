@@ -66,7 +66,7 @@ class MetadataExperienceTest {
         val window = compose.activity.resources.configuration
         val suffix = (if (window.screenWidthDp >= 600) "expanded" else if (window.fontScale > 1.2f) "large-text" else "phone") + if (appearance == "Day") "-day" else ""
         capture("metadata-recording-$suffix")
-        compose.onNodeWithText("Details from Audible", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Description from Audible", substring = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Refresh book details").performScrollTo().assertIsEnabled()
         capture("metadata-description-$suffix")
         compose.runOnIdle { vm.selection.value = SelectionState(enriched, metadataLoading = true) }

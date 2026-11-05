@@ -110,12 +110,13 @@ class RecordingChoiceTest {
 
         // Back on the page Kim's recording is the one Resume plays; choosing Ray again picks up at Ray's place.
         compose.runOnIdle { vm.playerOpen.value = false }
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Kim Doe · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Kim Doe · Free")
         compose.onNodeWithTag("change-recording").performScrollTo().performClick()
         compose.onNodeWithTag("recording:${ray.id}").performClick()
         // Ray has a place of its own, so the start choice shows, resuming there unless the listener picks otherwise.
-        compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near"))
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Resume where you stopped in this one", substring = true) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
+        // Its options load from the library after the pick, so wait for them rather than racing a short sheet.
+        compose.waitUntil(15_000) { runCatching { compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("start-near")) }.isSuccess }
+        compose.waitUntil(15_000) { compose.onAllNodes(hasText("Resume where you stopped in this one", substring = true) and isSelected()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("recording-chooser").performScrollToNode(hasTestTag("chooser-listen"))
         compose.onNodeWithTag("chooser-listen").performClick()
         compose.waitUntil(15_000) { playing(ray.sources.single()) }
@@ -123,6 +124,8 @@ class RecordingChoiceTest {
         main { service.toggle() }
 
         // After a restart the book still knows which recording is the listener's, and every recording's audio.
+        // The listener's recording is saved as playback starts; wait for that write rather than racing it.
+        compose.waitUntil(5_000) { ListeningRecordings(graph.preferences)[parent.id]?.let { sameRecording(it, ray) } == true }
         val restarted = ListeningRecordings(graph.preferences)
         assertTrue(sameRecording(restarted[parent.id]!!, ray))
         assertEquals(listOf(kim.sources.single().id), restarted.playedSources(parent.id, kim))
@@ -159,7 +162,7 @@ class RecordingChoiceTest {
         // The page resumes Ray and shows Kim's recording still getting ready.
         compose.runOnIdle { vm.playerOpen.value = false; vm.open(entry.book()) }
         compose.onNodeWithTag("listen-action").assertTextContains("Resume", substring = true)
-        compose.onNodeWithTag("recording-summary").assertTextEquals("Ray Porter · Free public recording")
+        compose.onNodeWithTag("recording-summary").assertTextEquals("Read by Ray Porter · Free")
         compose.onNodeWithTag("book-details").performScrollToNode(hasTestTag("preparation"))
         compose.onNodeWithText("Getting ready in TorBox").assertExists()
         compose.onNodeWithText("Kim Doe's recording").assertExists()

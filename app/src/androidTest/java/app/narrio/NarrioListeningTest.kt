@@ -27,7 +27,7 @@ class NarrioListeningTest {
         graph.preferences.edit().putBoolean("notificationAsked", true).commit()
         compose.runOnIdle { vm.open(NarrioViewModel.curated.first()) }
         compose.waitUntil(30_000) { vm.selection.value.book?.sources?.isNotEmpty() == true && !vm.selection.value.loading }
-        compose.onNodeWithText("Read by Ashleighjane").assertExists()
+        compose.onNodeWithTag("recording-summary").assertTextContains("Ashleighjane", substring = true)
     }
 
     /** Plays the open recording in [format], chosen in the recording chooser's Advanced view. */
@@ -48,7 +48,7 @@ class NarrioListeningTest {
         compose.waitUntil(90_000) { graph.playback.state.value.playing && graph.playback.state.value.source?.format == "MP3" && graph.playback.state.value.positionMs > 1000 }
         assertEquals(27, graph.playback.state.value.source?.parts?.size)
         compose.runOnIdle { graph.playback.service!!.speed(1f) }
-        compose.onNodeWithText("1×").performScrollTo().performClick()
+        compose.onNodeWithText("1× speed").performScrollTo().performClick()
         compose.onNodeWithText("1.5× speed").performScrollTo().performClick()
         compose.waitUntil(3000) { graph.playback.state.value.speed == 1.5f }
         compose.runOnIdle { graph.playback.service!!.part(1, 120_000) }
@@ -63,7 +63,8 @@ class NarrioListeningTest {
         assertFalse(graph.playback.state.value.sleep.active)
         compose.runOnIdle { graph.playback.service!!.part(1, 120_000) }
         compose.waitUntil(30_000) { graph.playback.state.value.partIndex == 1 && graph.playback.state.value.positionMs >= 120_000 && graph.playback.state.value.playing }
-        compose.onNodeWithContentDescription("Bookmark this moment").performClick()
+        compose.onNodeWithText("Bookmarks").performClick()
+        compose.onNodeWithText("Add bookmark").performClick()
         val bookId = graph.playback.state.value.book!!.id
         compose.waitUntil(5000) { runBlocking { graph.library.bookmarks(bookId).first().isNotEmpty() } }
         val bookmark = runBlocking { graph.library.bookmarks(bookId).first().first() }
@@ -117,7 +118,7 @@ class NarrioListeningTest {
         // Choosing it in the chooser keeps the book's one page and leads Listen with it.
         val recording = vm.sourceSearch.value.recordings.first { it.provider == "archive" }
         compose.runOnIdle { vm.chooseVersion(recording) }
-        compose.onNodeWithTag("recording-summary").assertTextContains("Free public recording", substring = true)
+        compose.onNodeWithTag("recording-summary").assertTextContains("· Free", substring = true)
         compose.onNodeWithText("Listen").performScrollTo().assertIsEnabled()
     }
 }

@@ -1,5 +1,6 @@
 package app.narrio.ui
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -100,6 +101,7 @@ private class Scrub(val startMs: Float) {
  * actions; touch is handled here so the finger can leave the bar while seeking. [scrubbing] reports the place being
  * chosen (null once it is released) so the times beside the bar can follow it.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SeekSlider(positionMs: Long, durationMs: Long, seek: (Long) -> Unit, scrubbing: (Long?) -> Unit, modifier: Modifier = Modifier) {
     val haptics = LocalHapticFeedback.current
@@ -117,7 +119,10 @@ internal fun SeekSlider(positionMs: Long, durationMs: Long, seek: (Long) -> Unit
         Slider(value = value.coerceIn(0f, duration), onValueChange = { active = true; value = it; scrubbing(it.toLong()) },
             onValueChangeFinished = { seek(value.toLong()); active = false; scrubbing(null) },
             valueRange = 0f..duration, enabled = durationMs > 0, interactionSource = interaction,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Listening position" })
+            modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Listening position" },
+            // A round thumb on a plain track: no end dot or gap competing with the place being shown.
+            thumb = { Box(Modifier.size(16.dp).background(if (durationMs > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline, CircleShape)) },
+            track = { state -> SliderDefaults.Track(state, enabled = durationMs > 0, drawStopIndicator = null, thumbTrackGapSize = 0.dp, modifier = Modifier.height(6.dp)) })
         // Drawn over the slider so it takes the touch (a tap never jumps); the slider still answers TalkBack and keyboard adjustments.
         Box(Modifier.matchParentSize().pointerInput(durationMs) {
             if (durationMs <= 0) return@pointerInput
