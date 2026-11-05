@@ -370,9 +370,8 @@ private fun BestEbookCard(search: StreamedEbookSearch, pinned: PinnedEbook, tall
                     Text(it.text, style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
                 }
                 // The book it's compared with, so the doubt can be judged without the page behind the sheet.
-                if (!trusted) Text(listOf(search.book.title, search.book.author).filter(String::isNotBlank).joinToString(" · ", prefix = "Your book: "),
-                    style = MaterialTheme.typography.bodySmall, color = muted, modifier = Modifier.padding(top = 2.dp))
-                if (!trusted) Text("${possibleMatchCaution(possible)} Read a little, then keep it or remove it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
+                // One sentence names the doubt and the book it's compared with, then how checking works.
+                if (!trusted) Text("${possibleMatchCaution(possible, search.book)} Read a little, then keep it or remove it.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(top = 2.dp))
             }
             else -> {
                 val copy = ebookNoMatchCopy(search, tally)
@@ -549,7 +548,8 @@ fun ShelfProgress(place: PlaceSummary, modifier: Modifier = Modifier, live: Stri
             style = MaterialTheme.typography.labelSmall, color = if (live != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         place.fraction?.let { progress ->
             Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(progress = { progress }, Modifier.fillMaxWidth().height(3.dp).clearAndSetSemantics { }, color = MaterialTheme.colorScheme.primary,
+            // A started book always shows a little fill, so its bar never reads as an empty track with a stray dot.
+            LinearProgressIndicator(progress = { if (progress > 0f || live != null) progress.coerceAtLeast(.03f) else progress }, Modifier.fillMaxWidth().height(3.dp).clearAndSetSemantics { }, color = MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.outlineVariant, gapSize = 0.dp, drawStopIndicator = {})
         }
     }

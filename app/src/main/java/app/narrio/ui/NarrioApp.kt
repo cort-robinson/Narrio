@@ -246,10 +246,9 @@ private fun CompactShell(vm: NarrioViewModel, current: Screen, destination: Int,
             // The Listening room draws above it while it moves, uncovering the mini-player and tabs as it drops.
             val fromRoom = transition.currentState == Listening
             val barDelay = if (fromRoom) 200 else Motion.MEDIUM * 2 / 3
-            // From the room they fade in as the room fades out near the dock, so the two players cross-fade rather than
-            // both showing at once.
-            val barEnter = if (fromRoom) fadeIn(androidx.compose.animation.core.tween(200, delayMillis = 150))
-                else fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay))
+            // From the room they're already in place underneath it, so the page's bottom is never empty; the room fades
+            // as it passes them, so the two players never stand out together.
+            val barEnter = if (fromRoom) EnterTransition.None else fadeIn(androidx.compose.animation.core.tween(Motion.SHORT, delayMillis = barDelay))
             transition.AnimatedVisibility({ it == Home || it is Details },
                 enter = barEnter,
                 exit = fadeOut(androidx.compose.animation.core.tween(Motion.SHORT / 2))) {

@@ -175,13 +175,20 @@ class ConnectTorBoxTest {
         compose.runOnIdle { assertTrue(fixture.connected.value) }
     }
 
+    private fun showNudge() {
+        compose.waitUntil(15_000) { !vm.catalog.value.loading && vm.catalog.value.books.isNotEmpty() }
+        compose.onNodeWithTag("discover-list").performScrollToKey("torbox-nudge")
+        compose.onNodeWithTag("torbox-nudge").assertIsDisplayed()
+    }
+
     @Test fun discoverHintShowsOnlyWhileDisconnectedAndStaysDismissed() {
         compose.runOnIdle {
             restoreConnected = vm.connected.value
             vm.graph.preferences.edit().remove(TorBoxNudge.KEY).commit()
             vm.connected.value = false; vm.navigate(0); vm.search("")
         }
-        compose.onNodeWithTag("torbox-nudge").assertIsDisplayed()
+        // It follows the first few books, so the list scrolls to it.
+        showNudge()
         // Which hint shows depends on whether LibriVox answered the free check in time.
         compose.onNode(hasAnyAncestor(hasTestTag("torbox-nudge")) and (hasText(FREE_AND_TORBOX) or hasText(FREE_MARKED_AND_TORBOX) or hasText(ALL_FREE_AND_TORBOX))).assertIsDisplayed()
         compose.runOnIdle { vm.connected.value = true }
@@ -189,7 +196,7 @@ class ConnectTorBoxTest {
         compose.runOnIdle { vm.connected.value = false }
 
         // Its Connect TorBox opens the sheet over Discover.
-        compose.onNodeWithTag("torbox-nudge").assertIsDisplayed()
+        showNudge()
         compose.onNode(hasText("Connect") and hasAnyAncestor(hasTestTag("torbox-nudge"))).performClick()
         compose.onNodeWithTag("connect-torbox-sheet").assertIsDisplayed()
         compose.runOnIdle { vm.dismissTorBoxConnect() }
@@ -199,7 +206,8 @@ class ConnectTorBoxTest {
         compose.runOnIdle { vm.search("hail mary") }
         compose.onNodeWithTag("torbox-nudge").assertDoesNotExist()
         compose.runOnIdle { vm.search("") }
-        compose.onNodeWithContentDescription("Not now").performClick()
+        showNudge()
+        compose.onNode(hasContentDescription("Not now") and hasAnyAncestor(hasTestTag("torbox-nudge"))).performClick()
         compose.onNodeWithTag("torbox-nudge").assertDoesNotExist()
         compose.runOnIdle { assertTrue(vm.graph.preferences.getLong(TorBoxNudge.KEY, 0) > 0) }
         compose.activityRule.scenario.recreate()

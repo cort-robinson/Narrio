@@ -150,9 +150,11 @@ fun ebookTitle(title: String, book: Audiobook): String = title.replace(FORMAT_TA
 private val FORMAT_TAG = Regex("""\s*[\[(](?:EPUB|PDF|TXT|MOBI|AZW3?|FB2)[\])]""", RegexOption.IGNORE_CASE)
 
 /** Why a possible match that leads the ebook sheet is only possible, in words a listener can check against. */
-fun possibleMatchCaution(choice: EbookChoice): String =
-    if (choice.edition.author.isBlank()) "No author is listed, so it may be a different book."
-    else "Its title or author differs a little from this book's."
+fun possibleMatchCaution(choice: EbookChoice, book: Audiobook? = null): String {
+    val yours = book?.let { listOf(it.title, it.author.takeIf(String::isNotBlank)?.let { author -> "by $author" }).filterNotNull().joinToString(" ") }
+    return if (choice.edition.author.isBlank()) "This ebook has no author listed, so it may not be ${yours ?: "this book"}."
+    else "Its title or author differs a little from ${yours ?: "this book's"}."
+}
 
 /** Where a choice is from, unless its note already says it comes with the recording. */
 fun ebookChoiceSource(choice: EbookChoice, recording: Boolean): String? =

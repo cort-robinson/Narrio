@@ -61,7 +61,7 @@ class EbookResultsModelTest {
         // Coming with the recording is the reason to try it, said once: no check note, no source line, and the book's name, not the file's.
         assertEquals(listOf(ChoiceNote(ChoiceNoteKind.LIKELY, "Comes with this recording")), ebookChoiceNotes(choices.first(), recording = true))
         assertNull(ebookChoiceSource(choices.first(), recording = true))
-        assertEquals("No author is listed, so it may be a different book.", possibleMatchCaution(choices.first()))
+        assertEquals("This ebook has no author listed, so it may not be this book.", possibleMatchCaution(choices.first()))
         assertEquals("Pride and Prejudice", ebookChoiceTitle(choices.first(), book))
         assertEquals("Pride and Prejudice - abridged", ebookChoiceTitle(choices.last(), book))
         assertEquals("Pride and Prejudice", ebookChoiceTitle(EbookChoice(BookTextSource("t", "Pride and Prejudice [EPUB]", "", "EPUB", "gutenberg"), "gutenberg", "Project Gutenberg", false, choices.last().fit), book))

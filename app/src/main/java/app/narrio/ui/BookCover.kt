@@ -30,8 +30,8 @@ import app.narrio.domain.Audiobook
 private val loadedCovers = java.util.Collections.synchronizedSet(HashSet<String>())
 
 @Composable
-private fun CoverPlaceholderMark() =
-    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .35f))
+private fun CoverPlaceholderMark(size: androidx.compose.ui.unit.Dp = 44.dp) =
+    Icon(Icons.AutoMirrored.Rounded.MenuBook, null, Modifier.size(size), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .35f))
 
 @Composable
 fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = false, blank: Boolean = false) {
@@ -69,7 +69,8 @@ fun BookCover(book: Audiobook, modifier: Modifier = Modifier, large: Boolean = f
         val fallback = reveal < 1f && previous == null && drawn
         // A large cover still on its way holds a quiet book mark, so the shape never reads as a broken image.
         // Any art bridging the change draws over it, so the mark shows only while nothing else does.
-        if (large && !drawn && !coverLoaded) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) { CoverPlaceholderMark() }
+        // A thumbnail still loading carries a smaller mark, so no size ever looks like a broken image.
+        if (!drawn && !coverLoaded) Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) { CoverPlaceholderMark(if (large) 44.dp else if (tiny) 16.dp else 24.dp) }
         if (fallback && "secret garden" in key) {
             Image(painterResource(R.drawable.secret_garden), null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xBD091A13), Color.Transparent, Color(0xD90B1C15)))))

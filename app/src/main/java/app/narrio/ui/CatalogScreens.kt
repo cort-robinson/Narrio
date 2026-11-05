@@ -56,7 +56,7 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val shelfCovers = remember(shelf) { shelf.associate { it.bookId to runCatching { it.book().coverUrl }.getOrDefault("") }.filterValues(String::isNotBlank) }
     // Short windows, such as a folding phone's cover screen, tighten the gaps so more books show.
     val short = LocalConfiguration.current.screenHeightDp < SHORT_WINDOW_DP
-    LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = if (short) 12.dp else 20.dp, bottom = 28.dp),
+    LazyColumn(modifier.fillMaxSize().testTag("discover-list"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = if (short) 12.dp else 20.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(if (short) 16.dp else 24.dp)) {
         // While searching, results start under the search field; the name returns when the search is cleared. The item
         // itself stays, so the list keeps its top and the name is always back in view.
@@ -101,7 +101,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
         }
         // While a book plays the listener is already listening; the hint waits for a quieter moment.
         val allFree = catalog.books.isNotEmpty() && catalog.books.all { it.id in catalog.free }
-        if (query.isBlank() && torBoxNudge.visible(connected) && playing.book == null) item(key = "torbox-nudge") { TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty(), compact = true, allFree = allFree) }
+        // Books come first; the hint follows the first few, where it's seen without pushing the list down.
+        val nudge = query.isBlank() && torBoxNudge.visible(connected) && playing.book == null
         catalog.notice?.let { item(key = "notice") { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
         catalog.error?.let { error -> item(key = "error") { RecoveryState("Couldn't load book metadata", error, { vm.search() }) } }
         if (browse) {
@@ -128,12 +129,14 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             if (query.isNotBlank()) item(key = "results-title") {
                 // Once free recordings are marked, the count says so; what an unmarked book needs is told on its page.
                 val count = "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}"
-                AnimatedContent(if (catalog.loading) "Searching…" else if (!connected && catalog.free.isNotEmpty()) "$count · free recordings are marked" else count,
+                val freeHere = catalog.books.count { it.id in catalog.free }
+                AnimatedContent(if (catalog.loading) "Searching…" else if (!connected && freeHere > 0) "$count · $freeHere free to listen" else count,
                     transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
                     Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            items(catalog.books, key = { it.id }) { book ->
+            val nudgeAfter = if (nudge) minOf(NUDGE_AFTER, catalog.books.size) else catalog.books.size
+            catalog.books.forEachIndexed { index, book -> item(key = book.id) {
                 BookRow(shelfCovers[book.id]?.let { book.copy(coverUrl = it) } ?: book, { vm.rememberSearch(catalog.query); vm.open(book) }, Modifier.animateItem().staleWhile(catalog.loading),
                     // The book in the mini-player says so in words where it appears in the list, as on the shelf.
                     extra = when {
@@ -142,6 +145,10 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                         book.id in shelfIds -> ({ Text("On your shelf", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) })
                         else -> null
                     })
+            }
+                if (index == nudgeAfter - 1 && nudge) item(key = "torbox-nudge") {
+                    TorBoxNudgeCard(vm::requestTorBoxConnect, torBoxNudge::dismiss, Modifier.animateItem(), marked = catalog.free.isNotEmpty(), compact = true, allFree = allFree)
+                }
             }
         } else if (!catalog.loading && catalog.error == null) item(key = "empty") {
             EmptyState("No books found", "Try another title or author, or clear the category.", Icons.Rounded.Search)
@@ -157,6 +164,9 @@ internal fun playingLine(playing: app.narrio.playback.ListeningState): String {
     val state = when { playing.playing -> "Playing"; playing.buffering -> "Loading"; else -> "Paused" }
     return left?.let { "$state · ${timeLeftLabel(it)} left" } ?: state
 }
+
+/** How many books Discover shows before its first-run TorBox hint. */
+private const val NUDGE_AFTER = 4
 
 /** Below this height, Discover and a book's page tighten their spacing and cover so actions stay in view. */
 internal const val SHORT_WINDOW_DP = 800
@@ -252,7 +262,7 @@ fun LibraryScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
                 // Adding an ebook file makes a new shelf book, so it lives with the shelf rather than among its books.
                 // Its one action shows as its own icon, so it never reads as another row's menu.
                 if (shelf.isNotEmpty()) TextButton({ if (!importing.working) addEbook() }, Modifier.testTag("shelf-add-ebook-header")) {
-                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add from phone")
+                    Icon(Icons.Rounded.UploadFile, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Add ebook file")
                 }
             }
             if (organizable) ShelfFilters(filter, vm::setShelfFilter, Modifier.padding(top = 12.dp))

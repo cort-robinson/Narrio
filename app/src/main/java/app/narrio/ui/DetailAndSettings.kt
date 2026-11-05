@@ -10,6 +10,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -72,7 +73,6 @@ fun OfflineStatus(vm: NarrioViewModel, download: OfflineBook, modifier: Modifier
     if (remove) AlertDialog(onDismissRequest = { remove = false }, title = { Text("Remove phone download?") }, text = { Text("Audio files for this ${download.source.format} source will be removed. Your book, bookmarks, and listening progress stay on your shelf.") }, confirmButton = { TextButton({ vm.removeDownload(download); remove = false }) { Text("Remove audio") } }, dismissButton = { TextButton({ remove = false }) { Text("Keep download") } })
 }
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
     val connected by vm.connected.collectAsStateWithLifecycle()
@@ -105,12 +105,10 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     // TorBox leads: it gates every source beyond LibriVox. Where books come from and how the app looks follow as rows,
     // then everyday switches, then the app itself.
-    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        // The title stays pinned, so rows scroll under it rather than being cut against the status bar.
-        stickyHeader(key = "title") {
-            // Its own top space keeps it clear of the status bar's fade while pinned.
-            Text("Settings", Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(top = 24.dp, bottom = 8.dp), style = MaterialTheme.typography.displaySmall)
-        }
+    val list = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().imePadding().testTag("settings-options"), state = list, contentPadding = PaddingValues(24.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        item(key = "title") { Text("Settings", style = MaterialTheme.typography.displaySmall) }
         item(key = "torbox") {
             Text("Where books come from", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.height(12.dp))
@@ -126,7 +124,7 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
             SettingSwitch("Download only on Wi-Fi", if (wifiOnly) "Saves your mobile data." else "Downloads can use mobile data.", wifiOnly, vm::setWifiOnly)
             Spacer(Modifier.height(12.dp))
             // One switch for highlighting: preparing it in the background and keeping it in step while reading along.
-            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books are prepared while charging on Wi-Fi.",
+            SettingSwitch("Read-along highlights", "Highlights words as they're read. Streamed books get them once Narrio prepares the audio, while your phone charges on Wi-Fi.",
                 backgroundAlignment && readAlongSync, { on -> vm.setBackgroundAlignment(on); vm.setReadAlongSync(on) }, Modifier.testTag("background-alignment"))
         }
         // How the app looks and keeps itself current. Local builds have no update channel and show their version under
@@ -154,6 +152,15 @@ private fun SettingsHome(vm: NarrioViewModel, connected: Boolean, appearance: Ap
                 }
             }
         }
+    }
+    // Once the big title scrolls away, a compact one takes its place, as on a book's page, so rows never run
+    // against the status bar and the page is always named.
+    AnimatedVisibility(list.firstVisibleItemIndex > 0, enter = fadeIn(), exit = fadeOut()) {
+        Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background)) {
+            Text("Settings", Modifier.padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 12.dp), style = MaterialTheme.typography.titleLarge)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        }
+    }
     }
 }
 
