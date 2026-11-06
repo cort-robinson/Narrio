@@ -87,7 +87,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Each test runs in its own process, which takes about 25 minutes for the suite before setup and boot.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -122,6 +123,8 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          # The reader's WebView renderer is killed when memory runs short, which takes the app down with it.
+          ram-size: 4096M
           force-avd-creation: false
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
@@ -141,6 +144,8 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: pixel_6
+          # The reader's WebView renderer is killed when memory runs short, which takes the app down with it.
+          ram-size: 4096M
           force-avd-creation: false
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true

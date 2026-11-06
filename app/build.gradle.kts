@@ -79,7 +79,11 @@ android {
         // Compressed speech-recognition libraries keep the APK download smaller.
         jniLibs.useLegacyPackaging = true
     }
-    testOptions { unitTests.isReturnDefaultValues = true }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+        // Each test runs in its own process, so one test's memory or crash can't fail the tests after it.
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
+    }
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
     // Reader fixtures (hostile and sample EPUBs) are shared by JVM and emulator tests.
     listOf("test", "androidTest").forEach { sourceSets.getByName(it).kotlin.directories += "src/sharedTest/java" }
@@ -140,6 +144,7 @@ dependencies {
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.06.01"))
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestUtil("androidx.test:orchestrator:1.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.window:window-testing:1.4.0")
     androidTestImplementation("androidx.work:work-testing:2.11.2")

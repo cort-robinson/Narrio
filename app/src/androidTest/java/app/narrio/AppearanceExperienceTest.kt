@@ -42,19 +42,6 @@ class AppearanceExperienceTest {
         return compose.onNodeWithTag(tag).performScrollTo().assertIsDisplayed()
     }
 
-    // Typing opens the keyboard, which shrinks the editor and scrolls the field into view over the next few frames. Wait
-    // for a node to hold still before tapping near it, so the tap lands where the test aimed rather than on a moving page.
-    private fun awaitStill(node: SemanticsNodeInteraction): SemanticsNodeInteraction {
-        var bounds = node.fetchSemanticsNode().boundsInRoot
-        var stillSince = System.currentTimeMillis()
-        compose.waitUntil(5_000) {
-            val now = node.fetchSemanticsNode().boundsInRoot
-            if (now != bounds) { bounds = now; stillSince = System.currentTimeMillis() }
-            System.currentTimeMillis() - stillSince >= 300
-        }
-        return node
-    }
-
     private fun capture(name: String) {
         compose.runOnIdle {
             val keyboard = compose.activity.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
@@ -166,8 +153,8 @@ class AppearanceExperienceTest {
         compose.onNodeWithText("Forest").performClick()
         target("colour-hex").performTextReplacement("broken")
         compose.onNodeWithTag("save-custom-theme").assertIsNotEnabled()
-        awaitStill(compose.onNodeWithTag("colour-hex"))
-        awaitStill(compose.onNodeWithContentDescription("Choose #8ACED8").performScrollTo()).performClick()
+        // Its click action, not a touch at its position: the keyboard opening can still be moving the page.
+        compose.onNodeWithContentDescription("Choose #8ACED8").performScrollTo().performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithTag("colour-hex").assertTextContains("#8ACED8")
         compose.onNodeWithContentDescription("Accent Hue").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(220f) }
         target("colour-hex")
@@ -188,6 +175,8 @@ class AppearanceExperienceTest {
         compose.runOnIdle { assertEquals(saved, vm.appearance.value.custom) }
         target("edit-custom-theme").performClick()
         target("custom-theme-name").performTextReplacement("Discard this draft")
+        // The typed name reaches the draft a frame later; recreating before then would save the old one.
+        compose.waitForIdle()
         compose.activityRule.scenario.recreate()
         target("custom-theme-name").assert(hasText("Discard this draft"))
         compose.onNodeWithContentDescription("Cancel custom theme").performClick()
