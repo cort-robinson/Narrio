@@ -132,7 +132,8 @@ fun DiscoverScreen(vm: NarrioViewModel, modifier: Modifier = Modifier) {
             if (query.isNotBlank()) item(key = "results-title") {
                 // Once free recordings are marked, the count says how many, and that count narrows the list to them.
                 val count = "${catalog.books.size} ${if (catalog.books.size == 1) "book" else "books"}"
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Tall enough for the free chip from the start, so the rows don't move down when it appears.
+                Row(Modifier.heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     AnimatedContent(if (catalog.loading) "Searching…" else count, Modifier.weight(1f, fill = false),
                         transitionSpec = { fadeIn().togetherWith(fadeOut()) }, label = "results title") {
                         Text(it, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
