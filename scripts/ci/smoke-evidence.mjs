@@ -6,9 +6,15 @@ import { pathToFileURL } from 'node:url';
 // the Git tree it tested: the files themselves, including this workflow and the tests.
 export const evidenceName = tree => `android-smoke-passed-${tree}`;
 
+// Runs whose checkout is exactly their head commit. A pull request run tests a merge commit
+// instead, which cannot be tied back to a tree afterwards, so its passes are not reused.
+export const EVIDENCE_EVENTS = ['push', 'workflow_dispatch'];
+
 // Picks a passing run's artifact that can stand in for running the emulator suite again.
-// Only this repository's own runs of this same workflow count, never a fork's.
-export function trustedEvidence({ artifacts, runs, repositoryId, workflowPath }) {
+// Only this repository's own runs of this same workflow count, never a fork's. The artifact's name
+// is only a lookup key: the run's own commit must have this exact tree. A run executes the workflow
+// and tests from its own commit, so a matching tree means it ran this workflow on these files.
+export function trustedEvidence({ artifacts, runs, repositoryId, workflowPath, tree, treeOf }) {
   for (const artifact of artifacts) {
     const run = artifact.workflow_run;
     if (artifact.expired || !run) continue;
@@ -16,6 +22,7 @@ export function trustedEvidence({ artifacts, runs, repositoryId, workflowPath })
     const details = runs.get(run.id);
     if (details?.path !== workflowPath || details.repository?.id !== repositoryId) continue;
     if (details.head_repository?.id !== repositoryId) continue;
+    if (!EVIDENCE_EVENTS.includes(details.event) || treeOf(details.head_sha) !== tree) continue;
     return { runId: run.id, url: details.html_url };
   }
   return null;
@@ -24,6 +31,17 @@ export function trustedEvidence({ artifacts, runs, repositoryId, workflowPath })
 // Manual runs always test, so there is a way to rerun the emulators on a tree that passed before.
 export function reuseAllowed({ event, androidRequired }) {
   return androidRequired && event !== 'workflow_dispatch';
+}
+
+// The tree of a commit in this checkout, or null when the commit is unknown here.
+function commitTree(sha) {
+  if (!/^[0-9a-f]{40}$/.test(sha ?? '')) return null;
+  try {
+    return execFileSync('git', ['rev-parse', '--verify', '--quiet', `${sha}^{tree}`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return null;
+  }
 }
 
 async function api(path, token) {
@@ -44,7 +62,7 @@ export async function findEvidence(tree, env = process.env) {
   for (const id of new Set(artifacts.map(artifact => artifact.workflow_run?.id).filter(Boolean))) {
     runs.set(id, await api(`/repos/${repo}/actions/runs/${id}`, env.GITHUB_TOKEN));
   }
-  return trustedEvidence({ artifacts, runs, repositoryId, workflowPath });
+  return trustedEvidence({ artifacts, runs, repositoryId, workflowPath, tree, treeOf: commitTree });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -191,11 +191,13 @@ jobs:
           retention-days: 14
 
   # Every shard passed and verified its classes, and the shards cover the whole list, so record
-  # that this tree passed. Later runs on the same tree, such as the push after a merge, reuse it.
+  # that this tree passed. Later runs on the same tree, such as a promotion PR, reuse it. Only
+  # branch pushes and manual runs record it: they test their own commit, which a later run can
+  # check against the tree. A pull request run tests a merge commit that cannot be checked later.
   smoke-evidence:
     name: Record passing smoke tests
     needs: [changes, native]
-    if: needs.native.result == 'success' && needs.changes.outputs.tree != ''
+    if: github.event_name != 'pull_request' && needs.native.result == 'success' && needs.changes.outputs.tree != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
