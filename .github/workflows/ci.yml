@@ -99,7 +99,7 @@ jobs:
   native:
     # The suite is split by class across parallel emulators, balanced by the seconds in the list file.
     # To change the number of emulators, change the shard list; the job reads its index and the total.
-    name: Android smoke tests (${{ matrix.shard }})
+    name: Android smoke tests
     needs: changes
     if: needs.changes.outputs.android == 'true' && needs.changes.outputs.smoke_reused != 'true'
     runs-on: ubuntu-24.04
