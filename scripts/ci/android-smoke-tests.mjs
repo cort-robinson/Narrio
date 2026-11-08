@@ -5,18 +5,48 @@ import { pathToFileURL } from 'node:url';
 export const SMOKE_TEST_LIST = '.github/android-smoke-tests.txt';
 const CLASS_NAME = /^[a-z_][\w]*(\.[a-z_][\w]*)*\.[A-Z][\w$]*$/;
 
-// One fully qualified class per line; blank lines and # comments are ignored.
-export function parseSmokeTests(text) {
-  const classes = [];
+export const DEFAULT_SECONDS = 30;
+
+// One fully qualified class per line, optionally followed by its measured CI seconds.
+// Blank lines and # comments are ignored.
+export function parseSmokeEntries(text) {
+  const entries = [];
   for (const [index, raw] of text.split(/\r?\n/).entries()) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
-    if (!CLASS_NAME.test(line)) throw new Error(`Line ${index + 1} is not a fully qualified test class: ${line}`);
-    if (classes.includes(line)) throw new Error(`Line ${index + 1} repeats ${line}`);
-    classes.push(line);
+    const [name, seconds, ...rest] = line.split(/\s+/);
+    if (!CLASS_NAME.test(name)) throw new Error(`Line ${index + 1} is not a fully qualified test class: ${line}`);
+    if (rest.length || (seconds !== undefined && !/^[1-9]\d*$/.test(seconds))) {
+      throw new Error(`Line ${index + 1} should be a class name and optional whole seconds: ${line}`);
+    }
+    if (entries.some(entry => entry.name === name)) throw new Error(`Line ${index + 1} repeats ${name}`);
+    entries.push({ name, seconds: seconds === undefined ? DEFAULT_SECONDS : Number(seconds) });
   }
-  if (!classes.length) throw new Error('The smoke-test list is empty');
-  return classes;
+  if (!entries.length) throw new Error('The smoke-test list is empty');
+  return entries;
+}
+
+export function parseSmokeTests(text) {
+  return parseSmokeEntries(text).map(entry => entry.name);
+}
+
+// Splits whole classes across shards, longest first onto the least-loaded shard. Classes stay
+// whole because a class's tests may depend on each other's saved state. Returns class names in list order.
+export function shardClasses(entries, shardIndex, shardCount) {
+  if (!Number.isInteger(shardCount) || shardCount < 1 || !Number.isInteger(shardIndex)
+    || shardIndex < 0 || shardIndex >= shardCount) {
+    throw new Error(`Invalid shard ${shardIndex} of ${shardCount}`);
+  }
+  const loads = Array(shardCount).fill(0);
+  const assigned = new Map();
+  const longestFirst = entries.map((entry, order) => ({ ...entry, order }))
+    .sort((a, b) => b.seconds - a.seconds || a.order - b.order);
+  for (const entry of longestFirst) {
+    const shard = loads.indexOf(Math.min(...loads));
+    loads[shard] += entry.seconds;
+    assigned.set(entry.name, shard);
+  }
+  return entries.filter(entry => assigned.get(entry.name) === shardIndex).map(entry => entry.name);
 }
 
 // Counts executed (not skipped) test cases per class in JUnit XML reports.
@@ -43,13 +73,26 @@ function reportFiles(directory) {
   });
 }
 
+// Accepts an optional trailing "<index>/<count>" (zero-based) selecting one shard.
+function selectedClasses(text, shard) {
+  const entries = parseSmokeEntries(text);
+  if (shard === undefined) return entries.map(entry => entry.name);
+  const match = /^(\d+)\/(\d+)$/.exec(shard);
+  if (!match) throw new Error(`Shard must look like 0/4, not ${shard}`);
+  const classes = shardClasses(entries, Number(match[1]), Number(match[2]));
+  if (!classes.length) throw new Error(`Shard ${shard} has no classes; use fewer shards`);
+  return classes;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [command, resultsDirectory] = process.argv.slice(2);
+  const [command, ...args] = process.argv.slice(2);
   try {
-    const expected = parseSmokeTests(readFileSync(SMOKE_TEST_LIST, 'utf8'));
-    if (command === 'list') {
-      process.stdout.write(`${expected.join('\n')}\n`);
-    } else if (command === 'verify' && resultsDirectory) {
+    const text = readFileSync(SMOKE_TEST_LIST, 'utf8');
+    if (command === 'list' && args.length <= 1) {
+      process.stdout.write(`${selectedClasses(text, args[0]).join('\n')}\n`);
+    } else if (command === 'verify' && args.length >= 1 && args.length <= 2) {
+      const [resultsDirectory, shard] = args;
+      const expected = selectedClasses(text, shard);
       const counts = executedTests(reportFiles(resultsDirectory).map(file => readFileSync(file, 'utf8')));
       const missing = missingClasses(expected, counts);
       for (const name of expected) console.log(`${String(counts.get(name) ?? 0).padStart(3)}  ${name}`);
@@ -60,7 +103,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         console.log(`All ${expected.length} smoke-test classes ran.`);
       }
     } else {
-      console.error('Usage: android-smoke-tests.mjs list | verify <results-directory>');
+      console.error('Usage: android-smoke-tests.mjs list [shard] | verify <results-directory> [shard]   (shard: 0/4)');
       process.exitCode = 2;
     }
   } catch (error) {
