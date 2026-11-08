@@ -106,10 +106,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     env:
       SMOKE_SHARD: ${{ strategy.job-index }}/${{ strategy.job-total }}
-    # Each test runs in its own process; one shard takes about 4 minutes of tests after setup, boot, and build.
+    # Each test runs in its own process; one shard takes about 3 minutes of tests after setup, boot, and build.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -135,8 +135,11 @@ jobs:
         id: avd-cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ~/.android/avd/
-          key: narrio-avd-v1-${{ runner.os }}-${{ runner.arch }}-api35-google_apis-x86_64-pixel_6-${{ hashFiles('.github/workflows/ci.yml') }}
+          # The system image is cached too, so each emulator job does not download it again.
+          path: |
+            ~/.android/avd/
+            /usr/local/lib/android/sdk/system-images/android-35/google_apis/x86_64/
+          key: narrio-avd-v2-${{ runner.os }}-${{ runner.arch }}-api35-google_apis-x86_64-pixel_6-${{ hashFiles('.github/workflows/ci.yml') }}
       - name: Generate clean emulator snapshot on cache miss
         if: steps.avd-cache.outputs.cache-hit != 'true' && github.event_name == 'push'
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
@@ -157,7 +160,9 @@ jobs:
         if: steps.avd-cache.outputs.cache-hit != 'true' && github.event_name == 'push'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ~/.android/avd/
+          path: |
+            ~/.android/avd/
+            /usr/local/lib/android/sdk/system-images/android-35/google_apis/x86_64/
           key: ${{ steps.avd-cache.outputs.cache-primary-key }}
       - name: Run Android smoke tests
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2

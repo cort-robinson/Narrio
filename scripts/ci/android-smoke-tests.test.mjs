@@ -60,7 +60,7 @@ test('optional seconds weight classes, defaulting when absent', () => {
 test('shards keep classes whole, cover every class once, and balance by seconds', () => {
   const entries = parseSmokeEntries(readFileSync(SMOKE_TEST_LIST, 'utf8'));
   const names = entries.map(entry => entry.name);
-  for (const count of [1, 2, 4, 6]) {
+  for (const count of [1, 2, 4, 6, 8]) {
     const shards = Array.from({ length: count }, (_, index) => shardClasses(entries, index, count));
     assert.deepEqual(shards.flat().sort(), [...names].sort(), `${count} shards cover each class exactly once`);
     for (const shard of shards) assert.deepEqual(shard, names.filter(name => shard.includes(name)), 'list order is kept');
