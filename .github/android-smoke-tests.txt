@@ -1,34 +1,36 @@
 # Required Android smoke-test classes for CI, one fully qualified class name per line.
 # Add a class by appending its own line. Blank lines and lines starting with # are ignored.
+# An optional number after the name is the class's measured CI seconds; CI uses it only to balance
+# classes across parallel emulators. A class without one counts as 30 seconds.
 # Classes that are not required yet are listed, with reasons, in android-nonrequired-tests.txt.
-app.narrio.PersistenceAndRenewalTest
-app.narrio.NowPlayingDismissTest
-app.narrio.PreciseSeekTest
-app.narrio.PersistentPlayerTest
-app.narrio.SourceExperienceTest
-app.narrio.SourceSearchExperienceTest
-app.narrio.BookSourceDiscoveryAndroidTest
-app.narrio.AddonSettingsExperienceTest
-app.narrio.AppUpdatesExperienceTest
-app.narrio.FollowAlongMigrationTest
-app.narrio.ReadAlongExperienceTest
-app.narrio.ReaderAnnotationsExperienceTest
-app.narrio.ReadingStorageMigrationTest
-app.narrio.ReadingSyncSmokeTest
-app.narrio.LibraryFormatsExperienceTest
-app.narrio.ReadingIntegrationTest
-app.narrio.ReadingRestartTest
-app.narrio.ShelfOrganizingExperienceTest
-app.narrio.ShelfFinishedMigrationTest
-app.narrio.ListeningCompletionPlayerTest
-app.narrio.SleepTimerExperienceTest
-app.narrio.SleepTimerDialogTest
-app.narrio.PreparationCheckWorkerTest
-app.narrio.AdvancedSourcingExperienceTest
-app.narrio.LocalAudioPlaybackTest
-app.narrio.ReaderExperienceTest
-app.narrio.ConnectTorBoxTest
-app.narrio.BookDiscoveryExperienceTest
-app.narrio.RecordingChoiceTest
-app.narrio.PreparationNotificationTest
-app.narrio.AppearanceExperienceTest
+app.narrio.PersistenceAndRenewalTest 6
+app.narrio.NowPlayingDismissTest 9
+app.narrio.PreciseSeekTest 9
+app.narrio.PersistentPlayerTest 12
+app.narrio.SourceExperienceTest 17
+app.narrio.SourceSearchExperienceTest 36
+app.narrio.BookSourceDiscoveryAndroidTest 6
+app.narrio.AddonSettingsExperienceTest 14
+app.narrio.AppUpdatesExperienceTest 33
+app.narrio.FollowAlongMigrationTest 2
+app.narrio.ReadAlongExperienceTest 51
+app.narrio.ReaderAnnotationsExperienceTest 45
+app.narrio.ReadingStorageMigrationTest 6
+app.narrio.ReadingSyncSmokeTest 24
+app.narrio.LibraryFormatsExperienceTest 86
+app.narrio.ReadingIntegrationTest 67
+app.narrio.ReadingRestartTest 19
+app.narrio.ShelfOrganizingExperienceTest 55
+app.narrio.ShelfFinishedMigrationTest 2
+app.narrio.ListeningCompletionPlayerTest 14
+app.narrio.SleepTimerExperienceTest 21
+app.narrio.SleepTimerDialogTest 10
+app.narrio.PreparationCheckWorkerTest 6
+app.narrio.AdvancedSourcingExperienceTest 36
+app.narrio.LocalAudioPlaybackTest 9
+app.narrio.ReaderExperienceTest 81
+app.narrio.ConnectTorBoxTest 41
+app.narrio.BookDiscoveryExperienceTest 84
+app.narrio.RecordingChoiceTest 30
+app.narrio.PreparationNotificationTest 35
+app.narrio.AppearanceExperienceTest 74

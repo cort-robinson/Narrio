@@ -19,8 +19,14 @@ jobs:
     name: Select required checks
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      # Reads earlier runs' artifacts to find smoke tests that already passed on this tree.
+      actions: read
     outputs:
       android: ${{ steps.changes.outputs.android }}
+      tree: ${{ steps.evidence.outputs.tree }}
+      smoke_reused: ${{ steps.evidence.outputs.smoke_reused }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -33,6 +39,14 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci/android-required.mjs
+      # The emulator suite only depends on the files it tests, so a tree that already passed it
+      # in this repository's own run of this workflow does not need it again. Manual runs always test.
+      - name: Look for smoke tests that passed on this exact source tree
+        id: evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ANDROID_REQUIRED: ${{ steps.changes.outputs.android }}
+        run: node scripts/ci/smoke-evidence.mjs
 
   build:
     name: Build, unit tests, and lint
@@ -83,12 +97,20 @@ jobs:
           retention-days: 14
 
   native:
-    name: Android smoke tests
+    # The suite is split by class across parallel emulators, balanced by the seconds in the list file.
+    # To change the number of emulators, change the shard list; the job reads its index and the total.
+    name: Android smoke tests (${{ matrix.shard }})
     needs: changes
-    if: needs.changes.outputs.android == 'true'
+    if: needs.changes.outputs.android == 'true' && needs.changes.outputs.smoke_reused != 'true'
     runs-on: ubuntu-24.04
-    # Each test runs in its own process, which takes about 25 minutes for the suite before setup and boot.
-    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      SMOKE_SHARD: ${{ strategy.job-index }}/${{ strategy.job-total }}
+    # Each test runs in its own process; one shard takes about 4 minutes of tests after setup, boot, and build.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -152,21 +174,41 @@ jobs:
           # AGP 9's test engine splits instrumentation arguments on commas, so a comma-separated
           # class list silently runs only its first class. The runner reads the list from a device file instead.
           script: |
-            node scripts/ci/android-smoke-tests.mjs list > "$RUNNER_TEMP/android-smoke-tests.txt"
+            node scripts/ci/android-smoke-tests.mjs list "$SMOKE_SHARD" > "$RUNNER_TEMP/android-smoke-tests.txt"
             adb push "$RUNNER_TEMP/android-smoke-tests.txt" /data/local/tmp/narrio-smoke-tests.txt
             ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.testFile=/data/local/tmp/narrio-smoke-tests.txt
       - name: Verify every smoke-test class ran
         if: ${{ !cancelled() }}
-        run: node scripts/ci/android-smoke-tests.mjs verify app/build/outputs/androidTest-results/connected
+        run: node scripts/ci/android-smoke-tests.mjs verify app/build/outputs/androidTest-results/connected "$SMOKE_SHARD"
       - name: Upload native test reports
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: android-smoke-reports
+          name: android-smoke-reports-${{ matrix.shard }}
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
           retention-days: 14
+
+  # Every shard passed and verified its classes, and the shards cover the whole list, so record
+  # that this tree passed. Later runs on the same tree, such as the push after a merge, reuse it.
+  smoke-evidence:
+    name: Record passing smoke tests
+    needs: [changes, native]
+    if: needs.native.result == 'success' && needs.changes.outputs.tree != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Describe the passing run
+        env:
+          TREE: ${{ needs.changes.outputs.tree }}
+        run: printf '{"tree":"%s","sha":"%s","run":"%s"}\n' "$TREE" "$GITHUB_SHA" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/smoke-passed.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: android-smoke-passed-${{ needs.changes.outputs.tree }}
+          path: ${{ runner.temp }}/smoke-passed.json
+          retention-days: 30
+          if-no-files-found: error
 
   gate:
     # A branch push must never satisfy a pull request's merge gate on the same SHA.
@@ -180,13 +222,15 @@ jobs:
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}
           ANDROID_REQUIRED: ${{ needs.changes.outputs.android }}
+          SMOKE_REUSED: ${{ needs.changes.outputs.smoke_reused }}
           BUILD_RESULT: ${{ needs.build.result }}
           NATIVE_RESULT: ${{ needs.native.result }}
         run: |
           test "$CHANGES_RESULT" = success
           test "$BUILD_RESULT" = success
-          case "$ANDROID_REQUIRED:$NATIVE_RESULT" in
-            true:success|false:skipped) ;;
+          # Android work either ran the emulators here or reused a pass on this exact tree.
+          case "$ANDROID_REQUIRED:$SMOKE_REUSED:$NATIVE_RESULT" in
+            true:false:success|true:true:skipped|false:false:skipped) ;;
             *) exit 1 ;;
           esac
 
@@ -265,7 +309,7 @@ jobs:
   preview-status:
     name: Update preview test status
     if: always() && github.event_name == 'push' && github.ref == 'refs/heads/dev' && needs.preview-publish.result == 'success'
-    needs: [build, native, preview-publish]
+    needs: [changes, build, native, preview-publish]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -288,7 +332,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BUILD_RESULT: ${{ needs.build.result }}
-          NATIVE_RESULT: ${{ needs.native.result }}
+          NATIVE_RESULT: ${{ needs.changes.outputs.smoke_reused == 'true' && needs.native.result == 'skipped' && 'success' || needs.native.result }}
         run: node scripts/release/publish-preview.mjs --status
 
   release:
